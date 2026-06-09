@@ -5,9 +5,9 @@ import Image from "next/image";
 import Link from "next/link";
 import { Plant, CycleImage } from "@/app/lib/types";
 import { getPlantMetrics, getStageColor } from "@/app/lib/utils";
-import { Thermometer, CloudRain, Activity, Droplets, ArrowRight, LayoutGrid, List as ListIcon, Camera, X, Trash2 } from "lucide-react";
-import BulkWaterModal from "./BulkWaterModal";
+import { Thermometer, CloudRain, Activity, Droplets, ArrowRight, LayoutGrid, List as ListIcon, Camera, X, Trash2, Archive } from "lucide-react";
 import BulkStageModal from "./BulkStageModal";
+import BulkArchiveModal from "./BulkArchiveModal";
 import MeasurementModal from "./MeasurementModal";
 import { useToast } from "@/app/context/ToastContext";
 import { uploadCycleImage, deleteCycleImages, updateCycleImage } from "@/app/cycles/actions";
@@ -35,7 +35,7 @@ export default function CycleDetailView({ cycle, plants, lastMeasurement, cycleI
 
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('table');
   const [selectedPlants, setSelectedPlants] = useState<number[]>([]);
-  const [isWaterModalOpen, setIsWaterModalOpen] = useState(false);
+  const [isArchiveModalOpen, setIsArchiveModalOpen] = useState(false);
   const [isStageModalOpen, setIsStageModalOpen] = useState(false);
   const [isMeasureModalOpen, setIsMeasureModalOpen] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
@@ -43,6 +43,8 @@ export default function CycleDetailView({ cycle, plants, lastMeasurement, cycleI
   useEffect(() => {
     setIsMounted(true);
   }, []);
+
+  const activePlants = plants.filter(p => !p.is_archived);
 
   const handleImageTouchStart = (imageId: string) => {
     if (isSelectionMode) return;
@@ -154,7 +156,7 @@ export default function CycleDetailView({ cycle, plants, lastMeasurement, cycleI
     : "-";
 
   const toggleSelectAll = () => {
-    selectedPlants.length === plants.length ? setSelectedPlants([]) : setSelectedPlants(plants.map(p => p.id));
+    selectedPlants.length === activePlants.length ? setSelectedPlants([]) : setSelectedPlants(activePlants.map(p => p.id));
   };
 
   const toggleSelectPlant = (id: number) => {
@@ -205,8 +207,8 @@ export default function CycleDetailView({ cycle, plants, lastMeasurement, cycleI
             <h2 className="text-foreground font-bold whitespace-nowrap text-sm">{selectedPlants.length} seleccionadas</h2>
             <div className="h-6 w-px bg-card-border"></div>
             <div className="flex gap-2">
-                <button disabled={selectedPlants.length === 0} onClick={() => setIsWaterModalOpen(true)} className="bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/20 px-3 py-1.5 rounded-lg text-xs font-bold uppercase transition-colors disabled:opacity-30 flex items-center gap-1">
-                    <Droplets size={12} /> Regar
+                <button disabled={selectedPlants.length === 0} onClick={() => setIsArchiveModalOpen(true)} className="bg-orange-500/10 hover:bg-orange-500/20 text-orange-400 border border-orange-500/20 px-3 py-1.5 rounded-lg text-xs font-bold uppercase transition-colors disabled:opacity-30 flex items-center gap-1">
+                    <Archive size={12} /> Archivar
                 </button>
                 <button disabled={selectedPlants.length === 0} onClick={() => setIsStageModalOpen(true)} className="bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 border border-purple-500/20 px-3 py-1.5 rounded-lg text-xs font-bold uppercase transition-colors disabled:opacity-30 flex items-center gap-1">
                     <ArrowRight size={12} /> Etapa
@@ -226,7 +228,7 @@ export default function CycleDetailView({ cycle, plants, lastMeasurement, cycleI
             <table className="w-full text-left text-sm">
                 <thead className="bg-background text-muted uppercase text-[10px] font-bold tracking-widest">
                     <tr>
-                        <th className="p-4 w-10"><input type="checkbox" onChange={toggleSelectAll} checked={selectedPlants.length === plants.length && plants.length > 0} className="rounded border-card-border bg-slate-50 accent-brand-primary" /></th>
+                        <th className="p-4 w-10"><input type="checkbox" onChange={toggleSelectAll} checked={selectedPlants.length === activePlants.length && activePlants.length > 0} className="rounded border-card-border bg-slate-50 accent-brand-primary" /></th>
                         <th className="p-4">Planta</th>
                         <th className="p-4">Etapa</th>
                         <th className="p-4">Días en Etapa</th>
@@ -234,7 +236,7 @@ export default function CycleDetailView({ cycle, plants, lastMeasurement, cycleI
                     </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
-                    {plants.map(plant => {
+                    {activePlants.map(plant => {
                         const { currentStage, daysInCurrentStage } = getPlantMetrics(plant);
                         const rawStage = currentStage || plant.stage;
                         const displayStage = (rawStage === 'Esqueje' || rawStage === 'Plántula') ? 'Plántula' : rawStage;
@@ -257,7 +259,7 @@ export default function CycleDetailView({ cycle, plants, lastMeasurement, cycleI
         </div>
       ) : (
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
-            {plants.map(plant => {
+            {activePlants.map(plant => {
                 const { currentStage } = getPlantMetrics(plant);
                 const rawStage = currentStage || plant.stage;
                 const displayStage = (rawStage === 'Esqueje' || rawStage === 'Plántula') ? 'Plántula' : rawStage;
@@ -431,7 +433,7 @@ export default function CycleDetailView({ cycle, plants, lastMeasurement, cycleI
       )}
 
       {/* Modales */}
-      <BulkWaterModal isOpen={isWaterModalOpen} onClose={() => setIsWaterModalOpen(false)} selectedIds={selectedPlants} onSuccess={() => setSelectedPlants([])} cycleId={cycle.id} />
+      <BulkArchiveModal isOpen={isArchiveModalOpen} onClose={() => setIsArchiveModalOpen(false)} selectedIds={selectedPlants} onSuccess={() => setSelectedPlants([])} cycleId={cycle.id} />
       <BulkStageModal isOpen={isStageModalOpen} onClose={() => setIsStageModalOpen(false)} selectedIds={selectedPlants} onSuccess={() => setSelectedPlants([])} cycleId={cycle.id} />
       <MeasurementModal isOpen={isMeasureModalOpen} onClose={() => setIsMeasureModalOpen(false)} cycleId={cycle.id} />
     </div>

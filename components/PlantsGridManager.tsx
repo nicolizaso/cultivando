@@ -4,7 +4,7 @@ import { useState, useMemo } from "react";
 import PlantCard from "./plantcard";
 import { supabase } from "@/app/lib/supabase";
 import { useRouter } from "next/navigation";
-import { CheckSquare, Square, Trash2, X, FilterX, Filter } from "lucide-react";
+import { CheckSquare, Square, Trash2, X, FilterX, Filter, Archive } from "lucide-react";
 import { Plant as BasePlant, Cycle, Space } from "@/app/lib/types";
 import AddPlantModal from "./AddPlantModal";
 
@@ -27,12 +27,20 @@ export default function PlantsGridManager({ plants, cycles, spaces }: PlantsGrid
   const [showFilters, setShowFilters] = useState(false);
   const [selectedCycleId, setSelectedCycleId] = useState<string>("all");
   const [selectedSpaceId, setSelectedSpaceId] = useState<string>("all");
+  const [showArchived, setShowArchived] = useState(false);
 
   const router = useRouter();
 
   // Filter Logic
   const filteredPlants = useMemo(() => {
     return plants.filter(plant => {
+      // Filter by Archive State
+      if (showArchived) {
+          if (!plant.is_archived) return false;
+      } else {
+          if (plant.is_archived) return false;
+      }
+
       // Filter by Cycle
       if (selectedCycleId !== "all") {
         if (plant.cycle_id !== Number(selectedCycleId)) return false;
@@ -132,6 +140,18 @@ export default function PlantsGridManager({ plants, cycles, spaces }: PlantsGrid
          </div>
 
          <div className="flex gap-2 self-end md:self-auto">
+            <button
+                onClick={() => setShowArchived(!showArchived)}
+                className={`p-2 rounded-lg transition-colors ${
+                    showArchived
+                    ? "bg-brand-primary text-brand-bg shadow-sm shadow-brand-primary/20"
+                    : "bg-card-border hover:bg-card-border text-muted hover:text-foreground"
+                }`}
+                title="Mostrar Archivadas"
+            >
+                <Archive size={20} />
+            </button>
+
             <button
                 onClick={() => setShowFilters(!showFilters)}
                 className={`p-2 rounded-lg transition-colors ${

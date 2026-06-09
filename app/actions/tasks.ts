@@ -52,12 +52,12 @@ export async function createTask(formData: any) {
   const linkedPlantIds = Array.from(allPlantIds);
 
   // 2. Generate Dates
-  let datesToInsert: string[] = [];
+  const datesToInsert: string[] = [];
 
   if (isRecurring && endDate) {
       const startDateObj = new Date(date);
       const endDateObj = new Date(endDate);
-      let current = new Date(startDateObj);
+      const current = new Date(startDateObj);
       let count = 0;
       const maxIterations = 50;
 

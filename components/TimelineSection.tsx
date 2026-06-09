@@ -54,7 +54,7 @@ export default function TimelineSection({ pendingTasks, historyItems }: Timeline
             {formatDateShort(item.date)}
           </time>
         </div>
-        {item.notes && <p className="text-muted text-xs leading-relaxed">"{item.notes}"</p>}
+        {item.notes && <p className="text-muted text-xs leading-relaxed">&quot;{item.notes}&quot;</p>}
       </div>
     </div>
   );
@@ -120,7 +120,7 @@ export default function TimelineSection({ pendingTasks, historyItems }: Timeline
               </time>
             </div>
 
-            {item.notes && <p className="text-muted text-xs leading-relaxed mb-3">"{item.notes}"</p>}
+            {item.notes && <p className="text-muted text-xs leading-relaxed mb-3">&quot;{item.notes}&quot;</p>}
 
             {/* Render Images (Log media OR Cycle Image public_url) */}
             {item.media_url && item.media_url.length > 0 && (

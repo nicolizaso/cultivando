@@ -30,6 +30,7 @@ export interface Plant {
   date_floracion?: string;
   date_secado?: string;
   date_curado?: string;
+  is_archived?: boolean;
 }
 
 export interface Cycle {
