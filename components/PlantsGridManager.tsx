@@ -36,7 +36,7 @@ export default function PlantsGridManager({ plants, cycles, spaces }: PlantsGrid
     return plants.filter(plant => {
       // Filter by Archive State
       if (showArchived) {
-          if (!plant.is_archived) return false;
+          if (plant.is_archived !== true) return false;
       } else {
           if (plant.is_archived) return false;
       }
