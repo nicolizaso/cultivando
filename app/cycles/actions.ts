@@ -14,7 +14,7 @@ export async function bulkArchivePlants(
 
   try {
     const count = plantIds.length;
-    const title = `Archivadas ${count} plantas`;
+    const title = `Archivada`;
 
     const formattedDate = formatDateShort(date);
     const finalNotes = notes ? `${notes}\nFecha: ${formattedDate}` : `Fecha: ${formattedDate}`;
@@ -27,17 +27,19 @@ export async function bulkArchivePlants(
 
     if (updateError) throw updateError;
 
-    // 2. Insertar log
+    // 2. Insertar log (uno por cada planta)
+    const logsToInsert = plantIds.map((plantId) => ({
+      cycle_id: cycleId || null,
+      plant_id: plantId,
+      type: 'Nota',
+      title: title,
+      description: finalNotes,
+      created_at: new Date(date).toISOString(),
+    }));
+
     const { error: logError } = await supabase
       .from('logs')
-      .insert({
-        cycle_id: cycleId || null,
-        plant_id: null,
-        type: 'Archivada',
-        title: title,
-        notes: finalNotes,
-        date: new Date().toISOString(),
-      });
+      .insert(logsToInsert);
 
     if (logError) throw logError;
 
