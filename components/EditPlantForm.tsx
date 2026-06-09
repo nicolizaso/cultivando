@@ -72,7 +72,7 @@ export default function EditPlantForm({ plant, cycles }: EditPlantFormProps) {
     try {
       // Determine current stage based on the latest date set
       let currentStage = plant.stage;
-      let latestDate = '';
+      const latestDate = '';
 
       // Simple logic: the last stage with a date is the current stage
       // However, user might just be editing dates.

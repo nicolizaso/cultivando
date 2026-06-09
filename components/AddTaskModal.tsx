@@ -117,7 +117,7 @@ export default function AddTaskModal({ isOpen, onClose, plants, spaces, cycles =
     }
 
     const generateRecipe = () => {
-      let recipeStr = 'Preparar: '
+      const recipeStr = 'Preparar: '
       const items: string[] = []
 
       if (selectedNutrition.type === 'product') {

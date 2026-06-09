@@ -4,6 +4,55 @@ import { createClient } from '@/app/lib/supabase-server';
 import { revalidatePath } from 'next/cache';
 import { formatDateShort } from '@/app/lib/utils';
 
+export async function bulkArchivePlants(
+  plantIds: number[],
+  notes: string,
+  date: string,
+  cycleId?: number
+) {
+  const supabase = await createClient();
+
+  try {
+    const count = plantIds.length;
+    const title = `Archivadas ${count} plantas`;
+
+    const formattedDate = formatDateShort(date);
+    const finalNotes = notes ? `${notes}\nFecha: ${formattedDate}` : `Fecha: ${formattedDate}`;
+
+    // 1. Actualizar is_archived = true en plantas
+    const { error: updateError } = await supabase
+      .from('plants')
+      .update({ is_archived: true })
+      .in('id', plantIds);
+
+    if (updateError) throw updateError;
+
+    // 2. Insertar log
+    const { error: logError } = await supabase
+      .from('logs')
+      .insert({
+        cycle_id: cycleId || null,
+        plant_id: null,
+        type: 'Archivada',
+        title: title,
+        notes: finalNotes,
+        date: new Date().toISOString(),
+      });
+
+    if (logError) throw logError;
+
+    if (cycleId) {
+        revalidatePath(`/cycles/${cycleId}`);
+    }
+    revalidatePath('/plants');
+
+    return { success: true };
+  } catch (err: any) {
+    console.error("Error in bulkArchivePlants:", err);
+    return { error: 'No se pudieron archivar las plantas.' };
+  }
+}
+
 export async function bulkWaterPlants(
   plantIds: number[], 
   date: string, 
