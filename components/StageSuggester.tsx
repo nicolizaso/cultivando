@@ -86,7 +86,7 @@ export default function StageSuggester({ plants }: StageSuggesterProps) {
         exit={{ opacity: 0, y: 50 }}
         className="fixed z-50 bottom-24 left-0 right-0 mx-auto w-[92%] md:bottom-8 md:right-8 md:left-auto md:mx-0 md:w-96"
       >
-        <div className="bg-white border border-brand-primary/20 shadow-sm rounded-2xl p-4 flex flex-col gap-3 relative overflow-hidden">
+        <div className="bg-card border border-brand-primary/20 shadow-sm rounded-2xl p-4 flex flex-col gap-3 relative overflow-hidden">
             {/* Background effect */}
             <div className="absolute top-0 right-0 w-32 h-32 bg-brand-primary/10 rounded-full blur-2xl -mr-10 -mt-10 pointer-events-none"></div>
 
@@ -95,11 +95,11 @@ export default function StageSuggester({ plants }: StageSuggesterProps) {
                     <span className="text-xl">🌱</span>
                 </div>
                 <div>
-                    <h3 className="font-bold text-slate-800 text-sm uppercase tracking-wide">Sugerencia de Cultivo</h3>
-                    <p className="text-slate-700 text-sm mt-1">
-                        <span className="text-brand-primary font-bold">{suggestion.plant.name}</span> ha cumplido <span className="font-bold text-slate-800">{suggestion.plant.current_age_days ?? suggestion.plant.days ?? 0} días</span>.
+                    <h3 className="font-bold text-foreground text-sm uppercase tracking-wide">Sugerencia de Cultivo</h3>
+                    <p className="text-foreground text-sm mt-1">
+                        <span className="text-brand-primary font-bold">{suggestion.plant.name}</span> ha cumplido <span className="font-bold text-foreground">{suggestion.plant.current_age_days ?? suggestion.plant.days ?? 0} días</span>.
                         <br/>
-                        ¿Pasar a etapa <span className="font-bold text-slate-800">{suggestion.nextStage}</span>?
+                        ¿Pasar a etapa <span className="font-bold text-foreground">{suggestion.nextStage}</span>?
                     </p>
                 </div>
             </div>
@@ -107,7 +107,7 @@ export default function StageSuggester({ plants }: StageSuggesterProps) {
             <div className="flex gap-2 justify-end mt-2 relative z-10">
                 <button
                     onClick={handleDismiss}
-                    className="px-4 py-2 rounded-lg text-xs font-bold text-slate-500 hover:text-slate-800 hover:bg-white/5 transition-colors uppercase"
+                    className="px-4 py-2 rounded-lg text-xs font-bold text-muted hover:text-foreground hover:bg-card-border transition-colors uppercase"
                 >
                     No, esperar
                 </button>

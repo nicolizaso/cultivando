@@ -17,6 +17,7 @@ export default async function PlantsPage() {
         *,
         current_age_days,
         days_in_stage,
+        is_archived,
         cycles ( id, name, space_id )
       `)
       .order('created_at', { ascending: false }),
@@ -31,7 +32,7 @@ export default async function PlantsPage() {
   ]);
 
   return (
-    <main className="min-h-screen bg-[#F5F5F1] text-slate-800 p-4 md:p-8 pb-24 font-body">
+    <main className="min-h-screen bg-brand-bg text-brand-text p-4 md:p-8 pb-24 font-body">
       
       <GlobalHeader 
         userEmail={user?.email} 

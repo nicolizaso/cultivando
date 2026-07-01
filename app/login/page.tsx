@@ -38,27 +38,27 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#F5F5F1] flex flex-col items-center justify-center p-6 relative">
+    <main className="min-h-screen bg-brand-bg flex flex-col items-center justify-center p-6 relative">
       
       {/* Logo y Título */}
       <div className="flex flex-col items-center mb-8 text-center z-10">
-        <div className="bg-white p-4 mb-4 rounded-2xl border border-slate-100 shadow-sm">
+        <div className="bg-brand-card p-4 mb-4 rounded-2xl border border-brand-card-border shadow-sm">
           <Image src="/logo-login.png" alt="Logo" width={60} height={60} className="w-12 h-12 object-contain" />
         </div>
-        <h1 className="text-xl font-bold text-slate-800 tracking-widest uppercase">
+        <h1 className="text-xl font-bold text-brand-text tracking-widest uppercase">
           CULTIVAPP
         </h1>
       </div>
 
       {/* Tarjeta Bento */}
-      <div className="w-full max-w-sm bg-white border border-slate-100 rounded-2xl p-6 shadow-sm backdrop-blur-md z-10">
+      <div className="w-full max-w-sm bg-brand-card border border-brand-card-border rounded-2xl p-6 shadow-sm backdrop-blur-md z-10">
         
         {/* Toggle Login/Registro */}
-        <div className="flex bg-[#F5F5F1] p-1 rounded-xl mb-6 border border-slate-100">
+        <div className="flex bg-brand-bg p-1 rounded-xl mb-6 border border-brand-card-border">
           <button
             onClick={() => { setIsLogin(true); setMsg(null); }}
             className={`flex-1 text-xs font-bold py-3 rounded-lg transition-all ${
-              isLogin ? 'bg-slate-100 text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+              isLogin ? 'bg-slate-100 text-brand-text shadow-sm' : 'text-muted hover:text-foreground'
             }`}
           >
             INGRESAR
@@ -66,7 +66,7 @@ export default function LoginPage() {
           <button
             onClick={() => { setIsLogin(false); setMsg(null); }}
             className={`flex-1 text-xs font-bold py-3 rounded-lg transition-all ${
-              !isLogin ? 'bg-slate-100 text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+              !isLogin ? 'bg-slate-100 text-brand-text shadow-sm' : 'text-muted hover:text-foreground'
             }`}
           >
             REGISTRARSE
@@ -85,15 +85,15 @@ export default function LoginPage() {
           {/* Campo Username (Solo Registro) */}
           {!isLogin && (
             <div className="space-y-1">
-              <label className="text-[10px] uppercase font-bold text-slate-500 ml-1">Usuario</label>
+              <label className="text-[10px] uppercase font-bold text-muted ml-1">Usuario</label>
               <div className="relative">
-                <User className="absolute left-3 top-3.5 text-slate-500" size={16} />
+                <User className="absolute left-3 top-3.5 text-muted" size={16} />
                 <input
                   name="username"
                   type="text"
                   required={!isLogin}
                   placeholder="Nombre de Usuario"
-                  className="w-full bg-[#F5F5F1] border border-slate-200 rounded-xl py-3 pl-10 pr-4 text-slate-800 text-sm outline-none focus:border-brand-primary transition-colors"
+                  className="w-full bg-brand-bg border border-brand-card-border rounded-xl py-3 pl-10 pr-4 text-brand-text text-sm outline-none focus:border-brand-primary transition-colors"
                 />
               </div>
             </div>
@@ -101,32 +101,32 @@ export default function LoginPage() {
 
           {/* Campo Email / Usuario Login */}
           <div className="space-y-1">
-            <label className="text-[10px] uppercase font-bold text-slate-500 ml-1">
+            <label className="text-[10px] uppercase font-bold text-muted ml-1">
               {isLogin ? 'Email o Usuario' : 'Email'}
             </label>
             <div className="relative">
-              <Mail className="absolute left-3 top-3.5 text-slate-500" size={16} />
+              <Mail className="absolute left-3 top-3.5 text-muted" size={16} />
               <input
                 name="email"
                 type="text"
                 required
                 placeholder={isLogin ? "Email o Usuario" : "tu@email.com"}
-                className="w-full bg-[#F5F5F1] border border-slate-200 rounded-xl py-3 pl-10 pr-4 text-slate-800 text-sm outline-none focus:border-brand-primary transition-colors"
+                className="w-full bg-brand-bg border border-brand-card-border rounded-xl py-3 pl-10 pr-4 text-brand-text text-sm outline-none focus:border-brand-primary transition-colors"
               />
             </div>
           </div>
 
           {/* Campo Password */}
           <div className="space-y-1">
-            <label className="text-[10px] uppercase font-bold text-slate-500 ml-1">Contraseña</label>
+            <label className="text-[10px] uppercase font-bold text-muted ml-1">Contraseña</label>
             <div className="relative">
-              <Lock className="absolute left-3 top-3.5 text-slate-500" size={16} />
+              <Lock className="absolute left-3 top-3.5 text-muted" size={16} />
               <input
                 name="password"
                 type="password"
                 required
                 placeholder="••••••••"
-                className="w-full bg-[#F5F5F1] border border-slate-200 rounded-xl py-3 pl-10 pr-4 text-slate-800 text-sm outline-none focus:border-brand-primary transition-colors"
+                className="w-full bg-brand-bg border border-brand-card-border rounded-xl py-3 pl-10 pr-4 text-brand-text text-sm outline-none focus:border-brand-primary transition-colors"
               />
             </div>
           </div>
@@ -134,15 +134,15 @@ export default function LoginPage() {
           {/* Campo Repetir Password (Solo Registro) */}
           {!isLogin && (
             <div className="space-y-1">
-              <label className="text-[10px] uppercase font-bold text-slate-500 ml-1">Repetir Contraseña</label>
+              <label className="text-[10px] uppercase font-bold text-muted ml-1">Repetir Contraseña</label>
               <div className="relative">
-                <Lock className="absolute left-3 top-3.5 text-slate-500" size={16} />
+                <Lock className="absolute left-3 top-3.5 text-muted" size={16} />
                 <input
                   name="confirmPassword"
                   type="password"
                   required={!isLogin}
                   placeholder="••••••••"
-                  className="w-full bg-[#F5F5F1] border border-slate-200 rounded-xl py-3 pl-10 pr-4 text-slate-800 text-sm outline-none focus:border-brand-primary transition-colors"
+                  className="w-full bg-brand-bg border border-brand-card-border rounded-xl py-3 pl-10 pr-4 text-brand-text text-sm outline-none focus:border-brand-primary transition-colors"
                 />
               </div>
             </div>

@@ -107,7 +107,7 @@ export default function AgendaList({ tasks, disableDateFilter = false, groupBySt
     return (
       <div className="flex flex-col items-center justify-center h-full opacity-60">
         <CheckCircle2 size={32} className="text-brand-primary mb-2" />
-        <span className="text-sm text-slate-500 font-medium">No hay tareas {disableDateFilter ? 'para esta fecha' : 'para hoy'}</span>
+        <span className="text-sm text-muted font-medium">No hay tareas {disableDateFilter ? 'para esta fecha' : 'para hoy'}</span>
       </div>
     )
   }
@@ -122,7 +122,7 @@ export default function AgendaList({ tasks, disableDateFilter = false, groupBySt
            {/* Pending Section */}
            {pendingTasks.length > 0 && (
               <div className="mb-4">
-                 <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 sticky top-0 bg-white z-10 py-2 border-b border-slate-100">Pendientes ({pendingTasks.length})</h4>
+                 <h4 className="text-xs font-bold text-muted uppercase tracking-wider mb-2 sticky top-0 bg-card z-10 py-2 border-b border-card-border">Pendientes ({pendingTasks.length})</h4>
                  <div className="space-y-2">
                     {pendingTasks.map(task => (
                        <TaskPill
@@ -144,7 +144,7 @@ export default function AgendaList({ tasks, disableDateFilter = false, groupBySt
            {/* Completed Section */}
            {completedTasks.length > 0 && (
               <div className="mb-4">
-                 <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 sticky top-0 bg-white z-10 py-2 border-b border-slate-100">Completadas ({completedTasks.length})</h4>
+                 <h4 className="text-xs font-bold text-muted uppercase tracking-wider mb-2 sticky top-0 bg-card z-10 py-2 border-b border-card-border">Completadas ({completedTasks.length})</h4>
                  <div className="space-y-2">
                     {completedTasks.map(task => (
                        <TaskPill
@@ -191,18 +191,18 @@ export default function AgendaList({ tasks, disableDateFilter = false, groupBySt
 
       {/* Floating Action Bar */}
       {isSelectionMode && (
-        <div className="fixed bottom-24 md:bottom-6 left-1/2 -translate-x-1/2 w-[90%] max-w-md bg-white border border-slate-200 shadow-sm rounded-2xl p-3 flex items-center justify-between z-[60] animate-in slide-in-from-bottom-5 fade-in duration-200">
+        <div className="fixed bottom-24 md:bottom-6 left-1/2 -translate-x-1/2 w-[90%] max-w-md bg-card border border-card-border shadow-sm rounded-2xl p-3 flex items-center justify-between z-[60] animate-in slide-in-from-bottom-5 fade-in duration-200">
            <div className="flex items-center gap-3 px-2">
               <div className="bg-brand-primary/20 text-brand-primary p-2 rounded-full">
                 <CheckCircle2 size={20} />
               </div>
-              <span className="font-bold text-slate-800 text-sm">{selectedTasks.size} seleccionada{selectedTasks.size !== 1 ? 's' : ''}</span>
+              <span className="font-bold text-foreground text-sm">{selectedTasks.size} seleccionada{selectedTasks.size !== 1 ? 's' : ''}</span>
            </div>
 
            <div className="flex items-center gap-2">
              <button
                onClick={exitSelectionMode}
-               className="p-2.5 rounded-xl bg-slate-800 text-slate-700 hover:bg-slate-700 transition-colors"
+               className="p-2.5 rounded-xl bg-slate-800 text-foreground hover:bg-slate-700 transition-colors"
                disabled={isDeleting}
              >
                <X size={20} />

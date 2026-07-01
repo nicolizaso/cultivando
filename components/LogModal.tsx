@@ -134,9 +134,9 @@ export default function LogModal({ plantId, plantName }: Props) {
             onClick={() => setIsOpen(false)}
           ></div>
 
-          <div className="relative bg-brand-card w-full max-w-sm rounded-2xl border border-slate-200 shadow-sm p-6 animate-in zoom-in duration-200">
+          <div className="relative bg-brand-card w-full max-w-sm rounded-2xl border border-card-border shadow-sm p-6 animate-in zoom-in duration-200">
             
-            <h3 className="text-xl font-title text-slate-800 mb-1">Bitácora</h3>
+            <h3 className="text-xl font-title text-foreground mb-1">Bitácora</h3>
             <p className="text-xs text-brand-muted mb-4">Para: <span className="text-brand-primary">{plantName}</span></p>
 
             <form onSubmit={handleSubmit} className="space-y-4">
@@ -175,7 +175,7 @@ export default function LogModal({ plantId, plantName }: Props) {
                 <label className="block text-brand-muted mb-1 text-xs font-bold uppercase">Nota (Opcional)</label>
                 <textarea 
                   rows={3}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 text-slate-800 focus:border-brand-primary outline-none text-sm resize-none"
+                  className="w-full bg-slate-50 border border-card-border rounded-lg p-3 text-foreground focus:border-brand-primary outline-none text-sm resize-none"
                   placeholder="¿Cómo la ves hoy? Hojas amarillas, creció mucho..."
                   value={note}
                   onChange={(e) => setNote(e.target.value)}
@@ -187,7 +187,7 @@ export default function LogModal({ plantId, plantName }: Props) {
                 <button 
                   type="button" 
                   onClick={() => setIsOpen(false)}
-                  className="flex-1 py-3 text-brand-muted hover:text-slate-800 font-bold text-xs uppercase"
+                  className="flex-1 py-3 text-brand-muted hover:text-foreground font-bold text-xs uppercase"
                 >
                   Cancelar
                 </button>

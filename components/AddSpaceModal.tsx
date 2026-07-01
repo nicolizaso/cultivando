@@ -52,7 +52,7 @@ export default function AddSpaceModal() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setIsOpen(false)}></div>
           
-          <div className="relative bg-brand-card w-full max-w-sm rounded-2xl border border-slate-200 shadow-sm p-6 animate-in zoom-in duration-200">
+          <div className="relative bg-brand-card w-full max-w-sm rounded-2xl border border-card-border shadow-sm p-6 animate-in zoom-in duration-200">
             <h2 className="text-2xl font-title text-brand-primary mb-4 uppercase">Crear Espacio</h2>
             
             <form onSubmit={handleSubmit} className="space-y-4">
@@ -62,7 +62,7 @@ export default function AddSpaceModal() {
                   autoFocus
                   type="text"
                   required
-                  className="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 text-slate-800 focus:border-brand-primary outline-none"
+                  className="w-full bg-slate-50 border border-card-border rounded-lg p-3 text-foreground focus:border-brand-primary outline-none"
                   placeholder="Ej: Armario 80x80"
                   value={formData.name}
                   onChange={(e) => setFormData({...formData, name: e.target.value})}
@@ -72,7 +72,7 @@ export default function AddSpaceModal() {
               <div>
                 <label className="block text-brand-muted mb-1 text-xs font-bold uppercase">Tipo</label>
                 <select 
-                  className="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 text-slate-800 focus:border-brand-primary outline-none cursor-pointer"
+                  className="w-full bg-slate-50 border border-card-border rounded-lg p-3 text-foreground focus:border-brand-primary outline-none cursor-pointer"
                   value={formData.type}
                   onChange={(e) => setFormData({...formData, type: e.target.value})}
                 >
@@ -83,7 +83,7 @@ export default function AddSpaceModal() {
               </div>
 
               <div className="flex gap-3 mt-6">
-                <button type="button" onClick={() => setIsOpen(false)} className="flex-1 py-3 text-brand-muted hover:text-slate-800 font-bold text-xs uppercase">Cancelar</button>
+                <button type="button" onClick={() => setIsOpen(false)} className="flex-1 py-3 text-brand-muted hover:text-foreground font-bold text-xs uppercase">Cancelar</button>
                 <button type="submit" disabled={loading} className="flex-1 bg-brand-primary hover:bg-brand-primary-hover text-brand-bg py-3 rounded-lg font-title tracking-wide transition disabled:opacity-50">
                   {loading ? "CREANDO..." : "CREAR"}
                 </button>

@@ -24,14 +24,14 @@ const getTaskStyle = (type: string) => {
     case 'fertilizante': return { color: 'bg-green-500/20 text-green-300 border-green-500/30', icon: FlaskConical }
     case 'repelente': return { color: 'bg-orange-500/20 text-orange-300 border-orange-500/30', icon: ShieldAlert }
     case 'trasplante': return { color: 'bg-amber-700/20 text-amber-300 border-amber-700/30', icon: Shovel }
-    case 'poda': return { color: 'bg-slate-500/20 text-slate-700 border-slate-500/30', icon: Scissors }
-    case 'entrenamiento': return { color: 'bg-slate-500/20 text-slate-700 border-slate-500/30', icon: Activity }
-    case 'ambiente': return { color: 'bg-slate-500/20 text-slate-700 border-slate-500/30', icon: ArrowRightLeft }
+    case 'poda': return { color: 'bg-slate-500/20 text-foreground border-slate-500/30', icon: Scissors }
+    case 'entrenamiento': return { color: 'bg-slate-500/20 text-foreground border-slate-500/30', icon: Activity }
+    case 'ambiente': return { color: 'bg-slate-500/20 text-foreground border-slate-500/30', icon: ArrowRightLeft }
     case 'cambio_etapa': return { color: 'bg-purple-500/20 text-purple-300 border-purple-500/30', icon: ArrowRightCircle }
-    case 'lavado': return { color: 'bg-slate-600/20 text-slate-700 border-slate-600/30', icon: CloudRain }
+    case 'lavado': return { color: 'bg-slate-600/20 text-foreground border-slate-600/30', icon: CloudRain }
     case 'cosechar': return { color: 'bg-violet-500/20 text-violet-300 border-violet-500/30', icon: Flower }
     case 'muerta': return { color: 'bg-red-900/40 text-red-200 border-red-500/30', icon: Skull }
-    default: return { color: 'bg-slate-700/40 text-slate-700 border-slate-600/30', icon: FileText }
+    default: return { color: 'bg-slate-700/40 text-foreground border-slate-600/30', icon: FileText }
   }
 }
 
@@ -79,7 +79,7 @@ export default function TaskPill({ task, onComplete, onDelete, onEdit, onClick, 
       className={`w-full flex items-center justify-between p-3 rounded-xl border mb-2 cursor-pointer transition-all hover:brightness-110 select-none
         ${style.color}
         ${isCompleted && !selectionMode ? 'opacity-50' : ''}
-        ${isSelected ? 'ring-2 ring-white/50 bg-white/5' : ''}
+        ${isSelected ? 'ring-2 ring-white/50 bg-card-border' : ''}
       `}
       onMouseDown={handleStart}
       onMouseUp={handleEnd}
@@ -94,7 +94,7 @@ export default function TaskPill({ task, onComplete, onDelete, onEdit, onClick, 
       <div className="flex items-center gap-3 overflow-hidden pointer-events-none">
         {selectionMode && (
           <div className="shrink-0 transition-all duration-300">
-             {isSelected ? <CheckCircle2 size={20} className="text-slate-800 drop-shadow-md" /> : <Circle size={20} className="text-slate-800/30" />}
+             {isSelected ? <CheckCircle2 size={20} className="text-foreground drop-shadow-md" /> : <Circle size={20} className="text-foreground/30" />}
           </div>
         )}
 
@@ -104,7 +104,7 @@ export default function TaskPill({ task, onComplete, onDelete, onEdit, onClick, 
         <div className="flex flex-col overflow-hidden">
           <span className={`text-sm font-bold truncate ${isCompleted && !selectionMode ? 'line-through decoration-2 decoration-current/50' : ''}`}>{task.title}</span>
           {task.description && (
-            <span className={`text-xs text-slate-500 mt-0.5 truncate ${isCompleted && !selectionMode ? 'line-through decoration-current/50' : ''}`}>
+            <span className={`text-xs text-muted mt-0.5 truncate ${isCompleted && !selectionMode ? 'line-through decoration-current/50' : ''}`}>
               {task.description}
             </span>
           )}

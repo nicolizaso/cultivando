@@ -10,7 +10,7 @@ export async function createTask(formData: any) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Debes iniciar sesión.' }
 
-  const { targets, taskType, applicationType, date, description, otherText, isRecurring, frequency, endDate } = formData
+  const { targets, taskType, applicationType, targetStage, targetSpaceId, date, description, otherText, isRecurring, frequency, endDate } = formData
   if (!targets || targets.length === 0) return { error: 'Selecciona un objetivo.' }
 
   const title = taskType.id === 'otro' ? otherText : taskType.label
@@ -52,12 +52,12 @@ export async function createTask(formData: any) {
   const linkedPlantIds = Array.from(allPlantIds);
 
   // 2. Generate Dates
-  let datesToInsert: string[] = [];
+  const datesToInsert: string[] = [];
 
   if (isRecurring && endDate) {
       const startDateObj = new Date(date);
       const endDateObj = new Date(endDate);
-      let current = new Date(startDateObj);
+      const current = new Date(startDateObj);
       let count = 0;
       const maxIterations = 50;
 
@@ -92,6 +92,8 @@ export async function createTask(formData: any) {
       date: d, // Keep for compatibility
       type: taskType.id,
       application_type: taskType.id === 'fertilizante' ? applicationType : null,
+      target_stage: taskType.id === 'cambio_etapa' ? targetStage : null,
+      target_space_id: taskType.id === 'ambiente' && targetSpaceId ? targetSpaceId : null,
       status: 'pending',
       recurrence_id: recurrenceId,
       cycle_id: null
@@ -154,6 +156,7 @@ export async function updateTask(taskId: string | number, updates: any, scope: '
         title: updates.title,
         description: updates.description,
         application_type: updates.application_type !== undefined ? updates.application_type : null,
+        target_stage: updates.target_stage !== undefined ? updates.target_stage : null,
         due_date: updates.date,
         date: updates.date
       })
@@ -205,6 +208,7 @@ export async function updateTask(taskId: string | number, updates: any, scope: '
         title: updates.title || task.title,
         description: updates.description !== undefined ? updates.description : task.description,
         application_type: updates.application_type !== undefined ? updates.application_type : task.application_type,
+        target_stage: updates.target_stage !== undefined ? updates.target_stage : task.target_stage,
         due_date: shiftedDateFull,
         date: shiftedDateFull
       }).eq('id', task.id)
@@ -268,20 +272,84 @@ export async function toggleTaskStatus(taskId: string | number, newStatus: 'pend
         task_plants (
           plant_id,
           plants ( id, cycle_id )
+        ),
+        task_cycles (
+          cycle_id
         )
       `)
       .eq('id', taskId)
       .single()
 
-    if (task && task.task_plants && task.task_plants.length > 0) {
-      if (task.type === 'riego' || (task.type === 'fertilizante' && task.application_type === 'Riego')) {
-        const plantIds = task.task_plants.map((tp: any) => tp.plant_id)
+    if (task) {
+      const plantIds = task.task_plants ? task.task_plants.map((tp: any) => tp.plant_id) : []
+
+      if (plantIds.length > 0 && (task.type === 'riego' || (task.type === 'fertilizante' && task.application_type === 'Riego'))) {
         const { error: waterError } = await supabase
           .from('plants')
           .update({ last_water: new Date().toISOString() })
           .in('id', plantIds)
 
         if (waterError) console.error('Error updating last_water:', waterError)
+      } else if (task.type === 'cambio_etapa' && task.target_stage) {
+        // Logica para cambiar etapa
+        const stageToColumnMap: { [key: string]: string } = {
+          'Germinación': 'date_germinacion',
+          'Plántula': 'date_plantula',
+          'Vegetativo': 'date_vegetativo',
+          'Enraizamiento': 'date_enraizamiento',
+          'Floración': 'date_floracion',
+          'Secado': 'date_secado',
+          'Curado': 'date_curado',
+        }
+
+        const dateCol = stageToColumnMap[task.target_stage]
+        if (dateCol) {
+          const updateObj: any = {
+            stage: task.target_stage,
+          }
+          updateObj[dateCol] = new Date().toISOString()
+
+          const { error: stageError } = await supabase
+            .from('plants')
+            .update(updateObj)
+            .in('id', plantIds)
+
+          if (stageError) console.error('Error updating stage based on target_stage:', stageError)
+        }
+      }
+
+      // Nueva lógica para cambiar ambiente
+      if (task.type === 'ambiente' && task.target_space_id) {
+        const environmentPlantIds = task.task_plants?.map((tp: any) => tp.plant_id) || [];
+        const cycleIds = task.task_cycles?.map((tc: any) => tc.cycle_id) || [];
+
+        // 1. Mudar Plantas Individuales
+        if (environmentPlantIds.length > 0) {
+          const { error: movePlantsError } = await supabase
+            .from('plants')
+            .update({ space_id: task.target_space_id })
+            .in('id', environmentPlantIds)
+
+          if (movePlantsError) console.error('Error moving plants to new space:', movePlantsError)
+        }
+
+        // 2. Mudar Ciclos Enteros
+        if (cycleIds.length > 0) {
+          const { error: moveCyclesError } = await supabase
+            .from('cycles')
+            .update({ space_id: task.target_space_id })
+            .in('id', cycleIds)
+
+          if (moveCyclesError) console.error('Error moving cycles to new space:', moveCyclesError)
+
+          // Mover también todas las plantas de ese ciclo
+          const { error: movePlantsCycleError } = await supabase
+            .from('plants')
+            .update({ space_id: task.target_space_id })
+            .in('cycle_id', cycleIds)
+
+          if (movePlantsCycleError) console.error('Error moving plants from cycle to new space:', movePlantsCycleError)
+        }
       }
     }
   }

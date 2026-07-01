@@ -46,7 +46,7 @@ export default function MeasurementModal({ isOpen, onClose, cycleId }: Measureme
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={onClose}></div>
 
-      <div className="relative bg-brand-card w-full max-w-xs rounded-2xl border border-slate-200 shadow-sm p-6 animate-in zoom-in duration-200">
+      <div className="relative bg-brand-card w-full max-w-xs rounded-2xl border border-card-border shadow-sm p-6 animate-in zoom-in duration-200">
         <h2 className="text-xl font-title text-brand-primary mb-4 uppercase text-center">
             🌡️ Registrar Clima
         </h2>
@@ -58,7 +58,7 @@ export default function MeasurementModal({ isOpen, onClose, cycleId }: Measureme
             <input 
               type="date"
               required
-              className="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 text-slate-800 text-center focus:border-brand-primary outline-none"
+              className="w-full bg-slate-50 border border-card-border rounded-lg p-3 text-foreground text-center focus:border-brand-primary outline-none"
               value={date}
               onChange={(e) => setDate(e.target.value)}
             />
@@ -72,7 +72,7 @@ export default function MeasurementModal({ isOpen, onClose, cycleId }: Measureme
                 step="0.1"
                 required
                 placeholder="24.5"
-                className="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 text-slate-800 text-center text-xl font-bold focus:border-brand-primary outline-none"
+                className="w-full bg-slate-50 border border-card-border rounded-lg p-3 text-foreground text-center text-xl font-bold focus:border-brand-primary outline-none"
                 value={temp}
                 onChange={(e) => setTemp(e.target.value)}
                 />
@@ -84,7 +84,7 @@ export default function MeasurementModal({ isOpen, onClose, cycleId }: Measureme
                 step="0.1"
                 required
                 placeholder="60"
-                className="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 text-slate-800 text-center text-xl font-bold focus:border-brand-primary outline-none"
+                className="w-full bg-slate-50 border border-card-border rounded-lg p-3 text-foreground text-center text-xl font-bold focus:border-brand-primary outline-none"
                 value={hum}
                 onChange={(e) => setHum(e.target.value)}
                 />
@@ -99,7 +99,7 @@ export default function MeasurementModal({ isOpen, onClose, cycleId }: Measureme
             {loading ? "..." : "GUARDAR"}
           </button>
           
-          <button type="button" onClick={onClose} className="w-full text-xs text-brand-muted hover:text-slate-800 underline">
+          <button type="button" onClick={onClose} className="w-full text-xs text-brand-muted hover:text-foreground underline">
             Cancelar
           </button>
 

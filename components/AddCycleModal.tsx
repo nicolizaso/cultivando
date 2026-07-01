@@ -74,32 +74,32 @@ export default function AddCycleModal() {
 
       {isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-          <div className="bg-white border border-slate-200 w-full max-w-md rounded-2xl shadow-sm overflow-hidden animate-in zoom-in-95 duration-200">
+          <div className="bg-card border border-card-border w-full max-w-md rounded-2xl shadow-sm overflow-hidden animate-in zoom-in-95 duration-200">
             
-            <div className="bg-[#F5F5F1]/50 p-6 border-b border-slate-100">
-              <h2 className="text-xl font-bold text-slate-800 tracking-wide">Iniciar Nuevo Ciclo</h2>
-              <p className="text-slate-500 text-xs mt-1">Configura tu próximo cultivo</p>
+            <div className="bg-background/50 p-6 border-b border-card-border">
+              <h2 className="text-xl font-bold text-foreground tracking-wide">Iniciar Nuevo Ciclo</h2>
+              <p className="text-muted text-xs mt-1">Configura tu próximo cultivo</p>
             </div>
 
             <form onSubmit={handleSubmit} className="p-6 space-y-5">
               
               <div>
-                <label className="block text-slate-500 mb-1.5 text-[10px] font-bold uppercase tracking-wider">Nombre del Ciclo</label>
+                <label className="block text-muted mb-1.5 text-[10px] font-bold uppercase tracking-wider">Nombre del Ciclo</label>
                 <input 
                   type="text"
                   placeholder="Ej: Verano 2024"
                   required
-                  className="w-full bg-[#F5F5F1] border border-slate-200 rounded-xl p-3 text-slate-800 text-sm focus:border-brand-primary outline-none transition-colors"
+                  className="w-full bg-background border border-card-border rounded-xl p-3 text-foreground text-sm focus:border-brand-primary outline-none transition-colors"
                   value={formData.name}
                   onChange={(e) => setFormData({...formData, name: e.target.value})}
                 />
               </div>
 
               <div>
-                <label className="block text-slate-500 mb-1.5 text-[10px] font-bold uppercase tracking-wider">Espacio Asignado</label>
+                <label className="block text-muted mb-1.5 text-[10px] font-bold uppercase tracking-wider">Espacio Asignado</label>
                 <select 
                   required
-                  className="w-full bg-[#F5F5F1] border border-slate-200 rounded-xl p-3 text-slate-800 text-sm focus:border-brand-primary outline-none appearance-none transition-colors"
+                  className="w-full bg-background border border-card-border rounded-xl p-3 text-foreground text-sm focus:border-brand-primary outline-none appearance-none transition-colors"
                   value={formData.spaceId}
                   onChange={(e) => setFormData({...formData, spaceId: e.target.value})}
                 >
@@ -118,21 +118,21 @@ export default function AddCycleModal() {
               </div>
 
               <div>
-                <label className="block text-slate-500 mb-1.5 text-[10px] font-bold uppercase tracking-wider">Fecha de Inicio</label>
+                <label className="block text-muted mb-1.5 text-[10px] font-bold uppercase tracking-wider">Fecha de Inicio</label>
                 <input 
                   type="date"
                   required
-                  className="w-full bg-[#F5F5F1] border border-slate-200 rounded-xl p-3 text-slate-800 text-sm focus:border-brand-primary outline-none transition-colors scheme-light"
+                  className="w-full bg-background border border-card-border rounded-xl p-3 text-foreground text-sm focus:border-brand-primary outline-none transition-colors scheme-light"
                   value={formData.startDate}
                   onChange={(e) => setFormData({...formData, startDate: e.target.value})}
                 />
               </div>
 
-              <div className="flex gap-3 mt-8 pt-4 border-t border-slate-100">
+              <div className="flex gap-3 mt-8 pt-4 border-t border-card-border">
                 <button 
                   type="button" 
                   onClick={() => setIsOpen(false)} 
-                  className="flex-1 py-3 text-slate-500 hover:text-slate-800 font-bold text-xs uppercase transition-colors"
+                  className="flex-1 py-3 text-muted hover:text-foreground font-bold text-xs uppercase transition-colors"
                 >
                   Cancelar
                 </button>

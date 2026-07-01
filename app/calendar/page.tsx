@@ -46,17 +46,17 @@ export default async function CalendarPage() {
 
   // Process plants for the FAB (extracted from active cycles)
   const cycles = (activeCycles || []) as unknown as CycleWithPlantsAndSpace[];
-  const allPlantsMap = new Map<string, { id: string, name: string }>();
+  const allPlantsMap = new Map<string, { id: string, name: string, space_id?: number }>();
   cycles.forEach(cycle => {
     cycle.plants?.forEach(p => {
       if (!allPlantsMap.has(String(p.id))) {
-        allPlantsMap.set(String(p.id), { id: String(p.id), name: p.name });
+        allPlantsMap.set(String(p.id), { id: String(p.id), name: p.name, space_id: cycle.space_id });
       }
     });
   });
   const allPlants = Array.from(allPlantsMap.values());
 
-  const viewCycles = cycles.map(c => ({ id: c.id, name: c.name }));
+  const viewCycles = cycles.map(c => ({ id: c.id, name: c.name, space_id: c.space_id }));
   const mappedTasks = (tasks || []).map((t: any) => {
     const { cycleIds, cycleNames } = mapTaskCycles(t, viewCycles);
 
@@ -68,7 +68,7 @@ export default async function CalendarPage() {
   });
 
   return (
-    <main className="min-h-screen bg-[#F5F5F1] text-slate-800 p-4 md:p-8 pb-24 font-body">
+    <main className="min-h-screen bg-background text-foreground p-4 md:p-8 pb-24 font-body">
       <GlobalHeader userEmail={user?.email} title="Agenda" subtitle="Planificación" />
 
       <CalendarView

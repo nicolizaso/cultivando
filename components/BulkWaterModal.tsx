@@ -46,10 +46,10 @@ export default function BulkWaterModal({ isOpen, onClose, selectedIds, onSuccess
       {/* Backdrop oscuro */}
       <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={onClose}></div>
 
-      <div className="relative bg-brand-card w-full max-w-sm rounded-2xl border border-slate-200 shadow-sm p-6 animate-in zoom-in duration-200">
+      <div className="relative bg-brand-card w-full max-w-sm rounded-2xl border border-card-border shadow-sm p-6 animate-in zoom-in duration-200">
         <h2 className="text-xl font-title text-blue-400 mb-1 uppercase">Riego Masivo</h2>
         <p className="text-xs text-brand-muted mb-6">
-            Aplicando a <span className="font-bold text-slate-800">{selectedIds.length} plantas</span> seleccionadas.
+            Aplicando a <span className="font-bold text-foreground">{selectedIds.length} plantas</span> seleccionadas.
         </p>
 
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -59,7 +59,7 @@ export default function BulkWaterModal({ isOpen, onClose, selectedIds, onSuccess
             <input 
               type="date"
               required
-              className="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 text-slate-800 focus:border-brand-primary outline-none"
+              className="w-full bg-slate-50 border border-card-border rounded-lg p-3 text-foreground focus:border-brand-primary outline-none"
               value={date}
               onChange={(e) => setDate(e.target.value)}
             />
@@ -70,7 +70,7 @@ export default function BulkWaterModal({ isOpen, onClose, selectedIds, onSuccess
             <input 
               type="text"
               placeholder="Ej: 50 Litros totales"
-              className="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 text-slate-800 focus:border-brand-primary outline-none"
+              className="w-full bg-slate-50 border border-card-border rounded-lg p-3 text-foreground focus:border-brand-primary outline-none"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
             />
@@ -81,7 +81,7 @@ export default function BulkWaterModal({ isOpen, onClose, selectedIds, onSuccess
             <textarea 
               rows={3}
               placeholder="Ej: Base A+B (2ml/L), CalMag..."
-              className="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 text-slate-800 focus:border-brand-primary outline-none resize-none"
+              className="w-full bg-slate-50 border border-card-border rounded-lg p-3 text-foreground focus:border-brand-primary outline-none resize-none"
               value={nutrients}
               onChange={(e) => setNutrients(e.target.value)}
             />
@@ -91,14 +91,14 @@ export default function BulkWaterModal({ isOpen, onClose, selectedIds, onSuccess
             <button 
               type="button" 
               onClick={onClose}
-              className="flex-1 py-3 text-brand-muted hover:text-slate-800 font-bold text-xs uppercase"
+              className="flex-1 py-3 text-brand-muted hover:text-foreground font-bold text-xs uppercase"
             >
               Cancelar
             </button>
             <button 
               type="submit" 
               disabled={loading}
-              className="flex-1 bg-blue-500 hover:bg-blue-600 text-slate-800 py-3 rounded-lg font-title tracking-wide transition disabled:opacity-50"
+              className="flex-1 bg-blue-500 hover:bg-blue-600 text-foreground py-3 rounded-lg font-title tracking-wide transition disabled:opacity-50"
             >
               {loading ? "REGISTRANDO..." : "REGISTRAR RIEGO"}
             </button>

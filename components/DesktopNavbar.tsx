@@ -18,11 +18,11 @@ export default function DesktopNavbar() {
   if (pathname === "/login") return null;
 
   return (
-    <nav className="hidden md:flex justify-between items-center px-8 py-4 bg-white border-b border-slate-100 sticky top-0 z-50">
+    <nav className="hidden md:flex justify-between items-center px-8 py-4 bg-card dark:bg-background/80 backdrop-blur border-b border-card-border dark:border-slate-800 sticky top-0 z-50">
       {/* Logo Section */}
       <Link href="/" className="flex items-center gap-2 group">
         <Sprout className="text-brand-primary w-6 h-6 transition-transform group-hover:rotate-12" strokeWidth={2.5} />
-        <span className="font-title text-slate-800 text-lg tracking-wider uppercase">
+        <span className="font-title text-foreground text-lg tracking-wider uppercase">
             Cultivapp
         </span>
       </Link>
@@ -40,7 +40,7 @@ export default function DesktopNavbar() {
               className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-all duration-300 group ${
                 isActive
                   ? "bg-brand-primary/10 text-brand-primary"
-                  : "text-slate-500 hover:text-slate-800 hover:bg-white/5"
+                  : "text-muted hover:text-foreground hover:bg-card-border"
               }`}
             >
               <IconComponent

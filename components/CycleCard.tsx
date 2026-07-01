@@ -43,8 +43,8 @@ export default function CycleCard({ cycle }: { cycle: CycleWithSpace }) {
         onClick={handleCardClick}
         className={`group relative rounded-2xl p-6 border transition-all duration-300 cursor-pointer overflow-hidden ${
         cycle.is_active 
-        ? 'bg-white border-slate-100 hover:border-brand-primary/30'
-        : 'bg-[#F5F5F1] border-slate-100 opacity-60 hover:opacity-100'
+        ? 'bg-card dark:bg-[#12141C] border-black/5 dark:border-card-border hover:border-brand-primary/30 dark:hover:border-brand-primary/30'
+        : 'bg-brand-bg border-black/5 dark:border-card-border opacity-60 hover:opacity-100'
     }`}>
       
       {latestImage && (
@@ -70,23 +70,23 @@ export default function CycleCard({ cycle }: { cycle: CycleWithSpace }) {
           <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase border flex items-center gap-1 ${
               cycle.is_active
               ? 'bg-brand-primary/10 text-brand-primary border-brand-primary/20'
-              : 'bg-slate-800 text-slate-500 border-slate-200'
+              : 'bg-slate-800 text-muted border-card-border dark:border-slate-700'
           }`}>
               {cycle.is_active ? <PlayCircle size={10} /> : <StopCircle size={10} />}
               {cycle.is_active ? 'Activo' : 'Archivado'}
           </span>
         </div>
 
-        <h3 className="text-2xl font-light font-title text-slate-800 mb-2 group-hover:text-brand-primary transition-colors">
+        <h3 className={`text-2xl font-light font-title mb-2 group-hover:text-brand-primary transition-colors ${latestImage ? 'text-white' : 'text-brand-text'}`}>
             {cycle.name}
         </h3>
 
         <div className="space-y-2 mb-6">
-            <div className="flex items-center gap-2 text-slate-500 text-xs font-body">
+            <div className={`flex items-center gap-2 text-xs font-body ${latestImage ? 'text-slate-300' : 'text-brand-muted'}`}>
                 <MapPin size={14} />
                 <span>{cycle.spaces?.name || "Sin espacio"}</span>
             </div>
-            <div className="flex items-center gap-2 text-slate-500 text-xs font-body">
+            <div className={`flex items-center gap-2 text-xs font-body ${latestImage ? 'text-slate-300' : 'text-brand-muted'}`}>
                 <Calendar size={14} />
                 <span>Inicio: {new Date(cycle.start_date).toLocaleDateString()}</span>
             </div>
@@ -97,11 +97,11 @@ export default function CycleCard({ cycle }: { cycle: CycleWithSpace }) {
         </div>
 
         {/* Acciones Rápidas Inferiores */}
-        <div className="mt-4 pt-4 border-t border-slate-100 flex justify-end">
+        <div className="mt-4 pt-4 border-t border-card-border dark:border-slate-800 flex justify-end">
           <button
               onClick={toggleStatus}
               disabled={loading}
-              className="text-[10px] font-bold uppercase text-slate-500 hover:text-slate-800 flex items-center gap-1 transition-colors"
+              className={`text-[10px] font-bold uppercase hover:text-brand-primary flex items-center gap-1 transition-colors ${latestImage ? 'text-muted hover:text-white' : 'text-brand-muted hover:text-brand-text'}`}
           >
               {cycle.is_active ? <StopCircle size={12} /> : <PlayCircle size={12} />}
               {cycle.is_active ? "Finalizar Ciclo" : "Reactivar Ciclo"}

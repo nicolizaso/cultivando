@@ -4,6 +4,7 @@ import "./globals.css";
 import BottomNav from "@/components/BottomNav";
 import DesktopNavbar from "@/components/DesktopNavbar";
 import { ToastProvider } from "@/app/context/ToastContext"; // <--- Importamos el Provider
+import { ThemeProvider } from "@/components/ThemeProvider";
 
 const inter = Inter({
   weight: ["300", "400", "500", "700"],
@@ -37,21 +38,21 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="es">
-      <body className={`${inter.variable} ${playfair.variable} antialiased bg-[#F5F5F1] text-slate-800`}>
-        
-        {/* Envolvemos la app en el ToastProvider */}
-        <ToastProvider>
-          <DesktopNavbar />
-          {/* Contenedor principal */}
-          <div className="pb-24 md:pb-0"> 
-              {children}
-          </div>
+    <html lang="es" suppressHydrationWarning>
+      <body className={`${inter.variable} ${playfair.variable} antialiased bg-background text-foreground transition-colors duration-300`}>
+        <ThemeProvider>
+          {/* Envolvemos la app en el ToastProvider */}
+          <ToastProvider>
+            <DesktopNavbar />
+            {/* Contenedor principal */}
+            <div className="pb-24 md:pb-0">
+                {children}
+            </div>
 
-          {/* Navbar Flotante */}
-          <BottomNav />
-        </ToastProvider>
-        
+            {/* Navbar Flotante */}
+            <BottomNav />
+          </ToastProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

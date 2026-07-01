@@ -72,7 +72,7 @@ export default function EditPlantForm({ plant, cycles }: EditPlantFormProps) {
     try {
       // Determine current stage based on the latest date set
       let currentStage = plant.stage;
-      let latestDate = '';
+      const latestDate = '';
 
       // Simple logic: the last stage with a date is the current stage
       // However, user might just be editing dates.
@@ -147,7 +147,7 @@ export default function EditPlantForm({ plant, cycles }: EditPlantFormProps) {
     <div className="max-w-2xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
 
       <div className="flex items-center justify-between">
-        <Link href={`/plants/${plant.id}`} className="text-slate-500 hover:text-slate-800 flex items-center gap-2 text-sm font-bold uppercase tracking-wider transition-colors">
+        <Link href={`/plants/${plant.id}`} className="text-muted hover:text-foreground flex items-center gap-2 text-sm font-bold uppercase tracking-wider transition-colors">
           <ArrowLeft size={16} /> Volver
         </Link>
         <button
@@ -161,48 +161,48 @@ export default function EditPlantForm({ plant, cycles }: EditPlantFormProps) {
       <form onSubmit={handleSave} className="space-y-8">
 
         {/* TOP SECTION: Basic Info */}
-        <section className="bg-white p-6 rounded-2xl border border-slate-100 space-y-4">
-          <h2 className="text-lg font-title text-slate-800 mb-4 flex items-center gap-2">
+        <section className="bg-card p-6 rounded-2xl border border-card-border space-y-4">
+          <h2 className="text-lg font-title text-foreground mb-4 flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-brand-primary"></span>
             Información Básica
           </h2>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-slate-500 mb-1 text-xs font-bold uppercase tracking-wider">Nombre</label>
+              <label className="block text-muted mb-1 text-xs font-bold uppercase tracking-wider">Nombre</label>
               <input
                 type="text"
                 required
-                className="w-full bg-[#F5F5F1] border border-slate-200 rounded-xl p-3 text-slate-800 focus:border-brand-primary outline-none transition-colors"
+                className="w-full bg-background border border-card-border rounded-xl p-3 text-foreground focus:border-brand-primary outline-none transition-colors"
                 value={basicInfo.name}
                 onChange={(e) => handleBasicChange('name', e.target.value)}
               />
             </div>
 
             <div>
-              <label className="block text-slate-500 mb-1 text-xs font-bold uppercase tracking-wider">Genética (Strain)</label>
+              <label className="block text-muted mb-1 text-xs font-bold uppercase tracking-wider">Genética (Strain)</label>
               <input
                 type="text"
-                className="w-full bg-[#F5F5F1] border border-slate-200 rounded-xl p-3 text-slate-800 focus:border-brand-primary outline-none transition-colors"
+                className="w-full bg-background border border-card-border rounded-xl p-3 text-foreground focus:border-brand-primary outline-none transition-colors"
                 value={basicInfo.strain}
                 onChange={(e) => handleBasicChange('strain', e.target.value)}
               />
             </div>
 
             <div>
-              <label className="block text-slate-500 mb-1 text-xs font-bold uppercase tracking-wider">Banco (Breeder)</label>
+              <label className="block text-muted mb-1 text-xs font-bold uppercase tracking-wider">Banco (Breeder)</label>
               <input
                 type="text"
-                className="w-full bg-[#F5F5F1] border border-slate-200 rounded-xl p-3 text-slate-800 focus:border-brand-primary outline-none transition-colors"
+                className="w-full bg-background border border-card-border rounded-xl p-3 text-foreground focus:border-brand-primary outline-none transition-colors"
                 value={basicInfo.breeder}
                 onChange={(e) => handleBasicChange('breeder', e.target.value)}
               />
             </div>
 
             <div>
-              <label className="block text-slate-500 mb-1 text-xs font-bold uppercase tracking-wider">Origen</label>
+              <label className="block text-muted mb-1 text-xs font-bold uppercase tracking-wider">Origen</label>
               <select
-                className="w-full bg-[#F5F5F1] border border-slate-200 rounded-xl p-3 text-slate-800 focus:border-brand-primary outline-none transition-colors appearance-none"
+                className="w-full bg-background border border-card-border rounded-xl p-3 text-foreground focus:border-brand-primary outline-none transition-colors appearance-none"
                 value={basicInfo.source_type}
                 onChange={(e) => handleBasicChange('source_type', e.target.value)}
               >
@@ -212,9 +212,9 @@ export default function EditPlantForm({ plant, cycles }: EditPlantFormProps) {
             </div>
 
             <div className="md:col-span-2">
-              <label className="block text-slate-500 mb-1 text-xs font-bold uppercase tracking-wider">Ciclo / Armario</label>
+              <label className="block text-muted mb-1 text-xs font-bold uppercase tracking-wider">Ciclo / Armario</label>
               <select
-                className="w-full bg-[#F5F5F1] border border-slate-200 rounded-xl p-3 text-slate-800 focus:border-brand-primary outline-none transition-colors appearance-none"
+                className="w-full bg-background border border-card-border rounded-xl p-3 text-foreground focus:border-brand-primary outline-none transition-colors appearance-none"
                 value={basicInfo.cycle_id || ''}
                 onChange={(e) => handleBasicChange('cycle_id', Number(e.target.value))}
               >
@@ -229,13 +229,13 @@ export default function EditPlantForm({ plant, cycles }: EditPlantFormProps) {
         </section>
 
         {/* TIMELINE SECTION */}
-        <section className="bg-white p-6 rounded-2xl border border-slate-100">
-           <h2 className="text-lg font-title text-slate-800 mb-6 flex items-center gap-2">
+        <section className="bg-card p-6 rounded-2xl border border-card-border">
+           <h2 className="text-lg font-title text-foreground mb-6 flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-brand-primary"></span>
             Línea de Tiempo
           </h2>
 
-          <div className="relative space-y-6 before:absolute before:inset-0 before:ml-6 before:w-0.5 before:bg-white/5">
+          <div className="relative space-y-6 before:absolute before:inset-0 before:ml-6 before:w-0.5 before:bg-card-border">
             {STAGE_CONFIG.filter(stage => {
               if (basicInfo.source_type === 'Esqueje') {
                 return !['Germinación', 'Plántula'].includes(stage.label);
@@ -258,7 +258,7 @@ export default function EditPlantForm({ plant, cycles }: EditPlantFormProps) {
                     className={`absolute left-0 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full flex items-center justify-center border-2 z-10 transition-all duration-300 ${
                         isActive
                         ? `${colors.bgColor} ${colors.textColor} ${colors.borderColor}`
-                        : 'bg-[#F5F5F1] text-slate-600 border-slate-200 hover:border-brand-primary/50 hover:text-brand-primary'
+                        : 'bg-background text-muted border-card-border hover:border-brand-primary/50 hover:text-brand-primary'
                     }`}
                   >
                     <Icon size={20} strokeWidth={isActive ? 2 : 1.5} />
@@ -269,27 +269,27 @@ export default function EditPlantForm({ plant, cycles }: EditPlantFormProps) {
                     onClick={() => activateStage(dateKey)}
                     className={`flex items-center justify-between p-4 rounded-xl border transition-all cursor-pointer ${
                         isActive
-                        ? `bg-[#F5F5F1] ${colors.borderColor}`
-                        : 'bg-transparent border-transparent hover:bg-white/5'
+                        ? `bg-background ${colors.borderColor}`
+                        : 'bg-transparent border-transparent hover:bg-card-border'
                     }`}
                   >
                     <div>
-                        <span className={`text-sm font-bold uppercase tracking-wider block ${isActive ? 'text-slate-800' : 'text-slate-500'}`}>
+                        <span className={`text-sm font-bold uppercase tracking-wider block ${isActive ? 'text-foreground' : 'text-muted'}`}>
                             {stage.label}
                         </span>
-                        {!isActive && <span className="text-[10px] text-slate-600">Click para activar</span>}
+                        {!isActive && <span className="text-[10px] text-muted">Click para activar</span>}
                     </div>
 
                     <div onClick={(e) => e.stopPropagation()}>
                         {isActive ? (
                              <input
                                 type="date"
-                                className="bg-white border border-slate-200 rounded-lg px-3 py-1 text-sm text-slate-700 focus:border-brand-primary outline-none w-36"
+                                className="bg-card border border-card-border rounded-lg px-3 py-1 text-sm text-foreground focus:border-brand-primary outline-none w-36"
                                 value={dateValue ? dateValue.split('T')[0] : ''}
                                 onChange={(e) => handleDateChange(dateKey, e.target.value)}
                              />
                         ) : (
-                            <Calendar className="text-slate-700" size={20} />
+                            <Calendar className="text-foreground" size={20} />
                         )}
                     </div>
                   </div>
@@ -302,7 +302,7 @@ export default function EditPlantForm({ plant, cycles }: EditPlantFormProps) {
         <button
             type="submit"
             disabled={loading}
-            className="w-full bg-brand-primary hover:bg-brand-primary-hover text-black p-4 rounded-xl font-bold uppercase tracking-widest transition-all hover:scale-[1.01] active:scale-[0.99] disabled:opacity-50 disabled:hover:scale-100 flex items-center justify-center gap-2"
+            className="w-full bg-brand-primary hover:bg-brand-primary-hover text-foreground p-4 rounded-xl font-bold uppercase tracking-widest transition-all hover:scale-[1.01] active:scale-[0.99] disabled:opacity-50 disabled:hover:scale-100 flex items-center justify-center gap-2"
         >
             {loading ? "Guardando..." : <><Save size={18} /> Guardar Cambios</>}
         </button>

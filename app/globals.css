@@ -1,31 +1,60 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:is(.dark *));
+
+@layer base {
+  :root {
+    --background: #F5F5F1; /* Blanco Hueso */
+    --foreground: #1E293B;
+    --card: #FFFFFF;
+    --card-hover: #F8FAFC;
+    --card-border: rgba(0, 0, 0, 0.05);
+    --text-muted: #64748B;
+    --brand-primary: #1B3022;
+  }
+
+  .dark {
+    --background: #0B0C10; /* Negro Profundo original */
+    --foreground: #F8FAFC;
+    --card: #12141C; /* Gris Oscuro original */
+    --card-hover: #1A1D27;
+    --card-border: rgba(255, 255, 255, 0.05);
+    --text-muted: #94A3B8;
+    --brand-primary: #2D4F39;
+  }
+}
+
 /* DEFINICIÓN DEL TEMA CULTIVAPP */
 @theme {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-hover: var(--card-hover);
+  --color-card-border: var(--card-border);
+  --color-muted: var(--text-muted);
+
   /* 1. TIPOGRAFÍA (Se mantiene igual) */
-    --font-title: var(--font-playfair), "Arial", "Helvetica", sans-serif;
+  --font-title: var(--font-playfair), "Arial", "Helvetica", sans-serif;
   --font-body: var(--font-inter), "Helvetica", sans-serif;
 
   /* 2. COLORES OFICIALES (Actualizados) */
   
-  /* El Celeste de la marca #00a599 */
-  --color-brand-primary: #1B3022;
+  --color-brand-primary: var(--brand-primary);
   --color-brand-primary-hover: #2D4F39; /* Un poco más oscuro para el efecto hover */
   --color-brand-primary-glow: rgba(27, 48, 34, 0.5);
   
   /* Fondos Oscuros */
-  --color-brand-bg: #F5F5F1;   /* Fondo principal (Gris muy oscuro) */
-  --color-brand-card: #ffffff; /*
-
- Fondo de tarjetas (Gris medio) */
-  --color-brand-card-hover: #f8fafc;
+  --color-brand-bg: var(--background);   /* Fondo principal */
+  --color-brand-card: var(--card); /* Fondo de tarjetas */
+  --color-brand-card-hover: var(--card-hover);
+  --color-brand-card-border: var(--card-border);
   
   /* Texto */
-  --color-brand-text: #1e293b; /* Blanco hueso para leer bien */
-  --color-brand-muted: #64748b; /* Gris claro para textos secundarios */
+  --color-brand-text: var(--foreground); /* Blanco hueso para leer bien */
+  --color-brand-muted: var(--text-muted); /* Gris claro para textos secundarios */
   
   /* Sombras y bordes mejorados */
-  --shadow-card: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-card: 0 1px 2px 0 var(--card-border);
   --shadow-card-hover: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
   --border-gradient: linear-gradient(90deg, rgba(27,48,34,0.2) 0%, rgba(27,48,34,0.05) 100%);
 }
@@ -33,8 +62,9 @@
 /* Aplicamos los básicos al cuerpo */
 body {
   font-family: var(--font-body);
-  background-color: var(--color-brand-bg);
-  color: var(--color-brand-text);
+  background-color: var(--background);
+  color: var(--foreground);
+  transition: background-color 0.3s ease, color 0.3s ease;
   background-image: 
     radial-gradient(circle at 10% 20%, rgba(0, 165, 153, 0.05) 0%, transparent 20%),
     radial-gradient(circle at 90% 80%, rgba(0, 165, 153, 0.03) 0%, transparent 20%);

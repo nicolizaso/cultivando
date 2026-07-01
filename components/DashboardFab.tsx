@@ -4,10 +4,10 @@ import { useState } from 'react'
 import { Plus } from 'lucide-react'
 import AddTaskModal from './AddTaskModal'
 
-interface Plant { id: string; name: string; }
+interface Plant { id: string; name: string; space_id?: number; }
 interface Space { id: number; name: string; }
 
-export default function DashboardFab({ plants, spaces, cycles, initialDate }: { plants: Plant[], spaces: Space[], cycles?: { id: number; name: string }[], initialDate?: Date }) {
+export default function DashboardFab({ plants, spaces, cycles, initialDate }: { plants: Plant[], spaces: Space[], cycles?: { id: number; name: string; space_id?: number }[], initialDate?: Date }) {
   const [isModalOpen, setIsModalOpen] = useState(false)
 
   return (

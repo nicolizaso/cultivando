@@ -43,7 +43,7 @@ export default function SpaceCard({ space, onClick }: SpaceCardProps) {
     const hasVent = space.vent_extraction || space.vent_intraction;
 
     if (!hasLight && !hasDims && !hasVent) {
-      return <p className="text-xs text-slate-500 mt-1 font-body">Configurar espacio</p>;
+      return <p className="text-xs text-muted mt-1 font-body">Configurar espacio</p>;
     }
 
     return (
@@ -84,7 +84,7 @@ export default function SpaceCard({ space, onClick }: SpaceCardProps) {
   return (
     <div
       onClick={onClick}
-      className={`group bg-white border border-slate-100 rounded-2xl p-6 hover:border-brand-primary/30 transition-all duration-300 relative overflow-hidden ${onClick ? 'cursor-pointer' : ''}`}
+      className={`group bg-card dark:bg-[#12141C] border border-black/5 dark:border-card-border rounded-2xl p-6 hover:border-brand-primary/30 transition-all duration-300 relative overflow-hidden ${onClick ? 'cursor-pointer' : ''}`}
     >
         
         {/* Fondo decorativo */}
@@ -95,19 +95,19 @@ export default function SpaceCard({ space, onClick }: SpaceCardProps) {
         </div>
 
         <div className="flex items-start gap-4 relative z-10">
-          <div className="w-12 h-12 rounded-2xl bg-[#F5F5F1] border border-slate-100 flex items-center justify-center shrink-0">
+          <div className="w-12 h-12 rounded-2xl bg-brand-bg border border-card-border dark:border-slate-800 flex items-center justify-center shrink-0">
              {getSpaceIcon()}
           </div>
           <div>
-            <h3 className="text-xl font-light font-title text-slate-800">{space.name}</h3>
+            <h3 className="text-xl font-light font-title text-brand-text">{space.name}</h3>
             {/* Summary Line */}
             {renderTechnicalSummary()}
           </div>
         </div>
         
         {/* Barra decorativa */}
-        <div className="mt-6 pt-4 border-t border-slate-100 flex justify-between items-center">
-             <span className="inline-block text-[10px] font-bold uppercase tracking-widest text-slate-500 border border-slate-100 px-2 py-0.5 rounded-md">
+        <div className="mt-6 pt-4 border-t border-card-border dark:border-slate-800 flex justify-between items-center">
+             <span className="inline-block text-[10px] font-bold uppercase tracking-widest text-brand-muted border border-card-border dark:border-slate-800 px-2 py-0.5 rounded-md">
                 {space.type}
             </span>
             <div className="flex gap-1">

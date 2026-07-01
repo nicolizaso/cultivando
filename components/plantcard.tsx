@@ -101,7 +101,7 @@ export default function PlantCard({
         return <div onClick={handleCardClick} className="flex-1 flex flex-col p-3 min-w-0">{children}</div>;
     }
     return (
-        <Link href={`/plants/${id}`} className="flex-1 flex flex-col p-3 min-w-0 hover:bg-white/5 transition-colors">
+        <Link href={`/plants/${id}`} className="flex-1 flex flex-col p-3 min-w-0 hover:bg-slate-50 dark:hover:bg-card-border transition-colors">
             {children}
         </Link>
     );
@@ -109,10 +109,10 @@ export default function PlantCard({
 
   return (
     <motion.div 
-      className={`group relative flex flex-row bg-white border rounded-xl overflow-hidden h-28 transition-all duration-300 ${
+      className={`group relative flex flex-row bg-card dark:bg-[#12141C] border rounded-xl overflow-hidden h-28 transition-all duration-300 ${
         selectionMode && isSelected
           ? 'border-brand-primary ring-1 ring-brand-primary bg-brand-primary/5'
-          : 'border-slate-100 hover:border-brand-primary'
+          : 'border-black/5 dark:border-card-border hover:border-brand-primary dark:hover:border-brand-primary'
       }`}
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
@@ -120,7 +120,7 @@ export default function PlantCard({
       onClick={handleCardClick}
     >
         {/* Left Side: Image/Icon */}
-        <div className="w-24 md:w-28 relative shrink-0 border-r border-slate-100 bg-black/20">
+        <div className="w-24 md:w-28 relative shrink-0 border-r border-card-border dark:border-slate-800 bg-black/20">
             {imageUrl ? (
                 <Image
                     src={imageUrl}
@@ -138,7 +138,7 @@ export default function PlantCard({
             {/* Selection Overlay (Image Area) */}
             {selectionMode && (
                 <div className={`absolute inset-0 z-20 flex items-center justify-center bg-black/40 backdrop-blur-[1px] transition-opacity ${isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
-                    <div className={`rounded-full p-1 ${isSelected ? 'bg-brand-primary text-black' : 'border-2 border-slate-1000 text-transparent'}`}>
+                    <div className={`rounded-full p-1 ${isSelected ? 'bg-brand-primary text-foreground' : 'border-2 border-card-border text-transparent'}`}>
                         <Check size={16} strokeWidth={3} />
                     </div>
                 </div>
@@ -153,9 +153,9 @@ export default function PlantCard({
                 {/* Header: Name + Strain */}
                 <div className="flex justify-between items-start gap-2 pr-6">
                     <div className="min-w-0">
-                        <h3 className="font-bold text-slate-800 text-base leading-tight truncate">{name}</h3>
+                        <h3 className="font-bold text-brand-text text-base leading-tight truncate">{name}</h3>
                         {strain && (
-                            <p className="text-xs text-slate-500 truncate mt-0.5">{strain}</p>
+                            <p className="text-xs text-brand-muted truncate mt-0.5">{strain}</p>
                         )}
                     </div>
                 </div>
@@ -168,18 +168,18 @@ export default function PlantCard({
                 </div>
 
                 {/* Metrics: Age & Cycle */}
-                <div className="mt-auto pt-2 flex flex-col gap-1 text-xs text-slate-500">
+                <div className="mt-auto pt-2 flex flex-col gap-1 text-xs text-brand-muted">
                     <div className="flex items-center gap-3">
-                        <span className="flex items-center gap-1 font-medium text-slate-700">
+                        <span className="flex items-center gap-1 font-medium text-foreground dark:text-slate-300">
                             📅 {isMounted ? totalAge : <span className="opacity-0">0</span>} días
                         </span>
                         {cycleName && (
-                            <span className="truncate border-l border-slate-200 pl-3">
+                            <span className="truncate border-l border-card-border dark:border-slate-700 pl-3">
                                 {cycleName}
                             </span>
                         )}
                     </div>
-                    <span className="text-[10px] text-slate-500">
+                    <span className="text-[10px] text-brand-muted">
                        en etapa de {displayStage} hace {isMounted ? daysInCurrentStage : <span className="opacity-0">0</span>} días
                     </span>
                 </div>
@@ -194,7 +194,7 @@ export default function PlantCard({
                             e.stopPropagation();
                             setShowMenu(!showMenu);
                         }}
-                        className="p-1.5 text-slate-500 hover:text-slate-800 hover:bg-white/10 rounded-lg transition-colors"
+                        className="p-1.5 text-muted hover:text-foreground hover:bg-card-border rounded-lg transition-colors"
                     >
                         <MoreVertical size={16} />
                     </button>
@@ -205,11 +205,11 @@ export default function PlantCard({
                                 initial={{ opacity: 0, scale: 0.9, y: -10 }}
                                 animate={{ opacity: 1, scale: 1, y: 0 }}
                                 exit={{ opacity: 0, scale: 0.9, y: -10 }}
-                                className="absolute top-full right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-sm py-1 min-w-[120px] flex flex-col z-50 overflow-hidden"
+                                className="absolute top-full right-0 mt-1 bg-card border border-card-border rounded-lg shadow-sm py-1 min-w-[120px] flex flex-col z-50 overflow-hidden"
                             >
                                 <button
                                     onClick={handleWater}
-                                    className="flex items-center gap-2 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-white/5 hover:text-blue-400 w-full text-left transition-colors"
+                                    className="flex items-center gap-2 px-3 py-2 text-xs font-medium text-foreground hover:bg-card-border hover:text-blue-400 w-full text-left transition-colors"
                                 >
                                     <Droplet size={14} className={isWatered ? "text-blue-500" : ""} />
                                     {isWatered ? 'Regada' : 'Regar'}
@@ -217,13 +217,13 @@ export default function PlantCard({
 
                                 <Link
                                     href={`/plants/${id}`}
-                                    className="flex items-center gap-2 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-white/5 hover:text-brand-primary w-full text-left transition-colors"
+                                    className="flex items-center gap-2 px-3 py-2 text-xs font-medium text-foreground hover:bg-card-border hover:text-brand-primary w-full text-left transition-colors"
                                 >
                                     <Pencil size={14} />
                                     Detalles
                                 </Link>
 
-                                <div className="h-px bg-white/5 my-1" />
+                                <div className="h-px bg-card-border my-1" />
 
                                 <button
                                     onClick={handleDelete}

@@ -30,6 +30,7 @@ export interface Plant {
   date_floracion?: string;
   date_secado?: string;
   date_curado?: string;
+  is_archived?: boolean;
 }
 
 export interface Cycle {
@@ -76,6 +77,8 @@ export interface Task {
   cycleNames?: string;
   type: string; // 'riego', 'poda', etc.
   application_type?: string;
+  target_stage?: string;
+  target_space_id?: number | null;
   description?: string;
   recurrence_id?: string;
   task_plants?: {
@@ -112,4 +115,24 @@ export interface CycleImage {
   taken_at: string; // ISO Timestamp
   created_at: string; // ISO Timestamp
   description?: string;
+}
+
+export interface Fertilizer {
+  id: number;
+  user_id: string;
+  name: string;
+  brand: string;
+  stage: 'enraizamiento' | 'vegetativo' | 'floracion' | 'lavado' | 'todo';
+  dose_type: 'fija' | 'semanal';
+  dose_fixed?: number;
+  dose_weekly?: { week: number; dose: number }[];
+  created_at: string;
+}
+
+export interface FertilizerCombo {
+  id: number;
+  user_id: string;
+  name: string;
+  products: { fertilizer_id: number; name: string }[];
+  created_at: string;
 }

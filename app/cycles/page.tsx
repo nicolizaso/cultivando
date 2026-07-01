@@ -17,7 +17,7 @@ export default async function CyclesPage() {
     .limit(1, { foreignTable: 'cycle_images' });
 
   return (
-    <main className="min-h-screen bg-[#F5F5F1] text-slate-800 p-4 md:p-8 pb-24 font-body">
+    <main className="min-h-screen bg-background text-foreground p-4 md:p-8 pb-24 font-body">
       
       <GlobalHeader userEmail={user?.email} title="Historial" subtitle="Ciclos de Cultivo" />
       
@@ -33,8 +33,8 @@ export default async function CyclesPage() {
           ))
         ) : (
           <div className="col-span-full flex flex-col items-center justify-center py-20 opacity-50">
-            <Sprout size={48} className="mb-4 text-slate-600" />
-            <p className="text-slate-500">No hay ciclos registrados aún.</p>
+            <Sprout size={48} className="mb-4 text-muted" />
+            <p className="text-muted">No hay ciclos registrados aún.</p>
           </div>
         )}
       </section>

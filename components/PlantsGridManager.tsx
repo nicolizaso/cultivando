@@ -4,7 +4,7 @@ import { useState, useMemo } from "react";
 import PlantCard from "./plantcard";
 import { supabase } from "@/app/lib/supabase";
 import { useRouter } from "next/navigation";
-import { CheckSquare, Square, Trash2, X, FilterX, Filter } from "lucide-react";
+import { CheckSquare, Square, Trash2, X, FilterX, Filter, Archive } from "lucide-react";
 import { Plant as BasePlant, Cycle, Space } from "@/app/lib/types";
 import AddPlantModal from "./AddPlantModal";
 
@@ -27,12 +27,20 @@ export default function PlantsGridManager({ plants, cycles, spaces }: PlantsGrid
   const [showFilters, setShowFilters] = useState(false);
   const [selectedCycleId, setSelectedCycleId] = useState<string>("all");
   const [selectedSpaceId, setSelectedSpaceId] = useState<string>("all");
+  const [showArchived, setShowArchived] = useState(false);
 
   const router = useRouter();
 
   // Filter Logic
   const filteredPlants = useMemo(() => {
     return plants.filter(plant => {
+      // Filter by Archive State
+      if (showArchived) {
+          if (plant.is_archived !== true) return false;
+      } else {
+          if (plant.is_archived) return false;
+      }
+
       // Filter by Cycle
       if (selectedCycleId !== "all") {
         if (plant.cycle_id !== Number(selectedCycleId)) return false;
@@ -127,17 +135,29 @@ export default function PlantsGridManager({ plants, cycles, spaces }: PlantsGrid
     <div>
       {/* Toolbar */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
-         <div className="text-sm text-slate-500 font-bold">
-            {filteredPlants.length} plantas {hasFilters && <span className="text-slate-600 font-normal">(filtrado de {plants.length})</span>}
+         <div className="text-sm text-muted font-bold">
+            {filteredPlants.length} plantas {hasFilters && <span className="text-muted font-normal">(filtrado de {plants.length})</span>}
          </div>
 
          <div className="flex gap-2 self-end md:self-auto">
+            <button
+                onClick={() => setShowArchived(!showArchived)}
+                className={`p-2 rounded-lg transition-colors ${
+                    showArchived
+                    ? "bg-brand-primary text-brand-bg shadow-sm shadow-brand-primary/20"
+                    : "bg-card-border hover:bg-card-border text-muted hover:text-foreground"
+                }`}
+                title="Mostrar Archivadas"
+            >
+                <Archive size={20} />
+            </button>
+
             <button
                 onClick={() => setShowFilters(!showFilters)}
                 className={`p-2 rounded-lg transition-colors ${
                     showFilters || hasFilters
                     ? "bg-brand-primary text-brand-bg shadow-sm shadow-brand-primary/20"
-                    : "bg-white/5 hover:bg-white/10 text-slate-500 hover:text-slate-800"
+                    : "bg-card-border hover:bg-card-border text-muted hover:text-foreground"
                 }`}
                 title="Filtrar"
             >
@@ -149,7 +169,7 @@ export default function PlantsGridManager({ plants, cycles, spaces }: PlantsGrid
             {isSelectionMode && (
                 <button
                     onClick={toggleSelectAll}
-                    className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-slate-700 text-xs font-bold uppercase transition-colors"
+                    className="flex items-center gap-2 px-4 py-2 rounded-lg bg-card-border hover:bg-card-border text-foreground text-xs font-bold uppercase transition-colors"
                 >
                     {isAllSelected ? <CheckSquare size={16}/> : <Square size={16}/>}
                     <span className="hidden md:inline">{isAllSelected ? "Deseleccionar" : "Todos"}</span>
@@ -160,8 +180,8 @@ export default function PlantsGridManager({ plants, cycles, spaces }: PlantsGrid
                 onClick={toggleSelectionMode}
                 className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold uppercase transition-colors ${
                     isSelectionMode
-                    ? "bg-white/10 text-slate-800 border border-slate-300"
-                    : "bg-white/5 hover:bg-white/10 text-slate-700 border border-transparent"
+                    ? "bg-card-border text-foreground border border-slate-300"
+                    : "bg-card-border hover:bg-card-border text-foreground border border-transparent"
                 }`}
             >
                 {isSelectionMode ? "Cancelar" : "Seleccionar"}
@@ -171,15 +191,15 @@ export default function PlantsGridManager({ plants, cycles, spaces }: PlantsGrid
 
       {/* Collapsible Filter Section */}
       {showFilters && (
-        <div className="bg-white p-4 rounded-2xl mb-6 animate-in fade-in slide-in-from-top-2 border border-slate-100">
+        <div className="bg-card p-4 rounded-2xl mb-6 animate-in fade-in slide-in-from-top-2 border border-card-border">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* Space Filter */}
                 <div className="flex flex-col gap-1">
-                    <label className="text-xs text-slate-500 font-bold uppercase ml-1">Espacio</label>
+                    <label className="text-xs text-muted font-bold uppercase ml-1">Espacio</label>
                     <select
                         value={selectedSpaceId}
                         onChange={(e) => setSelectedSpaceId(e.target.value)}
-                        className="w-full bg-[#F5F5F1] text-slate-700 text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:border-brand-primary/50 transition-colors appearance-none cursor-pointer"
+                        className="w-full bg-background text-foreground text-sm border border-card-border rounded-lg px-3 py-2 focus:outline-none focus:border-brand-primary/50 transition-colors appearance-none cursor-pointer"
                     >
                         <option value="all">Todos los espacios</option>
                         {spaces.map(space => (
@@ -190,11 +210,11 @@ export default function PlantsGridManager({ plants, cycles, spaces }: PlantsGrid
 
                 {/* Cycle Filter */}
                 <div className="flex flex-col gap-1">
-                    <label className="text-xs text-slate-500 font-bold uppercase ml-1">Ciclo</label>
+                    <label className="text-xs text-muted font-bold uppercase ml-1">Ciclo</label>
                     <select
                         value={selectedCycleId}
                         onChange={(e) => setSelectedCycleId(e.target.value)}
-                        className="w-full bg-[#F5F5F1] text-slate-700 text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:border-brand-primary/50 transition-colors appearance-none cursor-pointer"
+                        className="w-full bg-background text-foreground text-sm border border-card-border rounded-lg px-3 py-2 focus:outline-none focus:border-brand-primary/50 transition-colors appearance-none cursor-pointer"
                     >
                         <option value="all">Todos los ciclos</option>
                         {cycles.map(cycle => (
@@ -208,7 +228,7 @@ export default function PlantsGridManager({ plants, cycles, spaces }: PlantsGrid
                 <div className="mt-4 flex justify-end">
                     <button
                         onClick={clearFilters}
-                        className="flex items-center gap-2 px-4 py-2 text-xs font-bold text-slate-500 hover:text-slate-800 bg-white/5 hover:bg-white/10 rounded-lg transition-colors"
+                        className="flex items-center gap-2 px-4 py-2 text-xs font-bold text-muted hover:text-foreground bg-card-border hover:bg-card-border rounded-lg transition-colors"
                     >
                         <FilterX size={16} />
                         Limpiar Filtros
@@ -232,8 +252,8 @@ export default function PlantsGridManager({ plants, cycles, spaces }: PlantsGrid
             />
           ))
         ) : (
-          <div className="col-span-full text-center py-20 bg-white rounded-2xl border border-dashed border-slate-200">
-            <p className="text-slate-500 font-body">
+          <div className="col-span-full text-center py-20 bg-card rounded-2xl border border-dashed border-card-border">
+            <p className="text-muted font-body">
                 {hasFilters ? "No se encontraron plantas con estos criterios." : "No hay plantas registradas en ningún ciclo."}
             </p>
           </div>
@@ -242,11 +262,11 @@ export default function PlantsGridManager({ plants, cycles, spaces }: PlantsGrid
 
       {/* Floating Action Bar */}
       {isSelectionMode && selectedIds.size > 0 && (
-          <div className="fixed bottom-24 md:bottom-8 left-1/2 -translate-x-1/2 z-50 flex items-center gap-4 bg-white border border-slate-200 p-2 rounded-full shadow-sm shadow-black/80 animate-in slide-in-from-bottom-4 fade-in">
-              <span className="pl-4 text-sm font-bold text-slate-800 whitespace-nowrap">
+          <div className="fixed bottom-24 md:bottom-8 left-1/2 -translate-x-1/2 z-50 flex items-center gap-4 bg-card border border-card-border p-2 rounded-full shadow-sm shadow-black/80 animate-in slide-in-from-bottom-4 fade-in">
+              <span className="pl-4 text-sm font-bold text-foreground whitespace-nowrap">
                   {selectedIds.size} seleccionadas
               </span>
-              <div className="w-px h-6 bg-white/10"></div>
+              <div className="w-px h-6 bg-card-border"></div>
               <button
                   onClick={handleDelete}
                   disabled={isDeleting}
@@ -260,7 +280,7 @@ export default function PlantsGridManager({ plants, cycles, spaces }: PlantsGrid
               </button>
               <button
                   onClick={() => { setSelectedIds(new Set()); setIsSelectionMode(false); }}
-                  className="bg-white/5 hover:bg-white/10 text-slate-500 p-2 rounded-full transition-colors"
+                  className="bg-card-border hover:bg-card-border text-muted p-2 rounded-full transition-colors"
               >
                   <X size={20} />
               </button>

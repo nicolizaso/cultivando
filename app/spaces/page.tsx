@@ -13,7 +13,7 @@ export default async function SpacesPage() {
     .order('created_at', { ascending: false });
 
   return (
-    <main className="min-h-screen bg-[#F5F5F1] text-slate-800 p-4 md:p-8 pb-24 font-body">
+    <main className="min-h-screen bg-background text-foreground p-4 md:p-8 pb-24 font-body">
       
       <GlobalHeader userEmail={user?.email} title="Infraestructura" subtitle="Espacios" />
 

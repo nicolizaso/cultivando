@@ -42,16 +42,16 @@ export default function AgendaModal({ isOpen, onClose, tasks, cycles }: AgendaMo
         onClick={onClose}
       />
 
-      <div className="relative bg-white w-full max-w-lg rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col max-h-[90vh] animate-in fade-in zoom-in duration-200">
+      <div className="relative bg-card w-full max-w-lg rounded-2xl border border-card-border shadow-sm overflow-hidden flex flex-col max-h-[90vh] animate-in fade-in zoom-in duration-200">
 
         {/* Header */}
-        <div className="bg-white z-20 border-b border-slate-100 sticky top-0">
+        <div className="bg-card z-20 border-b border-card-border sticky top-0">
           <div className="p-4 flex items-center justify-between">
-            <h2 className="text-xl font-title text-slate-800 flex items-center gap-2">
+            <h2 className="text-xl font-title text-foreground flex items-center gap-2">
               <ClipboardList className="text-brand-primary" />
               Agenda
             </h2>
-            <button onClick={onClose} className="p-2 hover:bg-white/5 rounded-full text-slate-500 hover:text-slate-800 transition-colors">
+            <button onClick={onClose} className="p-2 hover:bg-card-border rounded-full text-muted hover:text-foreground transition-colors">
               <X size={20} />
             </button>
           </div>
@@ -66,7 +66,7 @@ export default function AgendaModal({ isOpen, onClose, tasks, cycles }: AgendaMo
                   const val = e.target.value
                   setSelectedCycleId(val === 'all' ? 'all' : Number(val))
                 }}
-                className="w-full bg-[#F5F5F1] border border-slate-200 rounded-xl py-2 px-3 text-slate-800 text-sm outline-none focus:border-brand-primary/50"
+                className="w-full bg-background border border-card-border rounded-xl py-2 px-3 text-foreground text-sm outline-none focus:border-brand-primary/50"
               >
                 <option value="all">Todos los ciclos</option>
                 {cycles.map(cycle => (
@@ -80,7 +80,7 @@ export default function AgendaModal({ isOpen, onClose, tasks, cycles }: AgendaMo
                <select
                   value={statusFilter}
                   onChange={(e) => setStatusFilter(e.target.value as 'all' | 'pending' | 'completed')}
-                  className="w-full bg-[#F5F5F1] border border-slate-200 rounded-xl py-2 px-3 text-slate-800 text-sm outline-none focus:border-brand-primary/50"
+                  className="w-full bg-background border border-card-border rounded-xl py-2 px-3 text-foreground text-sm outline-none focus:border-brand-primary/50"
                >
                   <option value="all">Todas</option>
                   <option value="pending">Pendientes</option>
@@ -91,7 +91,7 @@ export default function AgendaModal({ isOpen, onClose, tasks, cycles }: AgendaMo
         </div>
 
         {/* List Content */}
-        <div className="flex-1 overflow-y-auto p-4 bg-[#F5F5F1]/30">
+        <div className="flex-1 overflow-y-auto p-4 bg-background/30">
            <AgendaList
               tasks={filteredTasks}
               disableDateFilter={true}
