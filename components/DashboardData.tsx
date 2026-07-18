@@ -168,9 +168,15 @@ export default async function DashboardData({ user }: { user: { id: string } }) 
           </div>
 
           {activeCycles.length > 0 ? (
-            activeCycles.map((cycle) => (
-              <CycleStatusCard key={cycle.id} cycle={cycle} />
-            ))
+            <div className={activeCycles.length > 3 ? "grid grid-cols-1 md:grid-cols-2 gap-4" : "space-y-6"}>
+              {activeCycles.map((cycle) => (
+                <CycleStatusCard
+                  key={cycle.id}
+                  cycle={cycle}
+                  isCompact={activeCycles.length > 3}
+                />
+              ))}
+            </div>
           ) : (
             <div className="bg-card rounded-2xl p-10 text-center border border-dashed border-card-border flex flex-col items-center justify-center">
               <Sprout className="w-12 h-12 text-muted mb-4 opacity-50" />
