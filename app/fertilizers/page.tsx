@@ -36,11 +36,17 @@ export default function FertilizersPage() {
   }, [])
 
   const handleSaveProduct = async (data: Partial<Fertilizer>) => {
+    let res;
     if (editingProduct) {
-      await updateFertilizer(editingProduct.id, data)
+      res = await updateFertilizer(editingProduct.id, data)
     } else {
-      await createFertilizer(data)
+      res = await createFertilizer(data)
     }
+
+    if (res && res.error) {
+      return res;
+    }
+
     await loadData()
     return { error: null }
   }
@@ -53,10 +59,14 @@ export default function FertilizersPage() {
   }
 
   const handleSaveCombo = async (data: Partial<FertilizerCombo>) => {
+    let res;
     if (editingCombo) {
-      await updateFertilizerCombo(editingCombo.id, data)
+      res = await updateFertilizerCombo(editingCombo.id, data)
     } else {
-      await createFertilizerCombo(data)
+      res = await createFertilizerCombo(data)
+    }
+    if (res && res.error) {
+      return res;
     }
     await loadData()
     return { error: null }

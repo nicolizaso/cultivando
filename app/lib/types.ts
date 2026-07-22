@@ -124,8 +124,8 @@ export interface Fertilizer {
   brand: string;
   stage: 'enraizamiento' | 'vegetativo' | 'floracion' | 'lavado' | 'todo';
   dose_type: 'fija' | 'semanal';
-  dose_fixed?: number;
-  dose_weekly?: { week: number; dose: number }[];
+  dose_fixed?: number | null;
+  dose_weekly?: { week: number; dose: number }[] | null;
   created_at: string;
 }
 

@@ -74,8 +74,8 @@ export default function AddFertilizerModal({ isOpen, onClose, onSave, initialDat
       brand,
       stage,
       dose_type: doseType,
-      dose_fixed: doseType === 'fija' ? parseFloat(doseFixed) || 0 : undefined,
-      dose_weekly: doseType === 'semanal' ? doseWeekly : undefined,
+      dose_fixed: doseType === 'fija' ? parseFloat(doseFixed) || 0 : null,
+      dose_weekly: doseType === 'semanal' ? doseWeekly : null,
     }
 
     const res = await onSave(formData)
