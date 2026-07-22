@@ -60,25 +60,33 @@ export default function AddFertilizerModal({ isOpen, onClose, onSave, initialDat
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!name || !brand) {
-      setError('Por favor, completa el nombre y la marca.')
-      return
-    }
+  e.preventDefault()
+  if (!name || !brand) {
+    setError('Por favor, completa el nombre y la marca.')
+    return
+  }
 
-    setIsSubmitting(true)
-    setError(null)
+  setIsSubmitting(true)
+  setError(null)
 
-    const formData: Partial<Fertilizer> = {
-      name,
-      brand,
-      stage,
-      dose_type: doseType,
-      dose_fixed: doseType === 'fija' ? parseFloat(doseFixed) || 0 : null,
-      dose_weekly: doseType === 'semanal' ? doseWeekly : null,
-    }
+  // 1. Armamos el objeto respetando los nombres exactos de las columnas de la BD
+  const formData: any = { // Lo ideal es que actualices tu type/interface Fertilizer luego
+    name: name.trim(),
+    brand: brand.trim(),
+    stage_category: stage, 
+    dosage_type: doseType,
+  }
 
-    const res = await onSave(formData)
+  // 2. Asignamos los valores de las dosis saneando los datos
+  if (doseType === 'fija') {
+    formData.fixed_dosage = parseFloat(doseFixed.toString().replace(',', '.')) || 0;
+    formData.weekly_dosages = null; 
+  } else {
+    formData.fixed_dosage = null;
+    formData.weekly_dosages = doseWeekly;
+  }
+
+  const res = await onSave(formData)
 
     setIsSubmitting(false)
     if (res.error) {

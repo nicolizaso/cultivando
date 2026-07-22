@@ -16,8 +16,10 @@ export async function getFertilizers() {
     .order('name', { ascending: true })
 
   if (error) {
-    console.error('Error fetching fertilizers:', error)
-    return { data: null, error: 'Error al cargar los fertilizantes.' }
+    // Esto imprime en tu terminal
+    console.error('Error creating fertilizer:', error)
+    // Devolvemos el mensaje exacto para que lo veas en la alerta de tu pantalla
+    return { error: `Error DB: ${error.message} - Detalles: ${error.details}` }
   }
 
   return { data: data as Fertilizer[], error: null }
