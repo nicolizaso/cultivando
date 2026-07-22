@@ -1,1 +1,0 @@
-ALTER TABLE plants ADD COLUMN IF NOT EXISTS is_archived BOOLEAN DEFAULT false;
