@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Playfair_Display, Inter } from "next/font/google";
+import { Inter } from "next/font/google";
 import "./globals.css";
 import BottomNav from "@/components/BottomNav";
 import DesktopNavbar from "@/components/DesktopNavbar";
@@ -7,15 +7,9 @@ import { ToastProvider } from "@/app/context/ToastContext"; // <--- Importamos e
 import { ThemeProvider } from "@/components/ThemeProvider";
 
 const inter = Inter({
-  weight: ["300", "400", "500", "700"],
+  weight: ["300", "400", "500", "600", "700"],
   subsets: ["latin"],
   variable: "--font-inter",
-});
-
-const playfair = Playfair_Display({
-  weight: ["700"],
-  subsets: ["latin"],
-  variable: "--font-playfair",
 });
 
 export const metadata: Metadata = {
@@ -25,7 +19,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#020617",
+  themeColor: "#0B0F19",
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
@@ -38,8 +32,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="es" suppressHydrationWarning>
-      <body className={`${inter.variable} ${playfair.variable} antialiased bg-background text-foreground transition-colors duration-300`}>
+    <html lang="es" suppressHydrationWarning className="dark">
+      <body className={`${inter.variable} antialiased bg-background text-foreground transition-colors duration-300 min-h-screen`}>
         <ThemeProvider>
           {/* Envolvemos la app en el ToastProvider */}
           <ToastProvider>

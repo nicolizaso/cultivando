@@ -2,14 +2,15 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, Sprout, RefreshCw, CalendarDays, Warehouse } from "lucide-react";
+import { Home, RefreshCw, CalendarDays, Warehouse } from "lucide-react";
+import Logo from "@/components/Logo";
 
 export default function DesktopNavbar() {
   const pathname = usePathname();
 
   const links = [
     { href: "/", label: "Inicio", icon: Home },
-    { href: "/plants", label: "Plantas", icon: Sprout },
+    { href: "/plants", label: "Plantas", icon: () => <Logo className="w-5 h-5" /> },
     { href: "/cycles", label: "Ciclos", icon: RefreshCw },
     { href: "/spaces", label: "Espacios", icon: Warehouse },
     { href: "/calendar", label: "Agenda", icon: CalendarDays },
@@ -18,10 +19,10 @@ export default function DesktopNavbar() {
   if (pathname === "/login") return null;
 
   return (
-    <nav className="hidden md:flex justify-between items-center px-8 py-4 bg-card dark:bg-background/80 backdrop-blur border-b border-card-border dark:border-slate-800 sticky top-0 z-50">
+    <nav className="hidden md:flex justify-between items-center px-8 py-4 bg-black/40 backdrop-blur-md border-b border-white/10 sticky top-0 z-50">
       {/* Logo Section */}
       <Link href="/" className="flex items-center gap-2 group">
-        <Sprout className="text-brand-primary w-6 h-6 transition-transform group-hover:rotate-12" strokeWidth={2.5} />
+        <Logo className="text-brand-primary w-8 h-8 transition-transform group-hover:rotate-12 drop-shadow-[0_0_8px_rgba(57,255,20,0.6)]" strokeWidth={2.5} />
         <span className="font-title text-foreground text-lg tracking-wider uppercase">
             Cultivapp
         </span>
@@ -39,7 +40,7 @@ export default function DesktopNavbar() {
               href={link.href}
               className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-all duration-300 group ${
                 isActive
-                  ? "bg-brand-primary/10 text-brand-primary"
+                  ? "bg-brand-primary text-black shadow-[0_0_15px_rgba(57,255,20,0.4)]"
                   : "text-muted hover:text-foreground hover:bg-card-border"
               }`}
             >

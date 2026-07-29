@@ -4,7 +4,8 @@ import { useState } from "react";
 import Link from "next/link";
 import UserMenu from "@/components/UserMenu";
 import ThemeToggle from "@/components/ThemeToggle";
-import { Sprout, Menu, X, FlaskConical, LogOut } from "lucide-react";
+import { Menu, X, FlaskConical, LogOut } from "lucide-react";
+import Logo from "@/components/Logo";
 import { signout } from "@/app/login/actions";
 
 interface GlobalHeaderProps {
@@ -22,7 +23,7 @@ export default function GlobalHeader({ title, subtitle, userEmail }: GlobalHeade
         {/* LOGO / NOMBRE APP */}
         <div className="flex items-center gap-2 mb-1">
             {/* Icono Vectorial Institucional */}
-            <Sprout className="text-brand-primary w-6 h-6" strokeWidth={2.5} />
+            <Logo className="text-brand-primary w-6 h-6" strokeWidth={2.5} />
             
             <span className="font-title text-brand-text text-lg tracking-wider uppercase">
                 Cultivapp
@@ -54,11 +55,11 @@ export default function GlobalHeader({ title, subtitle, userEmail }: GlobalHeade
 
       {/* Mobile Drawer/Modal */}
       {isMenuOpen && (
-        <div className="fixed inset-0 z-[100] bg-[#F5F5F1] dark:bg-[#0B0C10] flex flex-col md:hidden animate-in slide-in-from-right-full duration-300">
+        <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-md flex flex-col md:hidden animate-in slide-in-from-right-full duration-300">
           {/* Header del menú */}
           <div className="flex justify-between items-center p-6 border-b border-black/5 dark:border-white/5">
             <div className="flex items-center gap-2">
-              <Sprout className="text-brand-primary w-6 h-6" strokeWidth={2.5} />
+              <Logo className="text-brand-primary w-6 h-6" strokeWidth={2.5} />
               <span className="font-title text-brand-text text-lg tracking-wider uppercase">
                 Cultivapp
               </span>
@@ -79,7 +80,7 @@ export default function GlobalHeader({ title, subtitle, userEmail }: GlobalHeade
                 <Link
                   href="/fertilizers"
                   onClick={() => setIsMenuOpen(false)}
-                  className="flex items-center gap-4 p-4 rounded-2xl bg-card border border-card-border shadow-sm text-foreground hover:border-brand-primary/50 transition-colors"
+                  className="flex items-center gap-4 p-4 rounded-2xl glass-card text-foreground hover:border-brand-primary/50 transition-colors"
                 >
                   <div className="w-10 h-10 rounded-full bg-brand-primary/10 flex items-center justify-center text-brand-primary">
                     <FlaskConical size={20} />
@@ -91,7 +92,7 @@ export default function GlobalHeader({ title, subtitle, userEmail }: GlobalHeade
 
             <div className="space-y-4">
               <h2 className="font-title text-xs font-bold text-muted uppercase tracking-widest">Preferencias</h2>
-              <div className="flex items-center justify-between p-4 rounded-2xl bg-card border border-card-border shadow-sm text-foreground">
+              <div className="flex items-center justify-between p-4 rounded-2xl glass-card text-foreground">
                 <span className="font-sans font-medium">Tema Visual</span>
                 <ThemeToggle />
               </div>
@@ -99,7 +100,7 @@ export default function GlobalHeader({ title, subtitle, userEmail }: GlobalHeade
           </div>
 
           {/* Sección Usuario (Bottom) */}
-          <div className="p-6 border-t border-black/5 dark:border-white/5 bg-white/50 dark:bg-black/20">
+          <div className="p-6 border-t border-black/5 dark:border-white/5 bg-black/40 backdrop-blur-md border-t border-white/10">
             <div className="flex items-center gap-3 mb-6">
               <div className="w-10 h-10 rounded-full bg-brand-primary flex items-center justify-center text-white font-bold">
                 {userEmail ? userEmail[0].toUpperCase() : "U"}
