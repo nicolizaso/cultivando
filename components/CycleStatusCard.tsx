@@ -36,7 +36,7 @@ export default function CycleStatusCard({ cycle, isCompact = false }: CycleStatu
 
   return (
     <div
-      className={`group relative bg-card rounded-2xl p-6 border border-card-border hover:border-brand-primary/30 transition-all duration-300 overflow-hidden ${isCompact ? 'cursor-pointer focus:outline-none' : ''}`}
+      className={`group relative glass-card-interactive rounded-3xl p-6 transition-all duration-300 overflow-hidden ${isCompact ? 'cursor-pointer focus:outline-none' : ''}`}
       tabIndex={isCompact ? 0 : undefined}
     >
       {/* Background Decor or Image */}
@@ -61,17 +61,17 @@ export default function CycleStatusCard({ cycle, isCompact = false }: CycleStatu
             <div className={`${isCompact ? 'overflow-hidden' : ''}`}>
               <div className={`flex items-center gap-2 mb-2 ${isCompact ? 'opacity-0 group-hover:opacity-100 group-focus:opacity-100 transition-opacity duration-300 delay-100' : ''}`}>
                 {cycle.spaces && (
-                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold border uppercase font-body ${latestImage ? 'bg-card-border backdrop-blur-md border-card-border/20 text-[#FAF9F6]' : 'bg-background text-[#1B3022] border-card-border'}`}>
+                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold border uppercase font-body ${latestImage ? 'bg-card-border backdrop-blur-md border-card-border/20 text-[#FAF9F6]' : 'glass-card text-brand-text border-white/20'}`}>
                     {cycle.spaces.name}
                   </span>
                 )}
-                <span className={`px-2 py-0.5 rounded text-[10px] font-bold border uppercase font-body ${latestImage ? 'bg-card-border backdrop-blur-md border-card-border/20 text-[#FAF9F6]' : 'bg-brand-primary/10 text-brand-primary border-brand-primary/20'}`}>
+                <span className={`px-2 py-0.5 rounded text-[10px] font-bold border uppercase font-body ${latestImage ? 'bg-card-border backdrop-blur-md border-card-border/20 text-[#FAF9F6]' : 'bg-brand-primary/20 text-brand-primary border-brand-primary/40 backdrop-blur-md'}`}>
                   Día {daysDiff}
                 </span>
               </div>
             </div>
           </div>
-          <h3 className={`text-2xl md:text-3xl font-light font-title ${latestImage ? 'text-[#FAF9F6]' : 'text-[#1B3022]'}`}>{cycle.name}</h3>
+          <h3 className={`text-2xl md:text-3xl font-light font-title ${latestImage ? 'text-[#FAF9F6]' : 'text-brand-text'}`}>{cycle.name}</h3>
         </div>
 
         {/* Link / Button */}
@@ -100,9 +100,9 @@ export default function CycleStatusCard({ cycle, isCompact = false }: CycleStatu
                   <Link
                     key={group.id}
                     href={group.href}
-                    className={`flex items-center gap-2 border rounded-full pr-3 pl-1 py-1 transition-colors group/badge ${latestImage ? 'bg-card-border backdrop-blur-md border-card-border/20 hover:border-card-border/40' : 'bg-background border-card-border hover:border-brand-primary/50'}`}
+                    className={`flex items-center gap-2 border rounded-full pr-3 pl-1 py-1 transition-colors group/badge ${latestImage ? 'bg-card-border backdrop-blur-md border-card-border/20 hover:border-card-border/40' : 'glass-card-interactive hover:border-brand-primary/50'}`}
                   >
-                    <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs transition-colors ${latestImage ? 'bg-card-border text-white group-hover/badge:bg-card/30' : 'bg-slate-800 text-muted group-hover/badge:bg-slate-700'}`}>
+                    <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs transition-colors ${latestImage ? 'bg-card-border text-white group-hover/badge:bg-card/30' : 'bg-white/10 text-brand-text group-hover/badge:bg-brand-primary group-hover/badge:text-black'}`}>
                       <Leaf className="w-3 h-3" />
                     </div>
                     <span className={`text-xs font-body transition-colors ${latestImage ? 'text-[#FAF9F6]' : 'text-foreground group-hover/badge:text-foreground'}`}>

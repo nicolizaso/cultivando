@@ -6,7 +6,8 @@ import AgendaList from "@/components/AgendaList";
 import TaskManagerModal from "@/components/TaskManagerModal";
 import CycleStatusCard from "@/components/CycleStatusCard";
 import { Plant, Task } from "@/app/lib/types";
-import { Leaf, RefreshCw, Warehouse, Sprout, Plus, ArrowRight } from "lucide-react";
+import { Leaf, RefreshCw, Warehouse, Plus, ArrowRight } from "lucide-react";
+import Logo from "@/components/Logo";
 import StageSuggester from "@/components/StageSuggester";
 import { mapTaskCycles } from "@/app/lib/utils";
 
@@ -116,7 +117,7 @@ export default async function DashboardData({ user }: { user: { id: string } }) 
         <HomeTaskCard tasks={allTodayTasks} />
 
         {totalCycles > 0 ? (
-          <Link href="/cycles" className="bg-card p-5 rounded-2xl border border-card-border hover:border-brand-primary/30 transition-colors group flex flex-col justify-between">
+          <Link href="/cycles" className="glass-card-interactive p-6 rounded-3xl transition-colors group flex flex-col justify-between">
             <p className="text-[10px] uppercase tracking-widest text-muted font-bold mb-2 font-body">Ciclos en Curso</p>
             <div className="flex items-end justify-between">
               <span className="text-4xl font-title font-light text-foreground group-hover:text-brand-primary transition-colors">{totalCycles}</span>
@@ -124,7 +125,7 @@ export default async function DashboardData({ user }: { user: { id: string } }) 
             </div>
           </Link>
         ) : (
-          <Link href="/cycles" className="bg-card p-5 rounded-2xl border border-card-border hover:border-brand-primary/30 transition-colors group flex flex-col justify-center items-center text-center relative">
+          <Link href="/cycles" className="glass-card-interactive p-6 rounded-3xl transition-colors group flex flex-col justify-center items-center text-center relative">
              <div className="bg-brand-primary/10 p-3 rounded-full mb-2 text-brand-primary group-hover:scale-110 transition-transform">
                 <Plus size={24} strokeWidth={2.5} />
              </div>
@@ -135,7 +136,7 @@ export default async function DashboardData({ user }: { user: { id: string } }) 
           </Link>
         )}
 
-        <div className="bg-card p-5 rounded-2xl border border-card-border hover:border-brand-primary/30 transition-colors group">
+        <div className="glass-card-interactive p-6 rounded-3xl transition-colors group">
           <p className="text-[10px] uppercase tracking-widest text-muted font-bold mb-2 font-body">Plantas Activas</p>
           <div className="flex items-end justify-between">
             <span className="text-4xl font-title font-light text-foreground group-hover:text-brand-primary transition-colors">{totalPlants}</span>
@@ -143,7 +144,7 @@ export default async function DashboardData({ user }: { user: { id: string } }) 
           </div>
         </div>
 
-        <Link href="/spaces" className="bg-card p-5 rounded-2xl border border-card-border hover:bg-card-border transition-all cursor-pointer group">
+        <Link href="/spaces" className="glass-card-interactive p-6 rounded-3xl hover:border-brand-primary/30 transition-all cursor-pointer group">
           <p className="text-[10px] uppercase tracking-widest text-muted font-bold mb-2 font-body">Mis Espacios</p>
           <div className="flex items-center justify-between mt-2">
             <span className="text-4xl font-title font-light text-foreground group-hover:text-brand-primary transition-colors">
@@ -178,8 +179,8 @@ export default async function DashboardData({ user }: { user: { id: string } }) 
               ))}
             </div>
           ) : (
-            <div className="bg-card rounded-2xl p-10 text-center border border-dashed border-card-border flex flex-col items-center justify-center">
-              <Sprout className="w-12 h-12 text-muted mb-4 opacity-50" />
+            <div className="glass-card rounded-3xl p-10 text-center border-dashed flex flex-col items-center justify-center">
+              <Logo className="w-12 h-12 text-muted mb-4 opacity-50" />
               <p className="text-muted mb-4 font-body">No hay ciclos activos en este momento.</p>
               <Link href="/cycles" className="text-brand-primary hover:underline font-body font-bold bg-brand-primary/10 px-4 py-2 rounded-lg">Iniciar un nuevo ciclo</Link>
             </div>
@@ -192,7 +193,7 @@ export default async function DashboardData({ user }: { user: { id: string } }) 
             <h2 className="text-lg font-medium text-foreground font-title">Agenda</h2>
             <TaskManagerModal />
           </div>
-          <div className="bg-card rounded-2xl p-4 border border-card-border h-80 overflow-y-auto custom-scrollbar">
+          <div className="glass-card rounded-3xl p-6 h-80 overflow-y-auto custom-scrollbar">
              <AgendaList tasks={allTodayTasks} />
           </div>
         </div>

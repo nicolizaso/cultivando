@@ -17,6 +17,7 @@ const config: Config = {
         'card-border': 'var(--card-border)',
         muted: 'var(--text-muted)',
         'brand-primary': 'var(--brand-primary)',
+        'neon-green': '#39FF14',
       },
     },
   },

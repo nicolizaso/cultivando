@@ -4,23 +4,23 @@
 
 @layer base {
   :root {
-    --background: #F5F5F1; /* Blanco Hueso */
-    --foreground: #1E293B;
-    --card: #FFFFFF;
-    --card-hover: #F8FAFC;
-    --card-border: rgba(0, 0, 0, 0.05);
-    --text-muted: #64748B;
-    --brand-primary: #1B3022;
+    --background: #0B0F19; /* Dark bluish gradient base */
+    --foreground: #F8FAFC;
+    --card: rgba(21, 27, 40, 0.4); /* Glassmorphism background */
+    --card-hover: rgba(21, 27, 40, 0.6);
+    --card-border: rgba(255, 255, 255, 0.1); /* Semi-transparent border */
+    --text-muted: #94A3B8;
+    --brand-primary: #39FF14; /* Neon Green */
   }
 
   .dark {
-    --background: #0B0C10; /* Negro Profundo original */
+    --background: #0B0F19; /* Force dark bluish theme everywhere */
     --foreground: #F8FAFC;
-    --card: #12141C; /* Gris Oscuro original */
-    --card-hover: #1A1D27;
-    --card-border: rgba(255, 255, 255, 0.05);
+    --card: rgba(21, 27, 40, 0.4);
+    --card-hover: rgba(21, 27, 40, 0.6);
+    --card-border: rgba(255, 255, 255, 0.1);
     --text-muted: #94A3B8;
-    --brand-primary: #2D4F39;
+    --brand-primary: #39FF14;
   }
 }
 
@@ -33,15 +33,14 @@
   --color-card-border: var(--card-border);
   --color-muted: var(--text-muted);
 
-  /* 1. TIPOGRAFÍA (Se mantiene igual) */
-  --font-title: var(--font-playfair), "Arial", "Helvetica", sans-serif;
+  /* 1. TIPOGRAFÍA (Reemplazada por geometrica) */
+  --font-title: var(--font-inter), "Helvetica", sans-serif;
   --font-body: var(--font-inter), "Helvetica", sans-serif;
 
   /* 2. COLORES OFICIALES (Actualizados) */
-  
   --color-brand-primary: var(--brand-primary);
-  --color-brand-primary-hover: #2D4F39; /* Un poco más oscuro para el efecto hover */
-  --color-brand-primary-glow: rgba(27, 48, 34, 0.5);
+  --color-brand-primary-hover: #2ee60d; /* Un poco más oscuro para el efecto hover */
+  --color-brand-primary-glow: rgba(57, 255, 20, 0.5);
   
   /* Fondos Oscuros */
   --color-brand-bg: var(--background);   /* Fondo principal */
@@ -50,13 +49,13 @@
   --color-brand-card-border: var(--card-border);
   
   /* Texto */
-  --color-brand-text: var(--foreground); /* Blanco hueso para leer bien */
-  --color-brand-muted: var(--text-muted); /* Gris claro para textos secundarios */
+  --color-brand-text: var(--foreground);
+  --color-brand-muted: var(--text-muted);
   
   /* Sombras y bordes mejorados */
   --shadow-card: 0 1px 2px 0 var(--card-border);
   --shadow-card-hover: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-  --border-gradient: linear-gradient(90deg, rgba(27,48,34,0.2) 0%, rgba(27,48,34,0.05) 100%);
+  --border-gradient: linear-gradient(90deg, rgba(57, 255, 20, 0.2) 0%, rgba(57, 255, 20, 0.05) 100%);
 }
 
 /* Aplicamos los básicos al cuerpo */
@@ -66,18 +65,17 @@ body {
   color: var(--foreground);
   transition: background-color 0.3s ease, color 0.3s ease;
   background-image: 
-    radial-gradient(circle at 10% 20%, rgba(0, 165, 153, 0.05) 0%, transparent 20%),
-    radial-gradient(circle at 90% 80%, rgba(0, 165, 153, 0.03) 0%, transparent 20%);
+    radial-gradient(circle at 10% 20%, rgba(57, 255, 20, 0.03) 0%, transparent 40%),
+    radial-gradient(circle at 90% 80%, rgba(57, 255, 20, 0.03) 0%, transparent 40%),
+    linear-gradient(to bottom right, #0B0F19, #1E293B);
   background-attachment: fixed;
   min-height: 100vh;
 }
 
 /* Clases de utilidad para fuentes */
-h1, h2, .font-title
-
- {
+h1, h2, .font-title {
   font-family: var(--font-title);
-  letter-spacing: 0.05em;
+  letter-spacing: -0.02em; /* Tighter tracking for modern look */
   text-shadow: none;
 }
 
@@ -99,13 +97,13 @@ h3, h4, .font-title {
 
 @keyframes pulseGlow {
   0% {
-    box-shadow: 0 0 0 0 rgba(0, 165, 153, 0.4);
+    box-shadow: 0 0 0 0 rgba(57, 255, 20, 0.4);
   }
   70% {
-    box-shadow: 0 0 0 10px rgba(0, 165, 153, 0);
+    box-shadow: 0 0 0 10px rgba(57, 255, 20, 0);
   }
   100% {
-    box-shadow: 0 0 0 0 rgba(0, 165, 153, 0);
+    box-shadow: 0 0 0 0 rgba(57, 255, 20, 0);
   }
 }
 
@@ -122,7 +120,7 @@ h3, h4, .font-title {
 }
 
 .fade-in-up {
-  animation: fadeInUp 0.6s ease-out forwards;
+  animation: fadeInUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
 .pulse-glow {
@@ -130,43 +128,67 @@ h3, h4, .font-title {
 }
 
 .float-animation {
-  animation: float 3s ease-in-out infinite;
+  animation: float 4s ease-in-out infinite;
 }
 
 /* Gradientes de fondo */
 .gradient-brand {
-  background: linear-gradient(135deg, #1B3022 0%, #2D4F39 100%);
+  background: linear-gradient(135deg, rgba(57, 255, 20, 0.1) 0%, rgba(57, 255, 20, 0.05) 100%);
 }
 
-/* Efectos
-
- de overlay */
+/* Efectos de overlay */
 .overlay-dark {
-  background: rgba(0, 0, 0, 0.85);
-  backdrop-filter: blur(10px);
+  background: rgba(11, 15, 25, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+/* Glassmorphism Utilities */
+.glass-card {
+  background-color: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+}
+
+.glass-card-interactive {
+  background-color: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.glass-card-interactive:hover {
+  background-color: rgba(255, 255, 255, 0.05);
+  border-color: rgba(57, 255, 20, 0.3);
+  transform: translateY(-2px) scale(1.02);
+  box-shadow: 0 10px 40px rgba(57, 255, 20, 0.1);
 }
 
 /* Scrollbar personalizado */
 ::-webkit-scrollbar {
-  width: 8px;
+  width: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #f1f5f9;
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--color-brand-primary);
-  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 10px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--color-brand-primary-hover);
+  background: rgba(57, 255, 20, 0.5);
 }
 
 /* Efectos de carga */
 .skeleton-loader {
-  background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
+  background: linear-gradient(90deg, rgba(255,255,255,0.05) 25%, rgba(255,255,255,0.1) 50%, rgba(255,255,255,0.05) 75%);
   background-size: 200% 100%;
   animation: loading 1.5s infinite;
 }
