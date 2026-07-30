@@ -108,20 +108,42 @@ export async function createFertilizerCombo(formData: Partial<FertilizerCombo>) 
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Debes iniciar sesión.' }
 
+  // Fallback map based on possible generic or unknown payloads (handling Next.js forms)
+  const payload = formData as Partial<FertilizerCombo> & { title?: string; titulo?: string; description?: string };
+  const name = payload.name || payload.title || payload.titulo || 'Combo sin nombre';
+  const description = payload.description || null;
+
   const { data, error } = await supabase
     .from('fertilizer_combos')
-    .insert([{ ...formData, user_id: user.id }])
+    .insert([{ name, description, user_id: user.id }])
     .select()
 
   if (error) {
     console.error('Error creating combo:', error)
-    return { error: 'Error al crear el combo.' }
+    return { error: `Error DB: ${error.message} - Detalles: ${error.details || 'N/A'}` }
+  }
+
+  const comboId = data[0].id;
+
+  if (formData.products && formData.products.length > 0) {
+    const comboItems = formData.products.map(p => ({
+      combo_id: comboId,
+      fertilizer_id: p.fertilizer_id
+    }));
+
+    const { error: itemsError } = await supabase
+      .from('combo_items')
+      .insert(comboItems);
+
+    if (itemsError) {
+      console.error('Error creating combo items:', itemsError)
+      return { error: `Error DB: ${itemsError.message} - Detalles: ${itemsError.details || 'N/A'}` }
+    }
   }
 
   revalidatePath('/fertilizers')
   return { data: data[0], error: null }
 }
-
 export async function deleteFertilizerCombo(id: number) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
