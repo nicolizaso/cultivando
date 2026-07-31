@@ -4,13 +4,16 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/app/lib/supabase";
 import { useRouter } from "next/navigation";
 import { Space } from "@/app/lib/types";
-import { Plus } from "lucide-react"; 
+import { Plus, Warehouse } from "lucide-react";
+import EmptyState from "./EmptyState";
+import CreateSpaceInlineModal from "./CreateSpaceInlineModal";
 
 export default function AddCycleModal() {
   const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [spaces, setSpaces] = useState<Space[]>([]);
+  const [showInlineSpaceModal, setShowInlineSpaceModal] = useState(false);
 
   const [formData, setFormData] = useState({
     name: "",
@@ -18,13 +21,20 @@ export default function AddCycleModal() {
     spaceId: "",
   });
 
+  const fetchSpaces = async () => {
+    const { data } = await supabase.from('spaces').select('*');
+    if (data) setSpaces(data as Space[]);
+  };
+
   useEffect(() => {
-    const fetchSpaces = async () => {
-      const { data } = await supabase.from('spaces').select('*');
-      if (data) setSpaces(data as Space[]);
-    };
     fetchSpaces();
   }, []);
+
+  const handleSpaceCreated = async (newSpaceId: number) => {
+    await fetchSpaces();
+    setFormData(prev => ({ ...prev, spaceId: newSpaceId.toString() }));
+    setShowInlineSpaceModal(false);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -74,7 +84,7 @@ export default function AddCycleModal() {
 
       {isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-          <div className="bg-card border border-card-border w-full max-w-md rounded-2xl shadow-sm overflow-hidden animate-in zoom-in-95 duration-200">
+          <div className="bg-card border border-card-border w-full max-w-md rounded-2xl shadow-sm overflow-hidden animate-in zoom-in-95 duration-200 relative">
             
             <div className="bg-background/50 p-6 border-b border-card-border">
               <h2 className="text-xl font-bold text-foreground tracking-wide">Iniciar Nuevo Ciclo</h2>
@@ -97,23 +107,37 @@ export default function AddCycleModal() {
 
               <div>
                 <label className="block text-muted mb-1.5 text-[10px] font-bold uppercase tracking-wider">Espacio Asignado</label>
-                <select 
-                  required
-                  className="w-full bg-background border border-card-border rounded-xl p-3 text-foreground text-sm focus:border-brand-primary outline-none appearance-none transition-colors"
-                  value={formData.spaceId}
-                  onChange={(e) => setFormData({...formData, spaceId: e.target.value})}
-                >
-                  <option value="">Seleccionar Espacio...</option>
-                  {spaces.map(space => (
-                    <option key={space.id} value={space.id}>
-                       {space.type === 'Indoor' ? '🏠' : '☀️'} {space.name}
-                    </option>
-                  ))}
-                </select>
-                {spaces.length === 0 && (
-                   <p className="text-xs text-red-400 mt-2 flex items-center gap-1">
-                     ⚠️ Primero debes crear un Espacio en la sección Mis Espacios.
-                   </p>
+
+                {spaces.length > 0 ? (
+                  <select
+                    required
+                    className="w-full bg-background border border-card-border rounded-xl p-3 text-foreground text-sm focus:border-brand-primary outline-none appearance-none transition-colors"
+                    value={formData.spaceId}
+                    onChange={(e) => setFormData({...formData, spaceId: e.target.value})}
+                  >
+                    <option value="">Seleccionar Espacio...</option>
+                    {spaces.map(space => (
+                      <option key={space.id} value={space.id}>
+                         {space.type === 'Indoor' ? '🏠' : '☀️'} {space.name}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <EmptyState
+                    title="Sin Espacios"
+                    description="No tienes espacios creados aún."
+                    icon={Warehouse}
+                    className="p-4 py-6"
+                    action={
+                      <button
+                        type="button"
+                        onClick={() => setShowInlineSpaceModal(true)}
+                        className="bg-brand-primary/10 hover:bg-brand-primary/20 text-brand-primary px-4 py-2 rounded-xl text-xs font-bold transition-colors"
+                      >
+                        + Crear Espacio Rápido
+                      </button>
+                    }
+                  />
                 )}
               </div>
 
@@ -138,13 +162,21 @@ export default function AddCycleModal() {
                 </button>
                 <button 
                   type="submit" 
-                  disabled={loading} 
+                  disabled={loading || spaces.length === 0}
                   className="flex-1 bg-brand-primary hover:bg-brand-primary-hover text-white py-3 rounded-xl font-bold text-sm tracking-wide transition-all active:scale-[0.98] disabled:opacity-50"
                 >
                   {loading ? "CREANDO..." : "CONFIRMAR"}
                 </button>
               </div>
             </form>
+
+            {showInlineSpaceModal && (
+              <CreateSpaceInlineModal
+                onSuccess={handleSpaceCreated}
+                onCancel={() => setShowInlineSpaceModal(false)}
+              />
+            )}
+
           </div>
         </div>
       )}

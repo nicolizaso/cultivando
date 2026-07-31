@@ -1,3 +1,4 @@
+import OnboardingWizard from "./OnboardingWizard";
 import { createClient } from "@/app/lib/supabase-server";
 import Link from "next/link";
 import DashboardFab from "@/components/DashboardFab";
@@ -98,6 +99,8 @@ export default async function DashboardData({ user }: { user: { id: string } }) 
 
   return (
     <>
+      {activeSpacesCount === 0 && totalCycles === 0 && <OnboardingWizard />}
+
       <StageSuggester plants={flatPlantsList} />
 
       {username && (
