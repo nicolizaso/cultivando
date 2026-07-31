@@ -23,10 +23,10 @@ export default function GlobalHeader({ title, subtitle, userEmail }: GlobalHeade
         {/* LOGO / NOMBRE APP */}
         <div className="flex items-center gap-2 mb-1">
             {/* Icono Vectorial Institucional */}
-            <Logo className="text-brand-primary w-6 h-6" strokeWidth={2.5} />
+            <Logo className="text-brand-primary w-6 h-6" strokeWidth={2} />
             
             <span className="font-title text-brand-text text-lg tracking-wider uppercase">
-                Cultivapp
+                Cultiva con el Primo
             </span>
         </div>
         
@@ -46,7 +46,7 @@ export default function GlobalHeader({ title, subtitle, userEmail }: GlobalHeade
 
         {/* Mobile menu button */}
         <button
-          className="flex md:hidden p-2 rounded-full text-foreground hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+          className="flex md:hidden min-h-[48px] min-w-[48px] items-center justify-center p-2 rounded-full text-foreground hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
           onClick={() => setIsMenuOpen(true)}
         >
           <Menu size={24} />
@@ -59,13 +59,13 @@ export default function GlobalHeader({ title, subtitle, userEmail }: GlobalHeade
           {/* Header del menú */}
           <div className="flex justify-between items-center p-6 border-b border-black/5 dark:border-white/5">
             <div className="flex items-center gap-2">
-              <Logo className="text-brand-primary w-6 h-6" strokeWidth={2.5} />
+              <Logo className="text-brand-primary w-6 h-6" strokeWidth={2} />
               <span className="font-title text-brand-text text-lg tracking-wider uppercase">
-                Cultivapp
+                Cultiva con el Primo
               </span>
             </div>
             <button
-              className="p-2 rounded-full text-foreground hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+              className="p-2 min-h-[48px] min-w-[48px] flex items-center justify-center rounded-full text-foreground hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
               onClick={() => setIsMenuOpen(false)}
             >
               <X size={24} />

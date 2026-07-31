@@ -1,10 +1,16 @@
 import type { Metadata, Viewport } from "next";
-import { Inter } from "next/font/google";
+import { Inter, Montserrat } from "next/font/google";
 import "./globals.css";
 import BottomNav from "@/components/BottomNav";
 import DesktopNavbar from "@/components/DesktopNavbar";
 import { ToastProvider } from "@/app/context/ToastContext"; // <--- Importamos el Provider
 import { ThemeProvider } from "@/components/ThemeProvider";
+
+const montserrat = Montserrat({
+  weight: ["800", "900"],
+  subsets: ["latin"],
+  variable: "--font-montserrat",
+});
 
 const inter = Inter({
   weight: ["300", "400", "500", "600", "700"],
@@ -13,7 +19,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Cultivapp",
+  title: "Cultiva con el Primo",
   description: "Gestión inteligente de cultivos",
   manifest: "/manifest.webmanifest",
 };
@@ -33,7 +39,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="es" suppressHydrationWarning className="dark">
-      <body className={`${inter.variable} antialiased bg-background text-foreground transition-colors duration-300 min-h-screen`}>
+      <body className={`${inter.variable} ${montserrat.variable} antialiased bg-background text-foreground transition-colors duration-300 min-h-screen`}>
         <ThemeProvider>
           {/* Envolvemos la app en el ToastProvider */}
           <ToastProvider>

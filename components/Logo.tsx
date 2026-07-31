@@ -1,6 +1,6 @@
 import React from 'react';
 
-export default function Logo({ className = "w-6 h-6", strokeWidth = 2.5 }: { className?: string, strokeWidth?: number }) {
+export default function Logo({ className = "w-6 h-6", strokeWidth = 2 }: { className?: string, strokeWidth?: number }) {
   return (
     <svg
       className={className}
