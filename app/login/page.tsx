@@ -46,7 +46,7 @@ export default function LoginPage() {
           <Image src="/logo-login.png" alt="Logo" width={60} height={60} className="w-12 h-12 object-contain" />
         </div>
         <h1 className="text-xl font-bold text-brand-text tracking-widest uppercase">
-          CULTIVAPP
+          CULTIVA CON EL PRIMO
         </h1>
       </div>
 
