@@ -21,10 +21,10 @@ export default function DesktopNavbar() {
   return (
     <nav className="hidden md:flex justify-between items-center px-8 py-4 bg-black/40 backdrop-blur-md border-b border-white/10 sticky top-0 z-50">
       {/* Logo Section */}
-      <Link href="/" className="flex items-center gap-2 group">
-        <Logo className="text-brand-primary w-8 h-8 transition-transform group-hover:rotate-12 drop-shadow-[0_0_8px_rgba(57,255,20,0.6)]" strokeWidth={2.5} />
+      <Link href="/" className="flex items-center min-h-[48px] min-w-[48px] gap-2 group">
+        <Logo className="text-brand-primary w-8 h-8 transition-transform group-hover:rotate-12 drop-shadow-[0_0_8px_rgba(57,255,20,0.6)]" strokeWidth={2} />
         <span className="font-title text-foreground text-lg tracking-wider uppercase">
-            Cultivapp
+            Cultiva con el Primo
         </span>
       </Link>
 
@@ -38,7 +38,7 @@ export default function DesktopNavbar() {
             <Link
               key={link.href}
               href={link.href}
-              className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-all duration-300 group ${
+              className={`flex items-center min-h-[48px] min-w-[48px] gap-2 px-3 py-2 rounded-lg transition-all duration-300 group ${
                 isActive
                   ? "bg-brand-primary text-black shadow-[0_0_15px_rgba(57,255,20,0.4)]"
                   : "text-muted hover:text-foreground hover:bg-card-border"
@@ -48,7 +48,7 @@ export default function DesktopNavbar() {
                 className={`w-5 h-5 transition-transform duration-300 ${
                     isActive ? "scale-110" : "group-hover:scale-110"
                 }`}
-                strokeWidth={isActive ? 2.5 : 1.5}
+                strokeWidth={2}
               />
               <span className="text-sm font-bold tracking-wide">{link.label}</span>
             </Link>

@@ -4,27 +4,27 @@
 
 @layer base {
   :root {
-    --background: #0B0F19; /* Dark bluish gradient base */
-    --foreground: #F8FAFC;
-    --card: rgba(21, 27, 40, 0.4); /* Glassmorphism background */
-    --card-hover: rgba(21, 27, 40, 0.6);
-    --card-border: rgba(255, 255, 255, 0.1); /* Semi-transparent border */
-    --text-muted: #94A3B8;
-    --brand-primary: #39FF14; /* Neon Green */
-  }
-
-  .dark {
-    --background: #0B0F19; /* Force dark bluish theme everywhere */
+    --background: #F9F9FB;
     --foreground: #F8FAFC;
     --card: rgba(21, 27, 40, 0.4);
     --card-hover: rgba(21, 27, 40, 0.6);
     --card-border: rgba(255, 255, 255, 0.1);
     --text-muted: #94A3B8;
-    --brand-primary: #39FF14;
+    --brand-primary: #2D6A4F;
+  }
+
+  .dark {
+    --background: #1B4332;
+    --foreground: #F8FAFC;
+    --card: rgba(21, 27, 40, 0.4);
+    --card-hover: rgba(21, 27, 40, 0.6);
+    --card-border: rgba(255, 255, 255, 0.1);
+    --text-muted: #94A3B8;
+    --brand-primary: #F4F1DE;
   }
 }
 
-/* DEFINICIÓN DEL TEMA CULTIVAPP */
+/* DEFINICIÓN DEL TEMA CULTIVA CON EL PRIMO */
 @theme {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -34,7 +34,7 @@
   --color-muted: var(--text-muted);
 
   /* 1. TIPOGRAFÍA (Reemplazada por geometrica) */
-  --font-title: var(--font-inter), "Helvetica", sans-serif;
+  --font-title: var(--font-montserrat), "Helvetica", sans-serif;
   --font-body: var(--font-inter), "Helvetica", sans-serif;
 
   /* 2. COLORES OFICIALES (Actualizados) */

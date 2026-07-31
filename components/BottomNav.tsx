@@ -34,7 +34,7 @@ export default function BottomNav() {
             <Link
               key={link.href}
               href={link.href}
-              className={`group flex flex-col items-center justify-center w-full py-3 transition-all duration-300 relative outline-none tap-highlight-transparent`}
+              className={`group flex flex-col items-center min-h-[48px] min-w-[48px] justify-center w-full py-3 transition-all duration-300 relative outline-none tap-highlight-transparent`}
             >
               {isActive && (
                 <span className="absolute -top-2 left-1/2 -translate-x-1/2 w-10 h-1 bg-brand-primary rounded-full shadow-[0_0_10px_rgba(57,255,20,0.8)] "></span>
@@ -48,7 +48,7 @@ export default function BottomNav() {
                     : 'text-muted group-hover:text-foreground scale-100'
                 }`}
                 // strokeWidth controla el grosor. 2 es normal, 2.5 es bold.
-                strokeWidth={isActive ? 2.5 : 1.5} /* @ts-ignore */
+                strokeWidth={2} /* @ts-ignore */
               />
               
               <span 

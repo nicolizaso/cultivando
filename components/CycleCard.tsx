@@ -60,7 +60,7 @@ export default function CycleCard({ cycle }: { cycle: CycleWithSpace }) {
 
       {/* Botón Eliminar (Flotante) */}
       <div className="absolute top-0 right-0 p-6 opacity-0 group-hover:opacity-100 transition-opacity flex gap-2 z-20">
-        <button onClick={handleDelete} className="p-2 bg-red-500/10 text-red-400 rounded-full hover:bg-red-500/20" title="Eliminar">
+        <button onClick={handleDelete} className="p-2 min-h-[48px] min-w-[48px] flex items-center justify-center bg-red-500/10 text-red-400 rounded-full hover:bg-red-500/20" title="Eliminar">
             <Trash2 size={16} />
         </button>
       </div>
@@ -101,7 +101,7 @@ export default function CycleCard({ cycle }: { cycle: CycleWithSpace }) {
           <button
               onClick={toggleStatus}
               disabled={loading}
-              className={`text-[10px] font-bold uppercase hover:text-brand-primary flex items-center gap-1 transition-colors ${latestImage ? 'text-muted hover:text-white' : 'text-brand-muted hover:text-brand-text'}`}
+              className={`text-[10px] font-bold uppercase hover:text-brand-primary flex items-center min-h-[48px] min-w-[48px] justify-center gap-1 transition-colors ${latestImage ? 'text-muted hover:text-white' : 'text-brand-muted hover:text-brand-text'}`}
           >
               {cycle.is_active ? <StopCircle size={12} /> : <PlayCircle size={12} />}
               {cycle.is_active ? "Finalizar Ciclo" : "Reactivar Ciclo"}
