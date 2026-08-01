@@ -300,3 +300,43 @@ export async function bulkChangeStage(
       return { error: 'Error al actualizar la imagen.' };
     }
   }
+
+export async function createCycleWithSpace(name: string, startDate: string, spaceId: number) {
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { success: false, error: "No autorizado" };
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('cycles')
+      .insert([
+        {
+          name: name,
+          start_date: startDate,
+          space_id: spaceId,
+          is_active: true,
+          user_id: user.id,
+        },
+      ])
+      .select('id')
+      .single();
+
+    if (error) {
+      console.error("Error creating cycle:", error);
+      return { success: false, error: "Error al crear el ciclo" };
+    }
+
+    revalidatePath("/cycles");
+    revalidatePath("/");
+    return { success: true, cycleId: data.id };
+  } catch (error) {
+    console.error("Error in createCycleWithSpace:", error);
+    return { success: false, error: "Error inesperado" };
+  }
+}

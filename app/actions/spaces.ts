@@ -38,3 +38,38 @@ export async function updateSpace(id: number, data: Partial<Space>) {
     return { success: false, error: "Error inesperado" };
   }
 }
+
+export async function createSpaceInline(name: string, type: 'Indoor' | 'Outdoor' | 'Mixto') {
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { success: false, error: "No autorizado" };
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from("spaces")
+      .insert({
+        name,
+        type,
+        user_id: user.id
+      })
+      .select('id')
+      .single();
+
+    if (error) {
+      console.error("Error creating space inline:", error);
+      return { success: false, error: "Error al crear el espacio" };
+    }
+
+    revalidatePath("/spaces");
+    return { success: true, spaceId: data.id };
+  } catch (error) {
+    console.error("Error in createSpaceInline:", error);
+    return { success: false, error: "Error inesperado" };
+  }
+}
