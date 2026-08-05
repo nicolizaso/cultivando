@@ -1,0 +1,39 @@
+1. Mapa del Sitio
+- Inicio (Panel de Control): Vista principal con widgets y resumen de la situación actual.
+- Plantas (Inventario Global): Inventario completo de todas las plantas individuales.
+- Ciclos (Historial): Registro de ciclos de cultivo activos y pasados.
+- Espacios (Infraestructura): Gestión de ubicaciones físicas y sus características.
+- Agenda (Calendario): Planificación de eventos y tareas asociadas al cultivo.
+- Nutrición (Fertilizantes): Catálogo de productos fertilizantes y combos.
+
+2. Diccionario de Funciones
+- Inicio:
+  - El usuario puede ver métricas clave, tareas pendientes y un resumen visual rápido.
+- Plantas:
+  - El usuario puede visualizar todas sus plantas (activas y archivadas).
+  - Puede crear nuevas plantas, editar sus datos o archivarlas.
+  - Al ingresar a una planta, el usuario puede ver su historial de eventos, registrar mediciones y ver fotos (Timeline).
+- Ciclos:
+  - El usuario puede crear nuevos ciclos de cultivo y añadirles fotos de portada.
+  - Puede visualizar qué plantas pertenecen a cada ciclo y su información general.
+- Espacios:
+  - El usuario puede agregar y configurar lugares físicos detallando dimensiones, iluminación y ventilación.
+  - Puede ver qué plantas o ciclos están alojados en cada espacio.
+- Agenda:
+  - El usuario puede visualizar las tareas diarias, semanales o mensuales en formato calendario o lista.
+  - Puede crear, editar, marcar como completadas o eliminar tareas (como Riego, Poda, Cambio de ambiente).
+- Nutrición:
+  - El usuario puede registrar productos individuales de fertilización y sus dosis.
+  - Puede agrupar múltiples productos en "Combos Nutricionales" para ser utilizados conjuntamente.
+
+3. Flujos de Trabajo
+- Relación Planta - Ciclo - Espacio:
+  - Las plantas recién creadas pueden ser ubicadas dentro de un Ciclo para su seguimiento agrupado, o asignadas a un Espacio físico determinado.
+  - Si un usuario realiza una tarea de "Cambio de ambiente" para reubicar un ciclo, automáticamente se actualizará la ubicación de todas las plantas dentro de ese ciclo al nuevo espacio físico.
+- Relación Tareas - Entidades:
+  - Al crear una tarea, el usuario decide si afecta a una Planta individual, a todo un Ciclo, o a un Espacio completo.
+  - Si una tarea se aplica a un Espacio, impactará a todas las plantas y ciclos que estén alojados dentro de él de manera simultánea.
+- Flujo de Nutrición a Tareas:
+  - Cuando el usuario programa una tarea de tipo "Fertilizante", la aplicación sugiere automáticamente los productos o combos creados previamente en la sección de Nutrición y puede calcular la dosificación según la etapa en la que se encuentra la planta objetivo.
+- Transición Automática de Etapas:
+  - Al completar tareas específicas (como el cambio a etapa de Floración), el sistema actualiza automáticamente el estado de la planta sin que el usuario deba modificar el perfil manualmente.
