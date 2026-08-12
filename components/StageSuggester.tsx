@@ -3,13 +3,11 @@
 import { useEffect, useState } from "react";
 import { Plant } from "@/app/lib/types";
 import { supabase } from "@/app/lib/supabase";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { Sprout } from "lucide-react";
+import { useToast } from "@/app/context/ToastContext";
 import { useRouter } from "next/navigation";
 import { getFirstSuggestion } from "@/app/lib/stage-logic";
-
-// I'll assume Toast.tsx is a component I can't just call imperatively unless it has a context or similar.
-// Since I don't see a ToastContext, I'll build a simple dismissible alert inside this component
-// and render it fixed on the screen.
 
 interface StageSuggesterProps {
   plants: Plant[];
@@ -18,6 +16,8 @@ interface StageSuggesterProps {
 export default function StageSuggester({ plants }: StageSuggesterProps) {
   const [suggestion, setSuggestion] = useState<{ plant: Plant; nextStage: string } | null>(null);
   const router = useRouter();
+  const { showToast } = useToast();
+  const reduceMotion = useReducedMotion();
 
   useEffect(() => {
     // Check for suggestions
@@ -69,8 +69,7 @@ export default function StageSuggester({ plants }: StageSuggesterProps) {
       setSuggestion(null);
 
     } catch (error) {
-      console.error("Error updating stage:", error);
-      alert("Error al actualizar la etapa.");
+      showToast(error instanceof Error ? error.message : "No se pudo actualizar la etapa", "error");
     } finally {
       setSuggestion(null);
     }
@@ -81,46 +80,41 @@ export default function StageSuggester({ plants }: StageSuggesterProps) {
   return (
     <AnimatePresence>
       <motion.div
-        initial={{ opacity: 0, y: 50 }}
+        role="status"
+        initial={reduceMotion ? false : { opacity: 0, y: 24 }}
         animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0, y: 50 }}
-        className="fixed z-50 bottom-24 left-0 right-0 mx-auto w-[92%] md:bottom-8 md:right-8 md:left-auto md:mx-0 md:w-96"
+        exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 24 }}
+        transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+        className="fixed inset-x-4 bottom-[calc(6rem+env(safe-area-inset-bottom))] z-50 mx-auto w-auto max-w-sm md:inset-x-auto md:bottom-8 md:right-8 md:mx-0 md:w-96"
       >
-        <div className="bg-card border border-brand-primary/20 shadow-sm rounded-2xl p-4 flex flex-col gap-3 relative overflow-hidden">
-            {/* Background effect */}
-            <div className="absolute top-0 right-0 w-32 h-32 bg-brand-primary/10 rounded-full blur-2xl -mr-10 -mt-10 pointer-events-none"></div>
-
-            <div className="flex items-start gap-3 relative z-10">
-                <div className="bg-brand-primary/20 p-2 rounded-full text-brand-primary">
-                    <span className="text-xl">🌱</span>
-                </div>
-                <div>
-                    <h3 className="font-bold text-foreground text-sm uppercase tracking-wide">Sugerencia de Cultivo</h3>
-                    <p className="text-foreground text-sm mt-1">
-                        <span className="text-brand-primary font-bold">{suggestion.plant.name}</span> ha cumplido <span className="font-bold text-foreground">{suggestion.plant.current_age_days ?? suggestion.plant.days ?? 0} días</span>.
-                        <br/>
-                        ¿Pasar a etapa <span className="font-bold text-foreground">{suggestion.nextStage}</span>?
-                    </p>
-                </div>
+        <div className="surface flex flex-col gap-3 rounded-[var(--radius-lg)] p-4 shadow-[var(--shadow-lg)]">
+          <div className="flex items-start gap-3">
+            <span
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-soft text-[color:var(--brand-text)]"
+              aria-hidden="true"
+            >
+              <Sprout size={20} />
+            </span>
+            <div className="min-w-0">
+              <h3 className="text-sm font-semibold text-fg">Sugerencia de cultivo</h3>
+              <p className="mt-1 text-sm leading-snug text-fg-muted">
+                <span className="font-semibold text-fg">{suggestion.plant.name}</span> cumplió{' '}
+                {suggestion.plant.current_age_days ?? suggestion.plant.days ?? 0} días.
+                ¿La pasamos a {suggestion.nextStage}?
+              </p>
             </div>
+          </div>
 
-            <div className="flex gap-2 justify-end mt-2 relative z-10">
-                <button
-                    onClick={handleDismiss}
-                    className="px-4 py-2 rounded-lg text-xs font-bold text-muted hover:text-foreground hover:bg-card-border transition-colors uppercase"
-                >
-                    No, esperar
-                </button>
-                <button
-                    onClick={handleConfirm}
-                    className="bg-brand-primary hover:bg-brand-primary-hover text-brand-bg px-4 py-2 rounded-lg text-xs font-bold shadow-sm shadow-brand-primary/20 transition-colors uppercase"
-                >
-                    Sí, actualizar
-                </button>
-            </div>
+          <div className="flex justify-end gap-2">
+            <button type="button" onClick={handleDismiss} className="btn btn-ghost h-10 min-h-10 px-3 text-xs">
+              Ahora no
+            </button>
+            <button type="button" onClick={handleConfirm} className="btn btn-primary h-10 min-h-10 px-3 text-xs">
+              Sí, actualizar
+            </button>
+          </div>
         </div>
       </motion.div>
     </AnimatePresence>
   );
-
 }

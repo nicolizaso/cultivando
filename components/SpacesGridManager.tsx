@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Space } from "@/app/lib/types";
 import SpaceCard from "@/components/SpaceCard";
 import SpaceConfigModal from "@/components/SpaceConfigModal";
+import EmptyState from "@/components/EmptyState";
 import { Warehouse } from "lucide-react";
 
 interface SpacesGridManagerProps {
@@ -15,22 +16,21 @@ export default function SpacesGridManager({ initialSpaces }: SpacesGridManagerPr
 
   return (
     <>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {initialSpaces && initialSpaces.length > 0 ? (
-          initialSpaces.map((space) => (
-            <SpaceCard
-              key={space.id}
-              space={space}
-              onClick={() => setSelectedSpace(space)}
-            />
-          ))
-        ) : (
-          <div className="col-span-full py-20 text-center border border-dashed border-card-border rounded-2xl bg-card">
-            <Warehouse className="mx-auto text-muted mb-4" size={48} />
-            <p className="text-muted">No hay espacios configurados.</p>
-          </div>
-        )}
-      </div>
+      {initialSpaces && initialSpaces.length > 0 ? (
+        <ul className="stagger grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {initialSpaces.map((space, i) => (
+            <li key={space.id} style={{ ['--i' as string]: i }}>
+              <SpaceCard space={space} onClick={() => setSelectedSpace(space)} />
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <EmptyState
+          icon={Warehouse}
+          title="Sin espacios"
+          description="Un espacio es el lugar físico donde cultivás: una carpa, un armario o el exterior. Creá el primero para asignarle ciclos."
+        />
+      )}
 
       <SpaceConfigModal
         isOpen={!!selectedSpace}

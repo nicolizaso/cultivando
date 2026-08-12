@@ -2,7 +2,8 @@ import { createClient } from "@/app/lib/supabase-server";
 import AddCycleModal from "@/components/AddCycleModal";
 import CycleCard from "@/components/CycleCard";
 import GlobalHeader from "@/components/GlobalHeader";
-import { Sprout } from "lucide-react"; 
+import EmptyState from "@/components/EmptyState";
+import { Sprout } from "lucide-react";
 
 export default async function CyclesPage() {
   const supabase = await createClient();
@@ -17,27 +18,30 @@ export default async function CyclesPage() {
     .limit(1, { foreignTable: 'cycle_images' });
 
   return (
-    <main className="min-h-screen bg-background text-foreground p-4 md:p-8 pb-24 font-body">
+    <main className="mx-auto w-full max-w-[1400px] px-5 py-6 md:px-8 md:py-8">
       
-      <GlobalHeader userEmail={user?.email} title="Historial" subtitle="Ciclos de Cultivo" />
+      <GlobalHeader userEmail={user?.email} title="Ciclos" subtitle="Historial de cultivo" />
       
       <div className="flex justify-end mb-6">
           {/* Modal simple sin props automáticas */}
           <AddCycleModal />
       </div>
 
-      <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {cycles && cycles.length > 0 ? (
-          cycles.map((cycle) => (
-            <CycleCard key={cycle.id} cycle={cycle} />
-          ))
-        ) : (
-          <div className="col-span-full flex flex-col items-center justify-center py-20 opacity-50">
-            <Sprout size={48} className="mb-4 text-muted" />
-            <p className="text-muted">No hay ciclos registrados aún.</p>
-          </div>
-        )}
-      </section>
+      {cycles && cycles.length > 0 ? (
+        <ul className="stagger grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {cycles.map((cycle, i) => (
+            <li key={cycle.id} style={{ ['--i' as string]: i }}>
+              <CycleCard cycle={cycle} />
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <EmptyState
+          icon={Sprout}
+          title="Sin ciclos"
+          description="Un ciclo agrupa las plantas que cultivás juntas en un espacio. Creá el primero para empezar a registrar."
+        />
+      )}
 
     </main>
   );

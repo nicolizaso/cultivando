@@ -1,9 +1,13 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
+import Link from "next/link";
 import { supabase } from "@/app/lib/supabase";
 import { useRouter } from "next/navigation";
 import { PlayCircle, StopCircle, Trash2, MapPin, Calendar, ArrowRight } from "lucide-react";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
+import { useToast } from "@/app/context/ToastContext";
 
 interface CycleWithSpace {
   id: number;
@@ -14,100 +18,135 @@ interface CycleWithSpace {
   cycle_images?: { public_url: string }[];
 }
 
-export default function CycleCard({ cycle }: { cycle: CycleWithSpace }) { 
+export default function CycleCard({ cycle }: { cycle: CycleWithSpace }) {
   const router = useRouter();
+  const { showToast } = useToast();
   const [loading, setLoading] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
   const latestImage = cycle.cycle_images?.[0]?.public_url;
 
-  const handleCardClick = () => {
-    router.push(`/cycles/${cycle.id}`);
-  };
-
-  const toggleStatus = async (e: React.MouseEvent) => {
-    e.stopPropagation(); // Evita entrar al ciclo al hacer click
+  const toggleStatus = async () => {
     setLoading(true);
     try {
-      await supabase.from('cycles').update({ is_active: !cycle.is_active }).eq('id', cycle.id);
+      const { error } = await supabase.from('cycles').update({ is_active: !cycle.is_active }).eq('id', cycle.id);
+      if (error) throw error;
+      showToast(cycle.is_active ? "Ciclo finalizado" : "Ciclo reactivado");
       router.refresh();
-    } catch (error) { alert("Error al actualizar estado"); } finally { setLoading(false); }
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "No se pudo actualizar el ciclo", "error");
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleDelete = async (e: React.MouseEvent) => {
-    e.stopPropagation(); // Evita entrar al ciclo
-    if (!confirm("¿Eliminar ciclo y su historial?")) return;
-    try { await supabase.from('cycles').delete().eq('id', cycle.id); router.refresh(); } catch (e) { alert("Error"); }
+  const handleDelete = async () => {
+    try {
+      const { error } = await supabase.from('cycles').delete().eq('id', cycle.id);
+      if (error) throw error;
+      showToast("Ciclo eliminado");
+      router.refresh();
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "No se pudo eliminar el ciclo", "error");
+    }
   };
 
   return (
-    <div 
-        onClick={handleCardClick}
-        className={`group relative rounded-2xl p-6 border transition-all duration-300 cursor-pointer overflow-hidden ${
-        cycle.is_active 
-        ? 'bg-card dark:bg-[#12141C] border-black/5 dark:border-card-border hover:border-brand-primary/30 dark:hover:border-brand-primary/30'
-        : 'bg-brand-bg border-black/5 dark:border-card-border opacity-60 hover:opacity-100'
-    }`}>
-      
-      {latestImage && (
-        <>
-          <img
-            src={latestImage}
-            alt={cycle.name}
-            className="absolute inset-0 w-full h-full object-cover opacity-60 group-hover:opacity-70 transition-opacity z-0"
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-[#0B0C10] via-[#0B0C10]/95 to-black/30 z-0" />
-        </>
-      )}
+    <>
+      <article
+        className={`surface-interactive group relative flex h-full flex-col overflow-hidden rounded-[var(--radius-lg)] ${
+          cycle.is_active ? "" : "opacity-75 hover:opacity-100"
+        }`}
+      >
+        {latestImage && (
+          <div className="relative h-32 w-full">
+            <Image
+              src={latestImage}
+              alt=""
+              fill
+              sizes="(min-width: 1024px) 420px, 100vw"
+              className="object-cover transition-transform duration-500 group-hover:scale-[1.03]"
+            />
+          </div>
+        )}
 
-      {/* Botón Eliminar (Flotante) */}
-      <div className="absolute top-0 right-0 p-6 opacity-0 group-hover:opacity-100 transition-opacity flex gap-2 z-20">
-        <button onClick={handleDelete} className="p-2 min-h-[48px] min-w-[48px] flex items-center justify-center bg-red-500/10 text-red-400 rounded-full hover:bg-red-500/20" title="Eliminar">
-            <Trash2 size={16} />
-        </button>
-      </div>
+        <div className="flex flex-1 flex-col p-5">
+          <div className="mb-3 flex items-start justify-between gap-2">
+            <span
+              className={`chip ${
+                cycle.is_active
+                  ? "border-[color:color-mix(in_srgb,var(--brand)_35%,transparent)] bg-brand-soft text-[color:var(--brand-text)]"
+                  : "border-line bg-surface-3 text-fg-muted"
+              }`}
+            >
+              {cycle.is_active
+                ? <PlayCircle size={12} aria-hidden="true" />
+                : <StopCircle size={12} aria-hidden="true" />}
+              {cycle.is_active ? "Activo" : "Archivado"}
+            </span>
 
-      <div className="relative z-10">
-        <div className="flex justify-between items-start mb-4">
-          <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase border flex items-center gap-1 ${
-              cycle.is_active
-              ? 'bg-brand-primary/10 text-brand-primary border-brand-primary/20'
-              : 'bg-slate-800 text-muted border-card-border dark:border-slate-700'
-          }`}>
-              {cycle.is_active ? <PlayCircle size={10} /> : <StopCircle size={10} />}
-              {cycle.is_active ? 'Activo' : 'Archivado'}
-          </span>
-        </div>
+            {/* Siempre visible: en táctil no existe el hover que antes lo revelaba */}
+            <button
+              type="button"
+              onClick={() => setShowConfirm(true)}
+              className="btn-icon relative z-10 h-9 min-h-9 w-9 min-w-9 text-[color:var(--danger)]"
+              aria-label={`Eliminar ciclo ${cycle.name}`}
+            >
+              <Trash2 size={16} aria-hidden="true" />
+            </button>
+          </div>
 
-        <h3 className={`text-2xl font-light font-title mb-2 group-hover:text-brand-primary transition-colors ${latestImage ? 'text-white' : 'text-brand-text'}`}>
-            {cycle.name}
-        </h3>
+          <h3 className="font-title text-xl font-semibold tracking-tight text-fg">
+            {/* El enlace se estira sobre la tarjeta; los botones llevan z-10 */}
+            <Link
+              href={`/cycles/${cycle.id}`}
+              className="transition-colors after:absolute after:inset-0 after:content-[''] hover:text-[color:var(--brand-text)]"
+            >
+              {cycle.name}
+            </Link>
+          </h3>
 
-        <div className="space-y-2 mb-6">
-            <div className={`flex items-center gap-2 text-xs font-body ${latestImage ? 'text-slate-300' : 'text-brand-muted'}`}>
-                <MapPin size={14} />
-                <span>{cycle.spaces?.name || "Sin espacio"}</span>
+          <dl className="mt-3 space-y-1.5 text-xs text-fg-muted">
+            <div className="flex items-center gap-2">
+              <dt className="sr-only">Espacio</dt>
+              <MapPin size={14} aria-hidden="true" />
+              <dd>{cycle.spaces?.name || "Sin espacio"}</dd>
             </div>
-            <div className={`flex items-center gap-2 text-xs font-body ${latestImage ? 'text-slate-300' : 'text-brand-muted'}`}>
-                <Calendar size={14} />
-                <span>Inicio: {new Date(cycle.start_date).toLocaleDateString()}</span>
+            <div className="flex items-center gap-2">
+              <dt className="sr-only">Fecha de inicio</dt>
+              <Calendar size={14} aria-hidden="true" />
+              <dd>Inicio: {new Date(cycle.start_date).toLocaleDateString('es-AR')}</dd>
             </div>
-        </div>
+          </dl>
 
-        <div className="flex items-center gap-2 text-xs font-bold text-brand-primary uppercase tracking-wider group-hover:translate-x-1 transition-transform">
-            Entrar al Panel <ArrowRight size={14} />
-        </div>
+          <p className="mt-4 flex items-center gap-1.5 text-sm font-semibold text-[color:var(--brand-text)]">
+            Entrar al panel
+            <ArrowRight size={15} className="transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
+          </p>
 
-        {/* Acciones Rápidas Inferiores */}
-        <div className="mt-4 pt-4 border-t border-card-border dark:border-slate-800 flex justify-end">
-          <button
+          <div className="mt-auto flex justify-end border-t border-line pt-3">
+            <button
+              type="button"
               onClick={toggleStatus}
               disabled={loading}
-              className={`text-[10px] font-bold uppercase hover:text-brand-primary flex items-center min-h-[48px] min-w-[48px] justify-center gap-1 transition-colors ${latestImage ? 'text-muted hover:text-white' : 'text-brand-muted hover:text-brand-text'}`}
-          >
-              {cycle.is_active ? <StopCircle size={12} /> : <PlayCircle size={12} />}
-              {cycle.is_active ? "Finalizar Ciclo" : "Reactivar Ciclo"}
-          </button>
+              className="btn btn-ghost relative z-10 h-9 min-h-9 px-3 text-xs"
+            >
+              {cycle.is_active
+                ? <StopCircle size={14} aria-hidden="true" />
+                : <PlayCircle size={14} aria-hidden="true" />}
+              {cycle.is_active ? "Finalizar ciclo" : "Reactivar ciclo"}
+            </button>
+          </div>
         </div>
-      </div>
-    </div>
+      </article>
+
+      <ConfirmDialog
+        isOpen={showConfirm}
+        onClose={() => setShowConfirm(false)}
+        onConfirm={handleDelete}
+        title="Eliminar ciclo"
+        description={`Se eliminará "${cycle.name}" y su historial. Esta acción no se puede deshacer.`}
+        confirmLabel="Eliminar"
+      />
+    </>
   );
 }
