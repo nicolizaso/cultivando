@@ -1,21 +1,23 @@
 import type { Metadata, Viewport } from "next";
-import { Inter, Montserrat } from "next/font/google";
+import { Outfit, Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
 import BottomNav from "@/components/BottomNav";
 import DesktopNavbar from "@/components/DesktopNavbar";
-import { ToastProvider } from "@/app/context/ToastContext"; // <--- Importamos el Provider
+import { ToastProvider } from "@/app/context/ToastContext";
 import { ThemeProvider } from "@/components/ThemeProvider";
 
-const montserrat = Montserrat({
-  weight: ["800", "900"],
+const outfit = Outfit({
+  weight: ["500", "600", "700"],
   subsets: ["latin"],
-  variable: "--font-montserrat",
+  variable: "--font-outfit",
+  display: "swap",
 });
 
-const inter = Inter({
-  weight: ["300", "400", "500", "600", "700"],
+const plusJakarta = Plus_Jakarta_Sans({
+  weight: ["400", "500", "600", "700"],
   subsets: ["latin"],
-  variable: "--font-inter",
+  variable: "--font-plus-jakarta",
+  display: "swap",
 });
 
 export const metadata: Metadata = {
@@ -25,11 +27,14 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#0B0F19",
+  // Sin maximumScale ni userScalable: bloquear el zoom rompe WCAG 1.4.4.
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
+  viewportFit: "cover",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#f2f5f2" },
+    { media: "(prefers-color-scheme: dark)", color: "#0d1512" },
+  ],
 };
 
 export default function RootLayout({
@@ -38,18 +43,22 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="es" suppressHydrationWarning className="dark">
-      <body className={`${inter.variable} ${montserrat.variable} antialiased bg-background text-foreground transition-colors duration-300 min-h-screen`}>
+    <html lang="es" suppressHydrationWarning>
+      <body
+        className={`${plusJakarta.variable} ${outfit.variable} antialiased bg-background text-foreground min-h-[100dvh]`}
+      >
         <ThemeProvider>
-          {/* Envolvemos la app en el ToastProvider */}
           <ToastProvider>
+            <a href="#contenido" className="skip-link">
+              Saltar al contenido principal
+            </a>
+
             <DesktopNavbar />
-            {/* Contenedor principal */}
-            <div className="pb-24 md:pb-0">
-                {children}
+
+            <div id="contenido" className="pb-28 md:pb-0">
+              {children}
             </div>
 
-            {/* Navbar Flotante */}
             <BottomNav />
           </ToastProvider>
         </ThemeProvider>

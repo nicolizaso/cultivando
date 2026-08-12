@@ -1,6 +1,11 @@
 import React from 'react';
 
-export default function Logo({ className = "w-6 h-6", strokeWidth = 2 }: { className?: string, strokeWidth?: number }) {
+type LogoProps = React.SVGProps<SVGSVGElement> & {
+  className?: string;
+  strokeWidth?: number;
+};
+
+export default function Logo({ className = "w-6 h-6", strokeWidth = 2, ...props }: LogoProps) {
   return (
     <svg
       className={className}
@@ -11,6 +16,8 @@ export default function Logo({ className = "w-6 h-6", strokeWidth = 2 }: { class
       strokeWidth={strokeWidth}
       strokeLinecap="round"
       strokeLinejoin="round"
+      focusable="false"
+      {...props}
     >
       <path d="M12 21a9 9 0 0 0 9-9c0-5-3.5-9-9-9S3 7 3 12a9 9 0 0 0 9 9z" strokeOpacity="0.2"/>
       <path d="M12 21c-4.5 0-7-4-7-9 0-4 2.5-7 7-7" />

@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
+import { createPortal } from "react-dom";
 import UserMenu from "@/components/UserMenu";
 import ThemeToggle from "@/components/ThemeToggle";
 import { Menu, X, FlaskConical, LogOut } from "lucide-react";
@@ -16,113 +17,151 @@ interface GlobalHeaderProps {
 
 export default function GlobalHeader({ title, subtitle, userEmail }: GlobalHeaderProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  // Escape cierra el panel y el fondo no debe hacer scroll mientras está abierto.
+  useEffect(() => {
+    if (!isMenuOpen) return;
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setIsMenuOpen(false);
+    };
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    document.addEventListener("keydown", onKeyDown);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [isMenuOpen]);
 
   return (
-    <header className="flex justify-between items-center mb-6 pt-2">
-      <div className="flex flex-col">
-        {/* LOGO / NOMBRE APP */}
-        <div className="flex items-center gap-2 mb-1">
-            {/* Icono Vectorial Institucional */}
-            <Logo className="text-brand-primary w-6 h-6" strokeWidth={2} />
-            
-            <span className="font-title text-brand-text text-lg tracking-wider uppercase">
-                Cultiva con el Primo
-            </span>
+    <header className="mb-8 flex items-start justify-between gap-4 pt-1">
+      <div className="min-w-0">
+        {/* El lockup de marca sólo aparece en móvil: en escritorio ya está en la barra superior */}
+        <div className="mb-1.5 flex items-center gap-2 md:hidden">
+          <Logo className="h-6 w-6 text-[color:var(--brand-text)]" strokeWidth={2} aria-hidden="true" />
+          <span className="font-title text-[15px] font-semibold tracking-tight text-fg">
+            Cultiva con el Primo
+          </span>
         </div>
-        
+
         {title && (
-            <h1 className="text-sm font-bold font-body text-brand-muted hidden md:block">
-                {title} {subtitle && <span className="font-normal opacity-50">| {subtitle}</span>}
-            </h1>
+          <h1 className="font-title text-2xl font-semibold tracking-tight text-fg md:text-[28px]">
+            {title}
+          </h1>
         )}
+        {subtitle && <p className="mt-1 text-sm text-fg-muted">{subtitle}</p>}
       </div>
 
-      <div className="flex items-center gap-2">
-        {/* Desktop elements */}
-        <div className="hidden md:flex items-center gap-2">
+      <div className="flex shrink-0 items-center gap-1">
+        <div className="hidden items-center gap-1 md:flex">
           <ThemeToggle />
           <UserMenu email={userEmail} />
         </div>
 
-        {/* Mobile menu button */}
         <button
-          className="flex md:hidden min-h-[48px] min-w-[48px] items-center justify-center p-2 rounded-full text-foreground hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+          type="button"
+          className="btn-icon md:hidden"
           onClick={() => setIsMenuOpen(true)}
+          aria-label="Abrir menú"
+          aria-expanded={isMenuOpen}
+          aria-haspopup="dialog"
         >
-          <Menu size={24} />
+          <Menu size={22} aria-hidden="true" />
         </button>
       </div>
 
-      {/* Mobile Drawer/Modal */}
-      {isMenuOpen && (
-        <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-md flex flex-col md:hidden animate-in slide-in-from-right-full duration-300">
-          {/* Header del menú */}
-          <div className="flex justify-between items-center p-6 border-b border-black/5 dark:border-white/5">
-            <div className="flex items-center gap-2">
-              <Logo className="text-brand-primary w-6 h-6" strokeWidth={2} />
-              <span className="font-title text-brand-text text-lg tracking-wider uppercase">
-                Cultiva con el Primo
-              </span>
-            </div>
-            <button
-              className="p-2 min-h-[48px] min-w-[48px] flex items-center justify-center rounded-full text-foreground hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+      {mounted &&
+        isMenuOpen &&
+        createPortal(
+          <div className="fixed inset-0 z-[120] md:hidden">
+            <div
+              className="absolute inset-0 bg-[color-mix(in_srgb,var(--fg)_55%,transparent)] animate-fade-in"
               onClick={() => setIsMenuOpen(false)}
-            >
-              <X size={24} />
-            </button>
-          </div>
+              aria-hidden="true"
+            />
 
-          {/* Navegación y Contenido principal */}
-          <div className="flex-1 p-6 space-y-8 overflow-y-auto">
-            <div className="space-y-4">
-              <h2 className="font-title text-xs font-bold text-muted uppercase tracking-widest">Secciones</h2>
-              <div className="flex flex-col gap-2">
-                <Link
-                  href="/fertilizers"
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-label="Menú"
+              className="animate-scale-in absolute inset-y-0 right-0 flex w-[86%] max-w-sm flex-col border-l border-line bg-surface shadow-[var(--shadow-overlay)]"
+            >
+              <div className="flex items-center justify-between gap-3 border-b border-line px-5 py-4">
+                <div className="flex items-center gap-2">
+                  <Logo className="h-6 w-6 text-[color:var(--brand-text)]" strokeWidth={2} aria-hidden="true" />
+                  <span className="font-title text-[15px] font-semibold text-fg">Cultiva con el Primo</span>
+                </div>
+                <button
+                  type="button"
+                  className="btn-icon -mr-2"
                   onClick={() => setIsMenuOpen(false)}
-                  className="flex items-center gap-4 p-4 rounded-2xl glass-card text-foreground hover:border-brand-primary/50 transition-colors"
+                  aria-label="Cerrar menú"
+                  autoFocus
                 >
-                  <div className="w-10 h-10 rounded-full bg-brand-primary/10 flex items-center justify-center text-brand-primary">
-                    <FlaskConical size={20} />
+                  <X size={22} aria-hidden="true" />
+                </button>
+              </div>
+
+              <div className="custom-scrollbar flex-1 space-y-7 overflow-y-auto p-5">
+                <section className="space-y-3">
+                  <h2 className="text-xs font-bold uppercase tracking-widest text-fg-subtle">Secciones</h2>
+                  <Link
+                    href="/fertilizers"
+                    onClick={() => setIsMenuOpen(false)}
+                    className="surface-interactive flex items-center gap-3 rounded-[var(--radius-lg)] p-4 text-fg"
+                  >
+                    <span
+                      className="flex h-10 w-10 items-center justify-center rounded-full bg-brand-soft text-[color:var(--brand-text)]"
+                      aria-hidden="true"
+                    >
+                      <FlaskConical size={20} />
+                    </span>
+                    <span className="font-medium">Nutrición</span>
+                  </Link>
+                </section>
+
+                <section className="space-y-3">
+                  <h2 className="text-xs font-bold uppercase tracking-widest text-fg-subtle">Preferencias</h2>
+                  <div className="surface flex items-center justify-between rounded-[var(--radius-lg)] py-2 pl-4 pr-2">
+                    <span className="font-medium text-fg">Tema visual</span>
+                    <ThemeToggle />
                   </div>
-                  <span className="font-sans text-lg font-medium">Nutrición</span>
-                </Link>
+                </section>
+              </div>
+
+              <div className="border-t border-line bg-surface-2 p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
+                <div className="mb-4 flex items-center gap-3">
+                  <span
+                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand text-sm font-bold text-[color:var(--brand-fg)]"
+                    aria-hidden="true"
+                  >
+                    {userEmail ? userEmail[0].toUpperCase() : "U"}
+                  </span>
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium text-fg" title={userEmail}>
+                      {userEmail || "Usuario"}
+                    </p>
+                    <p className="text-xs text-fg-muted">Cuenta activa</p>
+                  </div>
+                </div>
+
+                <button type="button" onClick={() => signout()} className="btn btn-danger w-full">
+                  <LogOut size={18} aria-hidden="true" />
+                  Cerrar sesión
+                </button>
               </div>
             </div>
-
-            <div className="space-y-4">
-              <h2 className="font-title text-xs font-bold text-muted uppercase tracking-widest">Preferencias</h2>
-              <div className="flex items-center justify-between p-4 rounded-2xl glass-card text-foreground">
-                <span className="font-sans font-medium">Tema Visual</span>
-                <ThemeToggle />
-              </div>
-            </div>
-          </div>
-
-          {/* Sección Usuario (Bottom) */}
-          <div className="p-6 border-t border-black/5 dark:border-white/5 bg-black/40 backdrop-blur-md border-t border-white/10">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="w-10 h-10 rounded-full bg-brand-primary flex items-center justify-center text-white font-bold">
-                {userEmail ? userEmail[0].toUpperCase() : "U"}
-              </div>
-              <div className="flex-1 overflow-hidden">
-                <p className="font-sans text-sm font-medium truncate" title={userEmail}>
-                  {userEmail || "Usuario"}
-                </p>
-                <p className="font-sans text-xs text-muted">Cuenta Activa</p>
-              </div>
-            </div>
-
-            <button
-              onClick={() => signout()}
-              className="w-full flex items-center justify-center gap-2 p-4 rounded-xl text-red-500 bg-red-500/10 hover:bg-red-500/20 font-sans font-medium transition-colors"
-            >
-              <LogOut size={20} />
-              <span>Cerrar Sesión</span>
-            </button>
-          </div>
-        </div>
-      )}
+          </div>,
+          document.body
+        )}
     </header>
   );
 }

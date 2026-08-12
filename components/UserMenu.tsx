@@ -2,86 +2,106 @@
 
 import { useState, useRef, useEffect } from "react";
 import { signout } from "@/app/login/actions";
-import { LogOut, User, Settings, ChevronDown } from "lucide-react";
+import { LogOut, User, ChevronDown } from "lucide-react";
 
 export default function UserMenu({ email }: { email?: string }) {
   const [isOpen, setIsOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
-  // Cerrar al hacer click fuera
   useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+    if (!isOpen) return;
+
+    function handlePointerDown(event: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
         setIsOpen(false);
       }
     }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setIsOpen(false);
+        triggerRef.current?.focus();
+      }
+    }
+
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isOpen]);
+
+  // Al abrir con teclado, el foco entra en la primera opción del menú.
+  useEffect(() => {
+    if (isOpen) menuRef.current?.querySelector<HTMLElement>("button")?.focus();
+  }, [isOpen]);
 
   const initial = email ? email[0].toUpperCase() : "U";
 
   return (
-    <div className="relative" ref={menuRef}>
-      {/* AVATAR TRIGGER */}
-      <button 
+    <div className="relative" ref={containerRef}>
+      <button
+        ref={triggerRef}
+        type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className={`group flex items-center gap-2 pl-1 pr-3 py-1 rounded-full transition-all border ${
-            isOpen 
-            ? 'bg-card border-brand-primary text-foreground shadow-[0_0_15px_rgba(0,165,153,0.3)]'
-            : 'bg-card border-card-border text-muted hover:border-brand-primary/50 hover:text-foreground'
+        aria-expanded={isOpen}
+        aria-haspopup="menu"
+        aria-label={email ? `Cuenta de ${email}` : "Menú de cuenta"}
+        className={`flex items-center gap-1.5 rounded-full border py-1 pl-1 pr-2.5 transition-colors ${
+          isOpen
+            ? "border-[color:var(--brand)] bg-surface text-fg"
+            : "border-line bg-surface text-fg-muted hover:border-line-strong hover:text-fg"
         }`}
       >
-        <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm transition-colors ${
-            isOpen ? 'bg-brand-primary text-white' : 'bg-slate-50 text-brand-primary group-hover:bg-brand-primary group-hover:text-white'
-        }`}>
-            {initial}
-        </div>
-        <ChevronDown size={14} className={`transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`} />
+        <span
+          className="flex h-8 w-8 items-center justify-center rounded-full bg-brand text-sm font-bold text-[color:var(--brand-fg)]"
+          aria-hidden="true"
+        >
+          {initial}
+        </span>
+        <ChevronDown
+          size={14}
+          className={`transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`}
+          aria-hidden="true"
+        />
       </button>
 
-      {/* DROPDOWN MODAL (Estilo Bento) */}
       {isOpen && (
-        <div className="absolute right-0 top-14 w-64 bg-card border border-card-border rounded-2xl shadow-sm overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-200">
-          
-          {/* Header del Modal */}
-          <div className="p-4 border-b border-card-border bg-slate-50/50">
-            <div className="flex items-center gap-3 mb-1">
-                <div className="p-1.5 bg-brand-primary/10 rounded-lg text-brand-primary">
-                    <User size={16} />
-                </div>
-                <span className="text-[10px] text-muted uppercase font-bold tracking-widest">Cuenta</span>
+        <div
+          ref={menuRef}
+          role="menu"
+          aria-label="Opciones de cuenta"
+          className="animate-scale-in absolute right-0 top-12 z-50 w-64 overflow-hidden rounded-[var(--radius-lg)] border border-line bg-surface shadow-[var(--shadow-lg)]"
+        >
+          <div className="border-b border-line bg-surface-2 p-4">
+            <div className="mb-1.5 flex items-center gap-2">
+              <span
+                className="flex h-7 w-7 items-center justify-center rounded-[var(--radius-sm)] bg-brand-soft text-[color:var(--brand-text)]"
+                aria-hidden="true"
+              >
+                <User size={15} />
+              </span>
+              <span className="text-[11px] font-bold uppercase tracking-widest text-fg-subtle">Cuenta</span>
             </div>
-            <p className="text-sm text-foreground font-medium truncate font-body pl-1" title={email}>
-                {email || "Usuario"}
+            <p className="truncate text-sm font-medium text-fg" title={email}>
+              {email || "Usuario"}
             </p>
           </div>
 
-          {/* Opciones */}
-          <div className="p-2 space-y-1">
-            {/* Botón Fake de Configuración (para futuro) */}
-            <button 
-                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-muted hover:text-foreground hover:bg-card-border transition-colors group text-left"
-                onClick={() => alert("Próximamente: Ajustes de cuenta")}
+          <div className="p-2">
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => signout()}
+              className="group flex w-full items-center gap-3 rounded-[var(--radius-md)] px-3 py-2.5 text-left text-sm font-medium text-[color:var(--danger)] transition-colors hover:bg-[color:var(--danger-soft)]"
             >
-                <Settings size={16} className="text-muted group-hover:text-brand-primary transition-colors" />
-                Configuración
-            </button>
-
-            <div className="h-px bg-card-border my-1 mx-2"></div>
-
-            {/* Botón Cerrar Sesión */}
-            <button 
-                onClick={() => signout()} 
-                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-red-400 hover:bg-red-500/10 hover:text-red-300 transition-colors group text-left"
-            >
-                <LogOut size={16} className="group-hover:-translate-x-0.5 transition-transform" />
-                Cerrar Sesión
+              <LogOut size={16} className="transition-transform group-hover:-translate-x-0.5" aria-hidden="true" />
+              Cerrar sesión
             </button>
           </div>
-          
-          {/* Footer decorativo */}
-          <div className="h-1 w-full bg-linear-to-r from-brand-primary/0 via-brand-primary/20 to-brand-primary/0"></div>
         </div>
       )}
     </div>

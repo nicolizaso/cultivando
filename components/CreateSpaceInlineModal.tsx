@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { createSpaceInline } from "@/app/actions/spaces";
-import { Loader2 } from "lucide-react";
+import { AlertCircle, Loader2 } from "lucide-react";
+import Modal from "@/components/ui/Modal";
 
 interface CreateSpaceInlineModalProps {
   onSuccess: (spaceId: number) => void;
@@ -26,7 +27,7 @@ export default function CreateSpaceInlineModal({ onSuccess, onCancel }: CreateSp
       } else {
         setError(res.error || "Error al crear el espacio");
       }
-    } catch (err) {
+    } catch {
       setError("Error de conexión");
     } finally {
       setLoading(false);
@@ -34,60 +35,61 @@ export default function CreateSpaceInlineModal({ onSuccess, onCancel }: CreateSp
   };
 
   return (
-    <div className="absolute inset-0 z-[60] bg-background/95 backdrop-blur-md flex flex-col justify-center items-center p-6 animate-in fade-in zoom-in-95 duration-200">
-      <div className="w-full max-w-sm bg-card border border-card-border rounded-2xl shadow-xl p-6">
-        <h3 className="text-lg font-bold font-title mb-4">Crear Espacio Rápido</h3>
-
+    <Modal
+      isOpen
+      onClose={onCancel}
+      title="Crear espacio rápido"
+      size="sm"
+      dismissOnBackdrop={!loading}
+      footer={
+        <>
+          <button type="button" className="btn btn-ghost" onClick={onCancel} disabled={loading}>
+            Cancelar
+          </button>
+          <button type="submit" form="inline-space-form" className="btn btn-primary" disabled={loading}>
+            {loading && <Loader2 size={16} className="animate-spin" aria-hidden="true" />}
+            {loading ? "Creando..." : "Crear"}
+          </button>
+        </>
+      }
+    >
+      <form id="inline-space-form" onSubmit={handleSubmit} className="space-y-5">
         {error && (
-          <div className="mb-4 p-3 rounded-xl text-xs font-bold bg-red-500/10 text-red-400 border border-red-500/20">
+          <p className="field-error" role="alert">
+            <AlertCircle size={14} aria-hidden="true" />
             {error}
-          </div>
+          </p>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-muted mb-1.5 text-[10px] font-bold uppercase tracking-wider">Nombre del Espacio</label>
-            <input
-              type="text"
-              required
-              placeholder="Ej: Carpa 80x80"
-              className="w-full bg-background border border-card-border rounded-xl p-3 text-sm focus:border-brand-primary outline-none transition-colors"
-              value={formData.name}
-              onChange={(e) => setFormData({...formData, name: e.target.value})}
-            />
-          </div>
+        <div className="field">
+          <label htmlFor="inline-space-name" className="field-label">Nombre del espacio</label>
+          <input
+            id="inline-space-name"
+            data-autofocus
+            type="text"
+            required
+            aria-invalid={error ? true : undefined}
+            placeholder="Ej: Carpa 80x80"
+            className="field-input"
+            value={formData.name}
+            onChange={(e) => setFormData({...formData, name: e.target.value})}
+          />
+        </div>
 
-          <div>
-            <label className="block text-muted mb-1.5 text-[10px] font-bold uppercase tracking-wider">Tipo</label>
-            <select
-              className="w-full bg-background border border-card-border rounded-xl p-3 text-sm focus:border-brand-primary outline-none appearance-none transition-colors"
-              value={formData.type}
-              onChange={(e) => setFormData({...formData, type: e.target.value})}
-            >
-              <option value="Indoor">🏠 Indoor</option>
-              <option value="Outdoor">☀️ Outdoor</option>
-              <option value="Mixto">⛅ Mixto</option>
-            </select>
-          </div>
-
-          <div className="flex gap-3 mt-6 pt-4 border-t border-card-border">
-            <button
-              type="button"
-              onClick={onCancel}
-              className="flex-1 py-3 text-muted hover:text-foreground font-bold text-xs uppercase transition-colors"
-            >
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              disabled={loading}
-              className="flex-1 bg-brand-primary hover:bg-brand-primary-hover text-white py-3 rounded-xl font-bold text-sm tracking-wide transition-all active:scale-[0.98] disabled:opacity-50 flex justify-center items-center gap-2"
-            >
-              {loading ? <Loader2 className="animate-spin" size={16} /> : "CREAR"}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+        <div className="field">
+          <label htmlFor="inline-space-type" className="field-label">Tipo</label>
+          <select
+            id="inline-space-type"
+            className="field-input"
+            value={formData.type}
+            onChange={(e) => setFormData({...formData, type: e.target.value})}
+          >
+            <option value="Indoor">Indoor</option>
+            <option value="Outdoor">Outdoor</option>
+            <option value="Mixto">Mixto</option>
+          </select>
+        </div>
+      </form>
+    </Modal>
   );
 }
