@@ -4,9 +4,12 @@ import { useState, useMemo } from "react";
 import PlantCard from "./plantcard";
 import { supabase } from "@/app/lib/supabase";
 import { useRouter } from "next/navigation";
-import { CheckSquare, Square, Trash2, X, FilterX, Filter, Archive } from "lucide-react";
+import { CheckSquare, Square, Trash2, X, FilterX, Filter, Archive, Sprout } from "lucide-react";
 import { Plant as BasePlant, Cycle, Space } from "@/app/lib/types";
 import AddPlantModal from "./AddPlantModal";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
+import EmptyState from "@/components/EmptyState";
+import { useToast } from "@/app/context/ToastContext";
 
 interface Plant extends BasePlant {
   cycles?: { id: number; name: string; space_id: number } | null;
@@ -22,6 +25,7 @@ export default function PlantsGridManager({ plants, cycles, spaces }: PlantsGrid
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [isDeleting, setIsDeleting] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   // Filter States
   const [showFilters, setShowFilters] = useState(false);
@@ -30,6 +34,7 @@ export default function PlantsGridManager({ plants, cycles, spaces }: PlantsGrid
   const [showArchived, setShowArchived] = useState(false);
 
   const router = useRouter();
+  const { showToast } = useToast();
 
   // Filter Logic
   const filteredPlants = useMemo(() => {
@@ -99,9 +104,6 @@ export default function PlantsGridManager({ plants, cycles, spaces }: PlantsGrid
   const handleDelete = async () => {
     if (selectedIds.size === 0) return;
 
-    const confirm = window.confirm(`¿Estás seguro de que deseas eliminar ${selectedIds.size} plantas? Esta acción no se puede deshacer.`);
-    if (!confirm) return;
-
     setIsDeleting(true);
     try {
       const { error } = await supabase
@@ -112,12 +114,12 @@ export default function PlantsGridManager({ plants, cycles, spaces }: PlantsGrid
       if (error) throw error;
 
       // Reset state and refresh
+      showToast(`${selectedIds.size} plantas eliminadas`);
       setSelectedIds(new Set());
       setIsSelectionMode(false);
       router.refresh();
     } catch (error) {
-      console.error("Error deleting plants:", error);
-      alert("Error al eliminar las plantas seleccionadas.");
+      showToast(error instanceof Error ? error.message : "No se pudieron eliminar las plantas", "error");
     } finally {
       setIsDeleting(false);
     }
@@ -133,159 +135,168 @@ export default function PlantsGridManager({ plants, cycles, spaces }: PlantsGrid
 
   return (
     <div>
-      {/* Toolbar */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
-         <div className="text-sm text-muted font-bold">
-            {filteredPlants.length} plantas {hasFilters && <span className="text-muted font-normal">(filtrado de {plants.length})</span>}
-         </div>
+      {/* Barra de herramientas */}
+      <div className="mb-6 flex flex-col items-start justify-between gap-4 md:flex-row md:items-center">
+        <p className="text-sm text-fg-muted" aria-live="polite">
+          <span className="font-semibold text-fg">{filteredPlants.length}</span>{' '}
+          {filteredPlants.length === 1 ? 'planta' : 'plantas'}
+          {hasFilters && <span> (filtrado de {plants.length})</span>}
+        </p>
 
-         <div className="flex gap-2 self-end md:self-auto">
-            <button
-                onClick={() => setShowArchived(!showArchived)}
-                className={`p-2 rounded-lg transition-colors ${
-                    showArchived
-                    ? "bg-brand-primary text-brand-bg shadow-sm shadow-brand-primary/20"
-                    : "bg-card-border hover:bg-card-border text-muted hover:text-foreground"
-                }`}
-                title="Mostrar Archivadas"
-            >
-                <Archive size={20} />
+        <div className="flex flex-wrap items-center gap-2 self-stretch md:self-auto">
+          <button
+            type="button"
+            onClick={() => setShowArchived(!showArchived)}
+            aria-pressed={showArchived}
+            className={showArchived ? "btn btn-primary h-10 min-h-10 px-3" : "btn btn-secondary h-10 min-h-10 px-3"}
+          >
+            <Archive size={16} aria-hidden="true" />
+            <span className="hidden sm:inline">Archivadas</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setShowFilters(!showFilters)}
+            aria-expanded={showFilters}
+            aria-controls="plants-filters"
+            className={showFilters || hasFilters ? "btn btn-primary h-10 min-h-10 px-3" : "btn btn-secondary h-10 min-h-10 px-3"}
+          >
+            <Filter size={16} aria-hidden="true" />
+            <span className="hidden sm:inline">Filtros</span>
+          </button>
+
+          <AddPlantModal />
+
+          {isSelectionMode && (
+            <button type="button" onClick={toggleSelectAll} className="btn btn-secondary h-10 min-h-10 px-3">
+              {isAllSelected ? <CheckSquare size={16} aria-hidden="true" /> : <Square size={16} aria-hidden="true" />}
+              <span className="hidden md:inline">{isAllSelected ? "Deseleccionar" : "Todas"}</span>
             </button>
+          )}
 
-            <button
-                onClick={() => setShowFilters(!showFilters)}
-                className={`p-2 rounded-lg transition-colors ${
-                    showFilters || hasFilters
-                    ? "bg-brand-primary text-brand-bg shadow-sm shadow-brand-primary/20"
-                    : "bg-card-border hover:bg-card-border text-muted hover:text-foreground"
-                }`}
-                title="Filtrar"
-            >
-                <Filter size={20} />
-            </button>
-
-            <AddPlantModal />
-
-            {isSelectionMode && (
-                <button
-                    onClick={toggleSelectAll}
-                    className="flex items-center gap-2 px-4 py-2 rounded-lg bg-card-border hover:bg-card-border text-foreground text-xs font-bold uppercase transition-colors"
-                >
-                    {isAllSelected ? <CheckSquare size={16}/> : <Square size={16}/>}
-                    <span className="hidden md:inline">{isAllSelected ? "Deseleccionar" : "Todos"}</span>
-                </button>
-            )}
-
-            <button
-                onClick={toggleSelectionMode}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold uppercase transition-colors ${
-                    isSelectionMode
-                    ? "bg-card-border text-foreground border border-slate-300"
-                    : "bg-card-border hover:bg-card-border text-foreground border border-transparent"
-                }`}
-            >
-                {isSelectionMode ? "Cancelar" : "Seleccionar"}
-            </button>
-         </div>
+          <button
+            type="button"
+            onClick={toggleSelectionMode}
+            aria-pressed={isSelectionMode}
+            className="btn btn-secondary h-10 min-h-10 px-3"
+          >
+            {isSelectionMode ? "Cancelar" : "Seleccionar"}
+          </button>
+        </div>
       </div>
 
-      {/* Collapsible Filter Section */}
       {showFilters && (
-        <div className="bg-card p-4 rounded-2xl mb-6 animate-in fade-in slide-in-from-top-2 border border-card-border">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Space Filter */}
-                <div className="flex flex-col gap-1">
-                    <label className="text-xs text-muted font-bold uppercase ml-1">Espacio</label>
-                    <select
-                        value={selectedSpaceId}
-                        onChange={(e) => setSelectedSpaceId(e.target.value)}
-                        className="w-full bg-background text-foreground text-sm border border-card-border rounded-lg px-3 py-2 focus:outline-none focus:border-brand-primary/50 transition-colors appearance-none cursor-pointer"
-                    >
-                        <option value="all">Todos los espacios</option>
-                        {spaces.map(space => (
-                            <option key={space.id} value={space.id}>{space.name}</option>
-                        ))}
-                    </select>
-                </div>
-
-                {/* Cycle Filter */}
-                <div className="flex flex-col gap-1">
-                    <label className="text-xs text-muted font-bold uppercase ml-1">Ciclo</label>
-                    <select
-                        value={selectedCycleId}
-                        onChange={(e) => setSelectedCycleId(e.target.value)}
-                        className="w-full bg-background text-foreground text-sm border border-card-border rounded-lg px-3 py-2 focus:outline-none focus:border-brand-primary/50 transition-colors appearance-none cursor-pointer"
-                    >
-                        <option value="all">Todos los ciclos</option>
-                        {cycles.map(cycle => (
-                            <option key={cycle.id} value={cycle.id}>{cycle.name}</option>
-                        ))}
-                    </select>
-                </div>
+        <div id="plants-filters" className="surface animate-fade-in mb-6 rounded-[var(--radius-lg)] p-4">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div className="field">
+              <label htmlFor="filter-space" className="field-label">Espacio</label>
+              <select
+                id="filter-space"
+                value={selectedSpaceId}
+                onChange={(e) => setSelectedSpaceId(e.target.value)}
+                className="field-input"
+              >
+                <option value="all">Todos los espacios</option>
+                {spaces.map(space => (
+                  <option key={space.id} value={space.id}>{space.name}</option>
+                ))}
+              </select>
             </div>
 
-            {hasFilters && (
-                <div className="mt-4 flex justify-end">
-                    <button
-                        onClick={clearFilters}
-                        className="flex items-center gap-2 px-4 py-2 text-xs font-bold text-muted hover:text-foreground bg-card-border hover:bg-card-border rounded-lg transition-colors"
-                    >
-                        <FilterX size={16} />
-                        Limpiar Filtros
-                    </button>
-                </div>
-            )}
+            <div className="field">
+              <label htmlFor="filter-cycle" className="field-label">Ciclo</label>
+              <select
+                id="filter-cycle"
+                value={selectedCycleId}
+                onChange={(e) => setSelectedCycleId(e.target.value)}
+                className="field-input"
+              >
+                <option value="all">Todos los ciclos</option>
+                {cycles.map(cycle => (
+                  <option key={cycle.id} value={cycle.id}>{cycle.name}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {hasFilters && (
+            <div className="mt-4 flex justify-end">
+              <button type="button" onClick={clearFilters} className="btn btn-ghost h-10 min-h-10 px-3 text-xs">
+                <FilterX size={16} aria-hidden="true" />
+                Limpiar filtros
+              </button>
+            </div>
+          )}
         </div>
       )}
 
-      {/* Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {filteredPlants.length > 0 ? (
-          filteredPlants.map((plant) => (
-            <PlantCard
-              key={plant.id}
-              plant={plant}
-              cycleName={plant.cycles?.name}
-              selectionMode={isSelectionMode}
-              isSelected={selectedIds.has(plant.id)}
-              onToggleSelection={() => togglePlantSelection(plant.id)}
-            />
-          ))
-        ) : (
-          <div className="col-span-full text-center py-20 bg-card rounded-2xl border border-dashed border-card-border">
-            <p className="text-muted font-body">
-                {hasFilters ? "No se encontraron plantas con estos criterios." : "No hay plantas registradas en ningún ciclo."}
-            </p>
-          </div>
-        )}
-      </div>
-
-      {/* Floating Action Bar */}
-      {isSelectionMode && selectedIds.size > 0 && (
-          <div className="fixed bottom-24 md:bottom-8 left-1/2 -translate-x-1/2 z-50 flex items-center gap-4 bg-card border border-card-border p-2 rounded-full shadow-sm shadow-black/80 animate-in slide-in-from-bottom-4 fade-in">
-              <span className="pl-4 text-sm font-bold text-foreground whitespace-nowrap">
-                  {selectedIds.size} seleccionadas
-              </span>
-              <div className="w-px h-6 bg-card-border"></div>
-              <button
-                  onClick={handleDelete}
-                  disabled={isDeleting}
-                  className="bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/30 px-4 py-2 rounded-full text-sm font-bold flex items-center gap-2 transition-colors"
-              >
-                  {isDeleting ? "Eliminando..." : (
-                      <>
-                        <Trash2 size={16} /> Eliminar
-                      </>
-                  )}
-              </button>
-              <button
-                  onClick={() => { setSelectedIds(new Set()); setIsSelectionMode(false); }}
-                  className="bg-card-border hover:bg-card-border text-muted p-2 rounded-full transition-colors"
-              >
-                  <X size={20} />
-              </button>
-          </div>
+      {filteredPlants.length > 0 ? (
+        <ul className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {filteredPlants.map((plant) => (
+            <li key={plant.id}>
+              <PlantCard
+                plant={plant}
+                cycleName={plant.cycles?.name}
+                selectionMode={isSelectionMode}
+                isSelected={selectedIds.has(plant.id)}
+                onToggleSelection={() => togglePlantSelection(plant.id)}
+              />
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <EmptyState
+          icon={Sprout}
+          title={hasFilters ? "Sin resultados" : showArchived ? "Sin plantas archivadas" : "Sin plantas"}
+          description={
+            hasFilters
+              ? "Ninguna planta coincide con los filtros aplicados. Probá quitando alguno."
+              : showArchived
+                ? "Las plantas que archives desde un ciclo van a aparecer acá."
+                : "Todavía no hay plantas registradas. Creá una desde un ciclo activo."
+          }
+        />
       )}
+
+      {isSelectionMode && selectedIds.size > 0 && (
+        <div
+          role="toolbar"
+          aria-label="Acciones sobre las plantas seleccionadas"
+          className="animate-sheet-in surface fixed bottom-[calc(6rem+env(safe-area-inset-bottom))] left-1/2 z-50 flex -translate-x-1/2 items-center gap-3 rounded-full p-2 pl-4 shadow-[var(--shadow-lg)] md:bottom-8"
+        >
+          <span className="whitespace-nowrap text-sm font-semibold text-fg" aria-live="polite">
+            {selectedIds.size} seleccionadas
+          </span>
+
+          <button
+            type="button"
+            onClick={() => setShowDeleteConfirm(true)}
+            disabled={isDeleting}
+            className="btn btn-danger h-10 min-h-10 rounded-full px-4 text-xs"
+          >
+            <Trash2 size={16} aria-hidden="true" />
+            {isDeleting ? "Eliminando..." : "Eliminar"}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => { setSelectedIds(new Set()); setIsSelectionMode(false); }}
+            className="btn-icon h-10 min-h-10 w-10 min-w-10"
+            aria-label="Salir del modo selección"
+          >
+            <X size={18} aria-hidden="true" />
+          </button>
+        </div>
+      )}
+
+      <ConfirmDialog
+        isOpen={showDeleteConfirm}
+        onClose={() => setShowDeleteConfirm(false)}
+        onConfirm={handleDelete}
+        title="Eliminar plantas"
+        description={`Se eliminarán ${selectedIds.size} plantas y su historial. Esta acción no se puede deshacer.`}
+        confirmLabel="Eliminar"
+      />
     </div>
   );
 }
