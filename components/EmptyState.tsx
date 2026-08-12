@@ -17,21 +17,21 @@ export default function EmptyState({
   className = ""
 }: EmptyStateProps) {
   return (
-    <div className={`flex flex-col items-center justify-center p-8 text-center rounded-2xl border border-dashed border-card-border bg-background/50 backdrop-blur-sm ${className}`}>
-      <div className="bg-brand-primary/10 p-4 rounded-full mb-4">
-        <Icon className="w-8 h-8 text-brand-primary opacity-80" />
-      </div>
-      <h3 className="text-lg font-bold font-title text-foreground mb-2">
-        {title}
-      </h3>
-      <p className="text-sm text-muted font-body max-w-sm mb-6 leading-relaxed">
-        {description}
-      </p>
-      {action && (
-        <div className="mt-2 w-full flex justify-center">
-          {action}
-        </div>
-      )}
+    <div
+      className={`flex flex-col items-center justify-center rounded-[var(--radius-lg)] border border-dashed border-line-strong bg-surface p-8 text-center ${className}`}
+    >
+      <span
+        className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-brand-soft text-[color:var(--brand-text)]"
+        aria-hidden="true"
+      >
+        <Icon className="h-6 w-6" />
+      </span>
+
+      <h3 className="font-title text-base font-semibold text-fg">{title}</h3>
+
+      <p className="mt-2 max-w-sm text-sm leading-relaxed text-fg-muted">{description}</p>
+
+      {action && <div className="mt-5 flex w-full justify-center">{action}</div>}
     </div>
   );
 }
