@@ -147,101 +147,116 @@ export default async function PlantDetailPage({ params }: { params: Promise<{ id
     daysSinceWater = Math.round(diffMs / (1000 * 60 * 60 * 24));
   }
 
-  let waterCardClasses = "bg-card border-card-border";
-  let waterTextClasses = "text-foreground";
+  // El riego atrasado se marca por color y también por icono y texto: el
+  // color por sí solo no comunica el estado a quien no lo distingue.
+  let waterCardClasses = "border-line bg-surface";
+  let waterTextClasses = "text-fg";
   if (daysSinceWater !== null) {
     if (daysSinceWater >= 4) {
-      waterCardClasses = "bg-red-500/5 border-red-500/50";
-      waterTextClasses = "text-red-400";
+      waterCardClasses = "border-[color:color-mix(in_srgb,var(--danger)_45%,transparent)] bg-[color:var(--danger-soft)]";
+      waterTextClasses = "text-[color:var(--danger)]";
     } else if (daysSinceWater === 3) {
-      waterCardClasses = "bg-card border-yellow-500/40";
-      waterTextClasses = "text-yellow-200";
+      waterCardClasses = "border-[color:color-mix(in_srgb,var(--warning)_45%,transparent)] bg-[color:var(--warning-soft)]";
+      waterTextClasses = "text-[color:var(--warning)]";
     }
   }
 
   return (
-    <main className="min-h-screen bg-background pb-24 text-foreground p-4 md:p-8 font-body">
-      
-      <GlobalHeader userEmail={user?.email} title="Ficha Técnica" subtitle={plant.name} />
+    <main className="mx-auto w-full max-w-[1400px] px-5 py-6 md:px-8 md:py-8">
+      <GlobalHeader userEmail={user?.email} title={plant.name} subtitle="Ficha de la planta" />
 
-      {/* --- HERO SECTION --- */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
-        {/* Foto Principal */}
-        <div className="relative aspect-square md:aspect-video rounded-2xl overflow-hidden border border-card-border bg-card group">
+      <div className="mb-10 grid grid-cols-1 gap-8 md:grid-cols-2">
+        <div className="surface relative aspect-square overflow-hidden rounded-[var(--radius-lg)] md:aspect-video">
           {plant.image_url ? (
-            <Image src={plant.image_url} alt={plant.name} fill className="object-cover" />
+            <Image
+              src={plant.image_url}
+              alt={`Foto de ${plant.name}`}
+              fill
+              sizes="(min-width: 768px) 640px, 100vw"
+              priority
+              className="object-cover"
+            />
           ) : (
-            <div className="flex items-center justify-center h-full text-brand-primary opacity-20">
-                <Sprout size={64} />
+            <div className="flex h-full items-center justify-center text-fg-subtle">
+              <Sprout size={56} aria-hidden="true" />
             </div>
           )}
-          <div className="absolute top-4 right-4">
-            <Link
-                href={`/plants/${plant.id}/edit`}
-                className="bg-slate-100 hover:bg-slate-200 text-foreground p-2 rounded-lg border border-card-border transition-colors flex items-center gap-2 text-xs font-bold uppercase tracking-wider"
-            >
-                <Edit size={14} /> Editar
-            </Link>
-          </div>
+
+          <Link
+            href={`/plants/${plant.id}/edit`}
+            className="btn btn-secondary absolute right-4 top-4 h-10 min-h-10 px-3 text-xs"
+          >
+            <Edit size={14} aria-hidden="true" />
+            Editar
+          </Link>
         </div>
 
-        {/* Datos Técnicos */}
-        <div className="flex flex-col justify-center space-y-6">
-            <div>
-                <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                        <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase border ${stageInfo.bgColor} ${stageInfo.textColor} ${stageInfo.borderColor}`}>
-                            {stageInfo.icon} {displayStage}
-                        </span>
-                        <span className="text-xs text-muted uppercase tracking-widest font-bold">
-                            {plant.cycles?.name}
-                        </span>
-                    </div>
-                    <LogModal plantId={plant.id} plantName={plant.name} />
-                </div>
-                <h1 className="text-4xl md:text-5xl font-title font-light text-foreground mb-4">{plant.name}</h1>
+        <div className="flex flex-col justify-center gap-6">
+          <div>
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className={`chip ${stageInfo.bgColor} ${stageInfo.textColor} ${stageInfo.borderColor}`}>
+                  {stageInfo.icon}
+                  {displayStage}
+                </span>
+                {plant.cycles?.name && (
+                  <span className="chip border-line bg-surface-2 text-fg-muted">{plant.cycles.name}</span>
+                )}
+              </div>
+              <LogModal plantId={plant.id} plantName={plant.name} />
             </div>
 
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                <div className="bg-card p-4 rounded-2xl border border-card-border">
-                    <div className="flex items-center gap-2 mb-1 text-muted">
-                        <Calendar size={14} />
-                        <span className="text-[10px] uppercase font-bold tracking-widest">Edad Total</span>
-                    </div>
-                    <p className="text-2xl font-light text-foreground"><PlantMetricsDisplay plant={plant} type="totalAge" /> <span className="text-sm text-muted">días</span></p>
-                </div>
-                <div className={`p-4 rounded-2xl border flex flex-col justify-center ${stageInfo.bgColor} ${stageInfo.textColor} ${stageInfo.borderColor}`}>
-                    <div className={`flex items-center gap-2 mb-1 opacity-80`}>
-                        <History size={14} />
-                        <span className="text-[10px] uppercase font-bold tracking-widest">En Etapa</span>
-                    </div>
-                    <p className={`text-2xl font-light`}><PlantMetricsDisplay plant={plant} type="daysInCurrentStage" /> <span className="text-sm opacity-60">días</span></p>
-                </div>
-                <div className={`p-4 rounded-2xl border flex flex-col justify-center col-span-2 md:col-span-1 ${waterCardClasses}`}>
-                    <div className="flex items-center gap-2 mb-1 opacity-80">
-                        <Droplets size={14} />
-                        <span className="text-[10px] uppercase font-bold tracking-widest">Riego</span>
-                    </div>
-                    <div className={`flex items-center gap-2 text-xl font-light ${waterTextClasses} truncate`}>
-                        {daysSinceWater !== null && daysSinceWater >= 4 && <AlertTriangle size={18} />}
-                        <span>
-                            {daysSinceWater === null
-                                ? '-'
-                                : daysSinceWater === 0
-                                    ? 'Hoy'
-                                    : `Hace ${daysSinceWater} días`}
-                        </span>
-                    </div>
-                </div>
+            <h2 className="font-title text-3xl font-semibold tracking-tight text-fg md:text-4xl">{plant.name}</h2>
+            {plant.strain && <p className="mt-1 text-sm text-fg-muted">{plant.strain}</p>}
+          </div>
+
+          <dl className="grid grid-cols-2 gap-3 md:grid-cols-3">
+            <div className="surface rounded-[var(--radius-lg)] p-4">
+              <dt className="mb-1 flex items-center gap-1.5 text-xs font-semibold text-fg-muted">
+                <Calendar size={14} aria-hidden="true" />
+                Edad total
+              </dt>
+              <dd className="font-title text-2xl font-semibold text-fg">
+                <PlantMetricsDisplay plant={plant} type="totalAge" />
+                <span className="ml-1 text-sm font-normal text-fg-muted">días</span>
+              </dd>
             </div>
+
+            <div className={`rounded-[var(--radius-lg)] border p-4 ${stageInfo.bgColor} ${stageInfo.textColor} ${stageInfo.borderColor}`}>
+              <dt className="mb-1 flex items-center gap-1.5 text-xs font-semibold">
+                <History size={14} aria-hidden="true" />
+                En etapa
+              </dt>
+              <dd className="font-title text-2xl font-semibold">
+                <PlantMetricsDisplay plant={plant} type="daysInCurrentStage" />
+                <span className="ml-1 text-sm font-normal opacity-80">días</span>
+              </dd>
+            </div>
+
+            <div className={`col-span-2 rounded-[var(--radius-lg)] border p-4 md:col-span-1 ${waterCardClasses}`}>
+              <dt className="mb-1 flex items-center gap-1.5 text-xs font-semibold text-fg-muted">
+                <Droplets size={14} aria-hidden="true" />
+                Riego
+              </dt>
+              <dd className={`flex items-center gap-1.5 font-title text-xl font-semibold ${waterTextClasses}`}>
+                {daysSinceWater !== null && daysSinceWater >= 4 && (
+                  <AlertTriangle size={17} aria-hidden="true" />
+                )}
+                {daysSinceWater === null
+                  ? 'Sin registro'
+                  : daysSinceWater === 0
+                    ? 'Hoy'
+                    : `Hace ${daysSinceWater} días`}
+              </dd>
+            </div>
+          </dl>
         </div>
       </div>
 
-      {/* --- BITÁCORA (Timeline) --- */}
-      <section className="max-w-3xl mx-auto">
-        <div className="flex items-center gap-3 mb-6 border-b border-card-border pb-4">
-            <History className="text-brand-primary" size={20} />
-            <h2 className="text-lg font-title text-foreground">Bitácora de Seguimiento</h2>
+      <section aria-labelledby="bitacora" className="mx-auto max-w-3xl">
+        <div className="mb-6 flex items-center gap-2.5 border-b border-line pb-4">
+          <History className="text-[color:var(--brand-text)]" size={18} aria-hidden="true" />
+          <h2 id="bitacora" className="font-title text-lg font-semibold text-fg">Bitácora de seguimiento</h2>
         </div>
 
         <TimelineSection
