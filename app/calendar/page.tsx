@@ -68,8 +68,8 @@ export default async function CalendarPage() {
   });
 
   return (
-    <main className="min-h-screen bg-background text-foreground p-4 md:p-8 pb-24 font-body">
-      <GlobalHeader userEmail={user?.email} title="Agenda" subtitle="Planificación" />
+    <main className="mx-auto w-full max-w-[1400px] px-5 py-6 md:px-8 md:py-8">
+      <GlobalHeader userEmail={user?.email} title="Agenda" subtitle="Planificación del cultivo" />
 
       <CalendarView
         logs={logs || []}

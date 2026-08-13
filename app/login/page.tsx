@@ -27,7 +27,7 @@ export default function LoginPage() {
         setMsg({ type: 'error', text: res.error })
         setLoading(false)
       } else if (res?.success) {
-        router.push('/') // Redirección al Dashboard
+        router.push('/')
         router.refresh()
       }
     } catch (err) {
@@ -38,125 +38,130 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="min-h-screen bg-brand-bg flex flex-col items-center justify-center p-6 relative">
-      
-      {/* Logo y Título */}
-      <div className="flex flex-col items-center mb-8 text-center z-10">
-        <div className="bg-brand-card p-4 mb-4 rounded-2xl border border-brand-card-border shadow-sm">
-          <Image src="/logo-login.png" alt="Logo" width={60} height={60} className="w-12 h-12 object-contain" />
-        </div>
-        <h1 className="text-xl font-bold text-brand-text tracking-widest uppercase">
-          CULTIVA CON EL PRIMO
-        </h1>
+    <main className="flex min-h-[100dvh] flex-col items-center justify-center p-6">
+      <div className="mb-8 flex flex-col items-center text-center">
+        <span className="surface mb-4 flex h-20 w-20 items-center justify-center rounded-[var(--radius-xl)]">
+          <Image src="/logo-login.png" alt="" width={60} height={60} className="h-12 w-12 object-contain" />
+        </span>
+        <h1 className="font-title text-xl font-semibold tracking-tight text-fg">Cultiva con el Primo</h1>
+        <p className="mt-1 text-sm text-fg-muted">Gestión inteligente de cultivos</p>
       </div>
 
-      {/* Tarjeta Bento */}
-      <div className="w-full max-w-sm bg-brand-card border border-brand-card-border rounded-2xl p-6 shadow-sm backdrop-blur-md z-10">
-        
-        {/* Toggle Login/Registro */}
-        <div className="flex bg-brand-bg p-1 rounded-xl mb-6 border border-brand-card-border">
+      <div className="surface w-full max-w-sm rounded-[var(--radius-xl)] p-6">
+        {/* Conmutador ingresar/registrarse como grupo de pestañas real */}
+        <div role="tablist" aria-label="Modo de acceso" className="mb-6 flex gap-1 rounded-[var(--radius-md)] border border-line bg-surface-2 p-1">
           <button
+            type="button"
+            role="tab"
+            aria-selected={isLogin}
             onClick={() => { setIsLogin(true); setMsg(null); }}
-            className={`flex-1 text-xs font-bold py-3 rounded-lg transition-all ${
-              isLogin ? 'bg-slate-100 text-brand-text shadow-sm' : 'text-muted hover:text-foreground'
+            className={`flex-1 rounded-[var(--radius-sm)] py-2.5 text-sm font-semibold transition-colors ${
+              isLogin ? 'bg-brand text-[color:var(--brand-fg)]' : 'text-fg-muted hover:text-fg'
             }`}
           >
-            INGRESAR
+            Ingresar
           </button>
           <button
+            type="button"
+            role="tab"
+            aria-selected={!isLogin}
             onClick={() => { setIsLogin(false); setMsg(null); }}
-            className={`flex-1 text-xs font-bold py-3 rounded-lg transition-all ${
-              !isLogin ? 'bg-slate-100 text-brand-text shadow-sm' : 'text-muted hover:text-foreground'
+            className={`flex-1 rounded-[var(--radius-sm)] py-2.5 text-sm font-semibold transition-colors ${
+              !isLogin ? 'bg-brand text-[color:var(--brand-fg)]' : 'text-fg-muted hover:text-fg'
             }`}
           >
-            REGISTRARSE
+            Registrarse
           </button>
         </div>
 
         {msg && (
-          <div className="mb-4 p-3 rounded-xl text-xs font-bold bg-red-500/10 text-red-400 border border-red-500/20 flex items-center gap-2">
-            <AlertCircle size={14} />
+          <p
+            role="alert"
+            className="mb-5 flex items-start gap-2 rounded-[var(--radius-md)] border border-[color:color-mix(in_srgb,var(--danger)_35%,transparent)] bg-[color:var(--danger-soft)] p-3 text-sm font-medium text-[color:var(--danger)]"
+          >
+            <AlertCircle size={16} className="mt-0.5 shrink-0" aria-hidden="true" />
             {msg.text}
-          </div>
+          </p>
         )}
 
         <form onSubmit={handleOnSubmit} className="space-y-4">
-          
-          {/* Campo Username (Solo Registro) */}
           {!isLogin && (
-            <div className="space-y-1">
-              <label className="text-[10px] uppercase font-bold text-muted ml-1">Usuario</label>
+            <div className="field">
+              <label htmlFor="login-username" className="field-label">Usuario</label>
               <div className="relative">
-                <User className="absolute left-3 top-3.5 text-muted" size={16} />
+                <User className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-fg-muted" aria-hidden="true" />
                 <input
+                  id="login-username"
                   name="username"
                   type="text"
+                  autoComplete="username"
                   required={!isLogin}
-                  placeholder="Nombre de Usuario"
-                  className="w-full bg-brand-bg border border-brand-card-border rounded-xl py-3 pl-10 pr-4 text-brand-text text-sm outline-none focus:border-brand-primary transition-colors"
+                  placeholder="Nombre de usuario"
+                  className="field-input pl-10"
                 />
               </div>
             </div>
           )}
 
-          {/* Campo Email / Usuario Login */}
-          <div className="space-y-1">
-            <label className="text-[10px] uppercase font-bold text-muted ml-1">
-              {isLogin ? 'Email o Usuario' : 'Email'}
+          <div className="field">
+            <label htmlFor="login-email" className="field-label">
+              {isLogin ? 'Email o usuario' : 'Email'}
             </label>
             <div className="relative">
-              <Mail className="absolute left-3 top-3.5 text-muted" size={16} />
+              <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-fg-muted" aria-hidden="true" />
               <input
+                id="login-email"
                 name="email"
                 type="text"
+                autoComplete={isLogin ? 'username' : 'email'}
                 required
-                placeholder={isLogin ? "Email o Usuario" : "tu@email.com"}
-                className="w-full bg-brand-bg border border-brand-card-border rounded-xl py-3 pl-10 pr-4 text-brand-text text-sm outline-none focus:border-brand-primary transition-colors"
+                placeholder={isLogin ? 'Email o usuario' : 'tu@email.com'}
+                className="field-input pl-10"
               />
             </div>
           </div>
 
-          {/* Campo Password */}
-          <div className="space-y-1">
-            <label className="text-[10px] uppercase font-bold text-muted ml-1">Contraseña</label>
+          <div className="field">
+            <label htmlFor="login-password" className="field-label">Contraseña</label>
             <div className="relative">
-              <Lock className="absolute left-3 top-3.5 text-muted" size={16} />
+              <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-fg-muted" aria-hidden="true" />
               <input
+                id="login-password"
                 name="password"
                 type="password"
+                autoComplete={isLogin ? 'current-password' : 'new-password'}
                 required
-                placeholder="••••••••"
-                className="w-full bg-brand-bg border border-brand-card-border rounded-xl py-3 pl-10 pr-4 text-brand-text text-sm outline-none focus:border-brand-primary transition-colors"
+                placeholder="Tu contraseña"
+                className="field-input pl-10"
               />
             </div>
           </div>
 
-          {/* Campo Repetir Password (Solo Registro) */}
           {!isLogin && (
-            <div className="space-y-1">
-              <label className="text-[10px] uppercase font-bold text-muted ml-1">Repetir Contraseña</label>
+            <div className="field">
+              <label htmlFor="login-confirm" className="field-label">Repetir contraseña</label>
               <div className="relative">
-                <Lock className="absolute left-3 top-3.5 text-muted" size={16} />
+                <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-fg-muted" aria-hidden="true" />
                 <input
+                  id="login-confirm"
                   name="confirmPassword"
                   type="password"
+                  autoComplete="new-password"
                   required={!isLogin}
-                  placeholder="••••••••"
-                  className="w-full bg-brand-bg border border-brand-card-border rounded-xl py-3 pl-10 pr-4 text-brand-text text-sm outline-none focus:border-brand-primary transition-colors"
+                  placeholder="Repetí la contraseña"
+                  className="field-input pl-10"
                 />
               </div>
             </div>
           )}
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-brand-primary hover:bg-brand-primary-hover text-white font-bold py-3.5 rounded-xl transition-all active:scale-[0.98] mt-4 flex items-center justify-center gap-2 disabled:opacity-50"
-          >
-            {loading ? <Loader2 className="animate-spin" size={20} /> : (
+          <button type="submit" disabled={loading} className="btn btn-primary mt-2 w-full">
+            {loading ? (
+              <Loader2 className="animate-spin" size={18} aria-hidden="true" />
+            ) : (
               <>
-                {isLogin ? 'INGRESAR' : 'CREAR CUENTA'}
-                <ArrowRight size={20} />
+                {isLogin ? 'Ingresar' : 'Crear cuenta'}
+                <ArrowRight size={18} aria-hidden="true" />
               </>
             )}
           </button>

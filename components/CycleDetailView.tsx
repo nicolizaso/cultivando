@@ -5,11 +5,13 @@ import Image from "next/image";
 import Link from "next/link";
 import { Plant, CycleImage } from "@/app/lib/types";
 import { getPlantMetrics, getStageColor } from "@/app/lib/utils";
-import { Thermometer, CloudRain, Activity, Droplets, ArrowRight, LayoutGrid, List as ListIcon, Camera, X, Trash2, Archive } from "lucide-react";
+import { Thermometer, CloudRain, Activity, ArrowRight, LayoutGrid, List as ListIcon, Camera, X, Trash2, Archive, Loader2 } from "lucide-react";
 import BulkStageModal from "./BulkStageModal";
 import BulkArchiveModal from "./BulkArchiveModal";
 import MeasurementModal from "./MeasurementModal";
 import { useToast } from "@/app/context/ToastContext";
+import Modal from "@/components/ui/Modal";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { uploadCycleImage, deleteCycleImages, updateCycleImage } from "@/app/cycles/actions";
 import imageCompression from 'browser-image-compression';
 
@@ -39,6 +41,7 @@ export default function CycleDetailView({ cycle, plants, lastMeasurement, cycleI
   const [isStageModalOpen, setIsStageModalOpen] = useState(false);
   const [isMeasureModalOpen, setIsMeasureModalOpen] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
+  const [showDeleteImagesConfirm, setShowDeleteImagesConfirm] = useState(false);
 
   useEffect(() => {
     setIsMounted(true);
@@ -106,8 +109,6 @@ export default function CycleDetailView({ cycle, plants, lastMeasurement, cycleI
   };
 
   const handleDeleteImages = async () => {
-    if (!confirm("¿Estás seguro de eliminar las fotos seleccionadas?")) return;
-
     const result = await deleteCycleImages(selectedImages);
     if (result.success) {
         showToast("Fotos eliminadas", "success");
@@ -165,274 +166,410 @@ export default function CycleDetailView({ cycle, plants, lastMeasurement, cycleI
 
   return (
     <div className="space-y-6">
-      {/* 1. DASHBOARD AMBIENTAL (KPIs con Iconos) */}
-      <div className="grid grid-cols-3 gap-2">
-        {/* Temperatura */}
-        <div onClick={() => setIsMeasureModalOpen(true)} className="bg-card border border-card-border p-5 rounded-2xl flex items-center justify-between cursor-pointer hover:border-brand-primary/50 transition-colors group">
-            <div>
-                <p className="text-muted text-[10px] uppercase tracking-widest font-bold mb-1">Temperatura</p>
-                <div className="text-3xl font-light font-title text-foreground">
-                    {lastMeasurement ? `${lastMeasurement.temperature}°C` : "--"}
-                </div>
-            </div>
-            <Thermometer className="text-brand-primary w-8 h-8 opacity-80 group-hover:scale-110 transition-transform" strokeWidth={1.5} />
+      {/* 1. Clima del espacio */}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <button
+          type="button"
+          onClick={() => setIsMeasureModalOpen(true)}
+          className="surface-interactive flex items-center justify-between gap-3 rounded-[var(--radius-lg)] p-5 text-left"
+        >
+          <span>
+            <span className="mb-1 block text-xs font-semibold text-fg-muted">Temperatura</span>
+            <span className="block font-title text-3xl font-semibold text-fg">
+              {lastMeasurement ? `${lastMeasurement.temperature}°C` : "--"}
+            </span>
+          </span>
+          <Thermometer className="h-7 w-7 shrink-0 text-[color:var(--brand-text)]" strokeWidth={1.5} aria-hidden="true" />
+        </button>
+
+        <div className="surface flex items-center justify-between gap-3 rounded-[var(--radius-lg)] p-5">
+          <div>
+            <p className="mb-1 text-xs font-semibold text-fg-muted">Humedad</p>
+            <p className="font-title text-3xl font-semibold text-fg">
+              {lastMeasurement ? `${lastMeasurement.humidity}%` : "--"}
+            </p>
+          </div>
+          <CloudRain className="h-7 w-7 shrink-0 text-[color:var(--info)]" strokeWidth={1.5} aria-hidden="true" />
         </div>
 
-        {/* Humedad */}
-        <div className="bg-card border border-card-border p-5 rounded-2xl flex items-center justify-between">
-            <div>
-                <p className="text-muted text-[10px] uppercase tracking-widest font-bold mb-1">Humedad</p>
-                <div className="text-3xl font-light font-title text-foreground">
-                    {lastMeasurement ? `${lastMeasurement.humidity}%` : "--"}
-                </div>
-            </div>
-            <CloudRain className="text-blue-500 w-8 h-8 opacity-80" strokeWidth={1.5} />
-        </div>
-
-        {/* VPD */}
-        <div className="bg-card border border-card-border p-5 rounded-2xl flex items-center justify-between">
-            <div>
-                <p className="text-muted text-[10px] uppercase tracking-widest font-bold mb-1">VPD (kPa)</p>
-                <div className={`text-3xl font-light font-title ${!lastMeasurement ? 'text-muted' : parseFloat(vpd) < 0.4 || parseFloat(vpd) > 1.6 ? 'text-red-400' : 'text-emerald-400'}`}>
-                    {lastMeasurement ? `${vpd}` : "--"}
-                </div>
-            </div>
-            <Activity className="text-purple-500 w-8 h-8 opacity-80" strokeWidth={1.5} />
-        </div>
-      </div>
-
-      {/* 2. TOOLBAR & LISTA */}
-      <div className="bg-card border border-card-border p-4 rounded-2xl flex flex-col md:flex-row justify-between items-center gap-4 sticky top-4 z-30 shadow-sm shadow-black/50">
-        <div className="flex items-center gap-4 w-full md:w-auto overflow-x-auto">
-            <h2 className="text-foreground font-bold whitespace-nowrap text-sm">{selectedPlants.length} seleccionadas</h2>
-            <div className="h-6 w-px bg-card-border"></div>
-            <div className="flex gap-2">
-                <button disabled={selectedPlants.length === 0} onClick={() => setIsArchiveModalOpen(true)} className="bg-orange-500/10 hover:bg-orange-500/20 text-orange-400 border border-orange-500/20 px-3 py-1.5 rounded-lg text-xs font-bold uppercase transition-colors disabled:opacity-30 flex items-center gap-1">
-                    <Archive size={12} /> Archivar
-                </button>
-                <button disabled={selectedPlants.length === 0} onClick={() => setIsStageModalOpen(true)} className="bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 border border-purple-500/20 px-3 py-1.5 rounded-lg text-xs font-bold uppercase transition-colors disabled:opacity-30 flex items-center gap-1">
-                    <ArrowRight size={12} /> Etapa
-                </button>
-            </div>
-        </div>
-
-        <div className="flex bg-background p-1 rounded-lg border border-card-border">
-            <button onClick={() => setViewMode('table')} className={`p-2 rounded transition-all ${viewMode === 'table' ? 'bg-slate-50 text-foreground' : 'text-muted hover:text-foreground'}`}><ListIcon size={16} /></button>
-            <button onClick={() => setViewMode('grid')} className={`p-2 rounded transition-all ${viewMode === 'grid' ? 'bg-slate-50 text-foreground' : 'text-muted hover:text-foreground'}`}><LayoutGrid size={16} /></button>
+        <div className="surface flex items-center justify-between gap-3 rounded-[var(--radius-lg)] p-5">
+          <div>
+            <p className="mb-1 text-xs font-semibold text-fg-muted">VPD (kPa)</p>
+            <p
+              className={`font-title text-3xl font-semibold ${
+                !lastMeasurement
+                  ? 'text-fg-muted'
+                  : parseFloat(vpd) < 0.4 || parseFloat(vpd) > 1.6
+                    ? 'text-[color:var(--danger)]'
+                    : 'text-[color:var(--success)]'
+              }`}
+            >
+              {lastMeasurement ? `${vpd}` : "--"}
+            </p>
+          </div>
+          <Activity className="h-7 w-7 shrink-0 text-[color:var(--stage-bloom)]" strokeWidth={1.5} aria-hidden="true" />
         </div>
       </div>
 
-      {/* 3. LISTA (TABLE) */}
+      {/* 2. Barra de acciones sobre la selección */}
+      <div className="surface sticky top-20 z-30 flex flex-col items-stretch justify-between gap-3 rounded-[var(--radius-lg)] p-3 md:flex-row md:items-center">
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="px-1 text-sm font-semibold text-fg" aria-live="polite">
+            {selectedPlants.length} seleccionadas
+          </p>
+
+          <button
+            type="button"
+            disabled={selectedPlants.length === 0}
+            onClick={() => setIsArchiveModalOpen(true)}
+            className="btn btn-secondary h-10 min-h-10 px-3 text-xs"
+          >
+            <Archive size={14} aria-hidden="true" />
+            Archivar
+          </button>
+          <button
+            type="button"
+            disabled={selectedPlants.length === 0}
+            onClick={() => setIsStageModalOpen(true)}
+            className="btn btn-secondary h-10 min-h-10 px-3 text-xs"
+          >
+            <ArrowRight size={14} aria-hidden="true" />
+            Cambiar etapa
+          </button>
+        </div>
+
+        <div role="group" aria-label="Modo de vista" className="flex gap-1 self-end rounded-[var(--radius-md)] border border-line bg-surface-2 p-1">
+          <button
+            type="button"
+            onClick={() => setViewMode('table')}
+            aria-pressed={viewMode === 'table'}
+            aria-label="Ver como lista"
+            className={`flex h-9 w-9 items-center justify-center rounded-[var(--radius-sm)] transition-colors ${
+              viewMode === 'table' ? 'bg-brand text-[color:var(--brand-fg)]' : 'text-fg-muted hover:text-fg'
+            }`}
+          >
+            <ListIcon size={16} aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewMode('grid')}
+            aria-pressed={viewMode === 'grid'}
+            aria-label="Ver como cuadrícula"
+            className={`flex h-9 w-9 items-center justify-center rounded-[var(--radius-sm)] transition-colors ${
+              viewMode === 'grid' ? 'bg-brand text-[color:var(--brand-fg)]' : 'text-fg-muted hover:text-fg'
+            }`}
+          >
+            <LayoutGrid size={16} aria-hidden="true" />
+          </button>
+        </div>
+      </div>
+
+      {/* 3. Plantas del ciclo */}
       {viewMode === 'table' ? (
-        <div className="overflow-x-auto bg-card border border-card-border rounded-2xl">
-            <table className="w-full text-left text-sm">
-                <thead className="bg-background text-muted uppercase text-[10px] font-bold tracking-widest">
-                    <tr>
-                        <th className="p-4 w-10"><input type="checkbox" onChange={toggleSelectAll} checked={selectedPlants.length === activePlants.length && activePlants.length > 0} className="rounded border-card-border bg-slate-50 accent-brand-primary" /></th>
-                        <th className="p-4">Planta</th>
-                        <th className="p-4">Etapa</th>
-                        <th className="p-4">Días en Etapa</th>
-                        <th className="p-4 text-right">Acción</th>
-                    </tr>
-                </thead>
-                <tbody className="divide-y divide-white/5">
-                    {activePlants.map(plant => {
-                        const { currentStage, daysInCurrentStage } = getPlantMetrics(plant);
-                        const rawStage = currentStage || plant.stage;
-                        const displayStage = (rawStage === 'Esqueje' || rawStage === 'Plántula') ? 'Plántula' : rawStage;
-                        const stageInfo = getStageColor(displayStage);
-
-                        return (
-                            <tr key={plant.id} className={`hover:bg-card-border transition-colors ${selectedPlants.includes(plant.id) ? 'bg-brand-primary/5' : ''}`}>
-                                <td className="p-4"><input type="checkbox" checked={selectedPlants.includes(plant.id)} onChange={() => toggleSelectPlant(plant.id)} className="rounded border-card-border bg-slate-50 accent-brand-primary" /></td>
-                                <td className="p-4 font-bold text-foreground flex items-center gap-3">
-                                    <Link href={`/plants/${plant.id}`} className="hover:text-brand-primary hover:underline">{plant.name}</Link>
-                                </td>
-                                <td className="p-4"><span className={`text-[10px] px-2 py-1 rounded border uppercase font-bold ${stageInfo.bgColor} ${stageInfo.textColor} ${stageInfo.borderColor}`}>{displayStage}</span></td>
-                                <td className="p-4 text-muted font-body">{isMounted ? daysInCurrentStage : <span className="opacity-0">0</span>} d</td>
-                                <td className="p-4 text-right"><Link href={`/plants/${plant.id}`} className="text-xs font-bold text-brand-primary hover:text-foreground flex items-center justify-end gap-1">VER <ArrowRight size={10} /></Link></td>
-                            </tr>
-                        );
-                    })}
-                </tbody>
-            </table>
-        </div>
-      ) : (
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
-            {activePlants.map(plant => {
-                const { currentStage } = getPlantMetrics(plant);
+        <div className="surface overflow-x-auto rounded-[var(--radius-lg)]">
+          <table className="w-full text-left text-sm">
+            <caption className="sr-only">Plantas activas del ciclo {cycle.name}</caption>
+            <thead className="border-b border-line bg-surface-2 text-xs font-semibold uppercase tracking-wide text-fg-muted">
+              <tr>
+                <th scope="col" className="w-12 p-4">
+                  <input
+                    type="checkbox"
+                    onChange={toggleSelectAll}
+                    checked={selectedPlants.length === activePlants.length && activePlants.length > 0}
+                    aria-label="Seleccionar todas las plantas"
+                    className="h-4 w-4 accent-[color:var(--brand)]"
+                  />
+                </th>
+                <th scope="col" className="p-4">Planta</th>
+                <th scope="col" className="p-4">Etapa</th>
+                <th scope="col" className="p-4">Días en etapa</th>
+                <th scope="col" className="p-4 text-right">Acción</th>
+              </tr>
+            </thead>
+            <tbody>
+              {activePlants.map(plant => {
+                const { currentStage, daysInCurrentStage } = getPlantMetrics(plant);
                 const rawStage = currentStage || plant.stage;
                 const displayStage = (rawStage === 'Esqueje' || rawStage === 'Plántula') ? 'Plántula' : rawStage;
                 const stageInfo = getStageColor(displayStage);
 
                 return (
-                    <div key={plant.id} onClick={() => toggleSelectPlant(plant.id)} className={`relative group bg-card border rounded-2xl overflow-hidden cursor-pointer transition-all ${selectedPlants.includes(plant.id) ? 'border-brand-primary ring-1 ring-brand-primary' : 'border-card-border hover:border-slate-500'}`}>
-                        <div className="absolute top-2 left-2 z-10"><input type="checkbox" checked={selectedPlants.includes(plant.id)} readOnly className="w-5 h-5 accent-brand-primary" /></div>
-                        <div className="aspect-square bg-slate-50 relative">
-                             {(plant as any).image_url ? (
-                                <Image src={(plant as any).image_url} alt="" fill className="object-cover opacity-80 group-hover:opacity-100 transition-opacity" />
-                             ) : (
-                                <div className={`flex items-center justify-center h-full ${stageInfo.textColor} opacity-20`}><LayoutGrid size={32} /></div>
-                             )}
-                        </div>
-                        <div className="p-3">
-                            <p className="font-bold text-foreground text-sm truncate">{plant.name}</p>
-                            <p className={`text-[10px] uppercase font-bold ${stageInfo.textColor}`}>{displayStage}</p>
-                        </div>
-                    </div>
+                  <tr
+                    key={plant.id}
+                    className={`border-b border-line last:border-0 ${
+                      selectedPlants.includes(plant.id) ? 'bg-brand-soft' : ''
+                    }`}
+                  >
+                    <td className="p-4">
+                      <input
+                        type="checkbox"
+                        checked={selectedPlants.includes(plant.id)}
+                        onChange={() => toggleSelectPlant(plant.id)}
+                        aria-label={`Seleccionar ${plant.name}`}
+                        className="h-4 w-4 accent-[color:var(--brand)]"
+                      />
+                    </td>
+                    <td className="p-4 font-semibold text-fg">
+                      <Link href={`/plants/${plant.id}`} className="hover:text-[color:var(--brand-text)] hover:underline">
+                        {plant.name}
+                      </Link>
+                    </td>
+                    <td className="p-4">
+                      <span className={`chip ${stageInfo.bgColor} ${stageInfo.textColor} ${stageInfo.borderColor}`}>
+                        {stageInfo.icon}
+                        {displayStage}
+                      </span>
+                    </td>
+                    <td className="p-4 text-fg-muted">
+                      {isMounted ? `${daysInCurrentStage} d` : <span className="opacity-0">0 d</span>}
+                    </td>
+                    <td className="p-4 text-right">
+                      <Link
+                        href={`/plants/${plant.id}`}
+                        className="inline-flex items-center gap-1 text-xs font-semibold text-[color:var(--brand-text)] hover:underline"
+                      >
+                        Ver
+                        <ArrowRight size={12} aria-hidden="true" />
+                      </Link>
+                    </td>
+                  </tr>
                 );
-            })}
+              })}
+            </tbody>
+          </table>
         </div>
+      ) : (
+        <ul className="grid grid-cols-2 gap-4 md:grid-cols-4 lg:grid-cols-5">
+          {activePlants.map(plant => {
+            const { currentStage } = getPlantMetrics(plant);
+            const rawStage = currentStage || plant.stage;
+            const displayStage = (rawStage === 'Esqueje' || rawStage === 'Plántula') ? 'Plántula' : rawStage;
+            const stageInfo = getStageColor(displayStage);
+            const isSelected = selectedPlants.includes(plant.id);
+
+            return (
+              <li key={plant.id}>
+                {/* Casilla real envolviendo la tarjeta: seleccionable con teclado */}
+                <label
+                  className={`group relative block cursor-pointer overflow-hidden rounded-[var(--radius-lg)] border bg-surface transition-colors has-[:focus-visible]:outline has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-[color:var(--ring)] ${
+                    isSelected ? 'border-[color:var(--brand)] ring-1 ring-[color:var(--brand)]' : 'border-line hover:border-line-strong'
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={isSelected}
+                    onChange={() => toggleSelectPlant(plant.id)}
+                    className="sr-only"
+                  />
+                  <span className="absolute left-2 top-2 z-10 flex h-5 w-5 items-center justify-center rounded border border-line-strong bg-surface" aria-hidden="true">
+                    {isSelected && <span className="h-3 w-3 rounded-sm bg-brand" />}
+                  </span>
+
+                  <span className={`relative block aspect-square ${stageInfo.bgColor}`}>
+                    {(plant as any).image_url ? (
+                      <Image src={(plant as any).image_url} alt="" fill sizes="200px" className="object-cover" />
+                    ) : (
+                      <span className={`flex h-full items-center justify-center ${stageInfo.textColor}`}>
+                        <LayoutGrid size={28} aria-hidden="true" />
+                      </span>
+                    )}
+                  </span>
+
+                  <span className="block p-3">
+                    <span className="block truncate text-sm font-semibold text-fg">{plant.name}</span>
+                    <span className={`block text-xs font-semibold ${stageInfo.textColor}`}>{displayStage}</span>
+                  </span>
+                </label>
+              </li>
+            );
+          })}
+        </ul>
       )}
 
-      {/* 4. GALERÍA DE CICLO (NUEVA SECCIÓN) */}
-      <div className="bg-card border border-card-border p-6 rounded-2xl">
-        <div className="flex justify-between items-center mb-4">
-            <h3 className="text-foreground font-bold text-lg">Seguimiento del Indoor</h3>
-            <button
-                onClick={() => fileInputRef.current?.click()}
-                disabled={isUploading}
-                className="bg-brand-primary/10 hover:bg-brand-primary/20 text-brand-primary border border-brand-primary/20 p-2 rounded-lg transition-colors disabled:opacity-50"
-            >
-                {isUploading ? <Activity className="animate-spin" size={20} /> : <Camera size={20} />}
-            </button>
-            <input
-                type="file"
-                ref={fileInputRef}
-                onChange={handleFileChange}
-                accept="image/*"
-                className="hidden"
-            />
+      {/* 4. Galería del ciclo */}
+      <section aria-labelledby="galeria" className="surface rounded-[var(--radius-lg)] p-5">
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <h3 id="galeria" className="font-title text-lg font-semibold text-fg">Seguimiento visual</h3>
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={isUploading}
+            className="btn btn-secondary h-10 min-h-10 px-3 text-xs"
+          >
+            {isUploading ? (
+              <Loader2 className="animate-spin" size={16} aria-hidden="true" />
+            ) : (
+              <Camera size={16} aria-hidden="true" />
+            )}
+            {isUploading ? 'Subiendo...' : 'Subir foto'}
+          </button>
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleFileChange}
+            accept="image/*"
+            className="sr-only"
+            aria-label="Subir foto del ciclo"
+          />
         </div>
 
         {cycleImages && cycleImages.length > 0 ? (
-            <div className="flex gap-4 overflow-x-auto pb-4 snap-x scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent">
-                {cycleImages.map((img) => (
-                    <div
-                        key={img.id}
-                        onMouseDown={() => handleImageTouchStart(img.id)}
-                        onTouchStart={() => handleImageTouchStart(img.id)}
-                        onTouchEnd={handleImageTouchEnd}
-                        onMouseUp={handleImageTouchEnd}
-                        onClick={() => handleImageClick(img)}
-                        className={`relative flex-shrink-0 w-40 md:w-48 aspect-[3/4] bg-black rounded-xl overflow-hidden border snap-center cursor-pointer group transition-all duration-300 ${selectedImages.includes(img.id) ? 'border-brand-primary ring-2 ring-brand-primary' : 'border-card-border hover:border-brand-primary/50'}`}
-                    >
-                         {/* Selection Overlay */}
-                         {isSelectionMode && (
-                            <div className="absolute top-2 left-2 z-20">
-                                <input
-                                    type="checkbox"
-                                    checked={selectedImages.includes(img.id)}
-                                    readOnly
-                                    className="w-5 h-5 accent-brand-primary rounded border-slate-300 bg-black/50 backdrop-blur-sm"
-                                />
-                            </div>
-                         )}
+          <ul className="custom-scrollbar flex snap-x gap-4 overflow-x-auto pb-3">
+            {cycleImages.map((img) => {
+              const isSelected = selectedImages.includes(img.id);
+              const dayNumber = Math.floor((new Date(img.taken_at).getTime() - new Date(cycle.start_date).getTime()) / (1000 * 60 * 60 * 24));
 
-                         <Image
-                                src={img.public_url}
-                                alt={img.description || "Foto del ciclo"}
-                                fill
-                                className={`object-cover transition-transform duration-500 ${selectedImages.includes(img.id) ? 'scale-105 opacity-60' : 'group-hover:scale-105'}`}
-                         />
-                         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-80 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-3">
-                            <p className="text-foreground text-xs font-bold">{new Date(img.taken_at).toLocaleDateString()}</p>
-                            <p className="text-muted text-[10px]">Día {Math.floor((new Date(img.taken_at).getTime() - new Date(cycle.start_date).getTime()) / (1000 * 60 * 60 * 24))}</p>
-                         </div>
-                    </div>
-                ))}
-            </div>
-        ) : (
-            <div className="text-center py-10 border border-dashed border-card-border rounded-xl bg-card-border flex flex-col items-center justify-center">
-                <Camera className="text-muted mb-2 opacity-50" size={32} />
-                <p className="text-muted text-sm mb-1 font-bold">Sin fotos del ciclo</p>
-                <p className="text-muted text-xs">Sube una foto para ver el progreso visual</p>
-            </div>
-        )}
-      </div>
+              return (
+                <li key={img.id} className="shrink-0 snap-center">
+                  <button
+                    type="button"
+                    onMouseDown={() => handleImageTouchStart(img.id)}
+                    onTouchStart={() => handleImageTouchStart(img.id)}
+                    onTouchEnd={handleImageTouchEnd}
+                    onMouseUp={handleImageTouchEnd}
+                    onClick={() => handleImageClick(img)}
+                    aria-pressed={isSelectionMode ? isSelected : undefined}
+                    aria-label={
+                      isSelectionMode
+                        ? `Seleccionar foto del día ${dayNumber}`
+                        : `Ver foto del día ${dayNumber}`
+                    }
+                    className={`group relative block aspect-[3/4] w-40 overflow-hidden rounded-[var(--radius-md)] border transition-colors md:w-48 ${
+                      isSelected
+                        ? 'border-[color:var(--brand)] ring-2 ring-[color:var(--brand)]'
+                        : 'border-line hover:border-line-strong'
+                    }`}
+                  >
+                    {isSelectionMode && (
+                      <span
+                        className="absolute left-2 top-2 z-20 flex h-5 w-5 items-center justify-center rounded border border-line-strong bg-surface"
+                        aria-hidden="true"
+                      >
+                        {isSelected && <span className="h-3 w-3 rounded-sm bg-brand" />}
+                      </span>
+                    )}
 
-      {/* Lightbox / Detail Modal */}
-      {selectedImage && (
-        <div className="fixed inset-0 z-[60] bg-black/90 flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setSelectedImage(null)}>
-            <div className="bg-card border border-card-border rounded-2xl w-[90%] md:w-full max-w-md md:max-w-5xl h-auto md:h-[80vh] max-h-[85vh] overflow-y-auto md:overflow-hidden flex flex-col md:flex-row shadow-sm" onClick={(e) => e.stopPropagation()}>
-
-                {/* Image Section */}
-                <div className="relative w-full md:w-2/3 h-64 md:h-full shrink-0 bg-black flex items-center justify-center">
-                     <Image
-                        src={selectedImage.public_url}
-                        alt="Detail"
-                        fill
-                        className="object-contain"
+                    <Image
+                      src={img.public_url}
+                      alt={img.description || ""}
+                      fill
+                      sizes="192px"
+                      className={`object-cover transition-transform duration-500 ${isSelected ? 'scale-105 opacity-70' : 'group-hover:scale-105'}`}
                     />
-                     <button type="button" onClick={() => setSelectedImage(null)} className="absolute top-4 right-4 bg-black/50 p-2 rounded-full text-foreground z-10 hover:bg-card-border transition-colors">
-                        <X size={20} />
-                     </button>
-                </div>
 
-                {/* Form Section */}
-                <div className="w-full md:w-1/3 p-4 md:p-6 flex flex-col h-auto md:h-full bg-card border-l border-card-border">
-                    <div className="flex justify-between items-center mb-6">
-                        <h3 className="text-foreground font-bold text-lg font-title">Detalles de la Foto</h3>
-                    </div>
+                    <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 to-transparent p-3 text-left">
+                      <span className="block text-xs font-semibold text-white">
+                        {new Date(img.taken_at).toLocaleDateString('es-AR')}
+                      </span>
+                      <span className="block text-[11px] text-white/80">Día {dayNumber}</span>
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        ) : (
+          <div className="flex flex-col items-center justify-center rounded-[var(--radius-md)] border border-dashed border-line-strong py-10 text-center">
+            <Camera className="mb-2 text-fg-subtle" size={28} aria-hidden="true" />
+            <p className="text-sm font-semibold text-fg">Sin fotos del ciclo</p>
+            <p className="mt-1 text-xs text-fg-muted">Subí una foto para seguir el progreso visual.</p>
+          </div>
+        )}
+      </section>
 
-                    <form onSubmit={handleSaveImageDetails} className="flex flex-col gap-6 flex-1 h-full">
-                        <div>
-                            <label className="text-muted text-[10px] uppercase font-bold tracking-widest mb-2 block">Fecha</label>
-                            <input
-                                type="date"
-                                name="date"
-                                defaultValue={new Date(selectedImage.taken_at).toLocaleDateString('en-CA')}
-                                className="w-full bg-background border border-card-border rounded-xl p-4 text-foreground focus:outline-none focus:border-brand-primary/50 transition-colors font-body text-sm"
-                            />
-                        </div>
-
-                        <div className="flex-1 flex flex-col">
-                            <label className="text-muted text-[10px] uppercase font-bold tracking-widest mb-2 block">Notas / Descripción</label>
-                            <textarea
-                                name="description"
-                                defaultValue={selectedImage.description || ''}
-                                placeholder="Escribe una nota sobre esta foto..."
-                                rows={3}
-                                className="w-full h-20 md:h-auto md:flex-1 bg-background border border-card-border rounded-xl p-4 text-foreground focus:outline-none focus:border-brand-primary/50 transition-colors resize-none font-body text-sm leading-relaxed"
-                            />
-                        </div>
-
-                        <button
-                            type="submit"
-                            className="bg-brand-primary hover:bg-brand-primary/80 text-foreground font-bold py-4 rounded-xl transition-colors w-full mt-auto shadow-sm shadow-brand-primary/20"
-                        >
-                            Guardar Cambios
-                        </button>
-                    </form>
-                </div>
+      {/* Detalle de la foto */}
+      <Modal
+        isOpen={!!selectedImage}
+        onClose={() => setSelectedImage(null)}
+        title="Detalles de la foto"
+        size="xl"
+        footer={
+          <button type="submit" form="image-details-form" className="btn btn-primary">
+            Guardar cambios
+          </button>
+        }
+      >
+        {selectedImage && (
+          <div className="space-y-5">
+            <div className="relative h-64 w-full overflow-hidden rounded-[var(--radius-md)] border border-line bg-surface-2 md:h-80">
+              <Image
+                src={selectedImage.public_url}
+                alt={selectedImage.description || "Foto del ciclo"}
+                fill
+                sizes="(min-width: 768px) 640px, 100vw"
+                className="object-contain"
+              />
             </div>
-        </div>
-      )}
 
-      {/* SELECTION FAB */}
+            <form id="image-details-form" onSubmit={handleSaveImageDetails} className="space-y-5">
+              <div className="field">
+                <label htmlFor="image-date" className="field-label">Fecha</label>
+                <input
+                  id="image-date"
+                  type="date"
+                  name="date"
+                  data-autofocus
+                  defaultValue={new Date(selectedImage.taken_at).toLocaleDateString('en-CA')}
+                  className="field-input"
+                />
+              </div>
+
+              <div className="field">
+                <label htmlFor="image-description" className="field-label">Notas</label>
+                <textarea
+                  id="image-description"
+                  name="description"
+                  defaultValue={selectedImage.description || ''}
+                  placeholder="Escribí una nota sobre esta foto"
+                  rows={3}
+                  className="field-input resize-none"
+                />
+              </div>
+            </form>
+          </div>
+        )}
+      </Modal>
+
+      {/* Barra de selección de fotos */}
       {isSelectionMode && (
-        <div className="fixed bottom-24 md:bottom-12 left-0 right-0 z-50 flex justify-center px-4 animate-in slide-in-from-bottom-4 duration-300">
-            <div className="bg-slate-50 border border-card-border shadow-sm shadow-black rounded-full px-6 py-3 flex items-center gap-6 backdrop-blur-md">
-                <span className="text-foreground font-bold text-sm">{selectedImages.length} seleccionadas</span>
-                <div className="h-4 w-px bg-card-border"></div>
-                <button
-                    onClick={() => { setIsSelectionMode(false); setSelectedImages([]); }}
-                    className="text-muted hover:text-foreground transition-colors"
-                >
-                    <X size={20} />
-                </button>
-                <button
-                    onClick={handleDeleteImages}
-                    disabled={selectedImages.length === 0}
-                    className="bg-red-500/10 hover:bg-red-500/20 text-red-500 p-2 rounded-full transition-colors"
-                >
-                    <Trash2 size={20} />
-                </button>
-            </div>
+        <div
+          role="toolbar"
+          aria-label="Acciones sobre las fotos seleccionadas"
+          className="animate-sheet-in surface fixed bottom-[calc(6rem+env(safe-area-inset-bottom))] left-1/2 z-50 flex -translate-x-1/2 items-center gap-3 rounded-full py-2 pl-4 pr-2 shadow-[var(--shadow-lg)] md:bottom-10"
+        >
+          <span className="whitespace-nowrap text-sm font-semibold text-fg" aria-live="polite">
+            {selectedImages.length} seleccionadas
+          </span>
+
+          <button
+            type="button"
+            onClick={() => { setIsSelectionMode(false); setSelectedImages([]); }}
+            className="btn-icon h-10 min-h-10 w-10 min-w-10"
+            aria-label="Salir del modo selección"
+          >
+            <X size={18} aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowDeleteImagesConfirm(true)}
+            disabled={selectedImages.length === 0}
+            className="btn-icon h-10 min-h-10 w-10 min-w-10 text-[color:var(--danger)]"
+            aria-label={`Eliminar ${selectedImages.length} fotos`}
+          >
+            <Trash2 size={18} aria-hidden="true" />
+          </button>
         </div>
       )}
 
-      {/* Modales */}
+      <ConfirmDialog
+        isOpen={showDeleteImagesConfirm}
+        onClose={() => setShowDeleteImagesConfirm(false)}
+        onConfirm={handleDeleteImages}
+        title="Eliminar fotos"
+        description={`Se eliminarán ${selectedImages.length} fotos del ciclo. Esta acción no se puede deshacer.`}
+        confirmLabel="Eliminar"
+      />
+
       <BulkArchiveModal isOpen={isArchiveModalOpen} onClose={() => setIsArchiveModalOpen(false)} selectedIds={selectedPlants} onSuccess={() => setSelectedPlants([])} cycleId={cycle.id} />
       <BulkStageModal isOpen={isStageModalOpen} onClose={() => setIsStageModalOpen(false)} selectedIds={selectedPlants} onSuccess={() => setSelectedPlants([])} cycleId={cycle.id} />
       <MeasurementModal isOpen={isMeasureModalOpen} onClose={() => setIsMeasureModalOpen(false)} cycleId={cycle.id} />

@@ -4,25 +4,26 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/app/lib/supabase";
 import { useRouter } from "next/navigation";
 import { Plant, Cycle } from "@/app/lib/types";
-import { Sprout, Fingerprint, Calendar, Layers, Hash } from "lucide-react";
+import { Loader2, Sprout } from "lucide-react";
+import Modal from "@/components/ui/Modal";
+import { useToast } from "@/app/context/ToastContext";
 
-const BASE_INPUT_CLASSES = "w-full bg-background rounded-lg p-3 text-foreground focus:border-brand-primary outline-none transition";
-const INPUT_CLASSES = `${BASE_INPUT_CLASSES} border border-card-border`;
+const SEED_STAGES = ['Germinación', 'Plántula', 'Vegetativo', 'Floración'];
 
 export default function AddPlantModal() {
   const router = useRouter();
+  const { showToast } = useToast();
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [activeCycles, setActiveCycles] = useState<Cycle[]>([]);
   const [potentialMothers, setPotentialMothers] = useState<Plant[]>([]);
 
-  // Form State
   const [formData, setFormData] = useState({
     strain: "",
     name: "",
     breeder: "",
     source_type: "Semilla" as "Semilla" | "Esqueje",
-    mother_id: "" as string | number, // Store as string for select, convert to number on submit
+    mother_id: "" as string | number,
     stage: "Germinación",
     cycle_id: "" as string | number,
     planted_at: new Date().toISOString().split("T")[0],
@@ -31,14 +32,9 @@ export default function AddPlantModal() {
 
   const [isNameManuallyEdited, setIsNameManuallyEdited] = useState(false);
 
-  const SEED_STAGES = ['Germinación', 'Plántula', 'Vegetativo', 'Floración'];
-  const CLONE_STAGES = ['Enraizamiento', 'Vegetativo', 'Floración'];
-
-  // Fetch data on mount (or when modal opens)
   useEffect(() => {
     if (isOpen) {
       const fetchData = async () => {
-        // Fetch active cycles
         const { data: cyclesData } = await supabase
           .from('cycles')
           .select('*')
@@ -47,8 +43,6 @@ export default function AddPlantModal() {
 
         if (cyclesData) setActiveCycles(cyclesData as unknown as Cycle[]);
 
-        // Fetch potential mothers (all plants)
-        // Optimization: Could filter only those in Veg/Flower, but "existing plants" is the request.
         const { data: plantsData } = await supabase
           .from('plants')
           .select('*')
@@ -60,14 +54,14 @@ export default function AddPlantModal() {
     }
   }, [isOpen]);
 
-  // Smart Naming Effect
+  // Nombre sugerido a partir de la genética, hasta que el usuario lo edite.
   useEffect(() => {
     if (!isNameManuallyEdited && formData.strain) {
       setFormData(prev => ({ ...prev, name: prev.strain }));
     }
   }, [formData.strain, isNameManuallyEdited]);
 
-  // Preload Mother Data when a mother is selected
+  // Al elegir madre, se heredan sus datos.
   useEffect(() => {
     if (formData.source_type === 'Esqueje' && formData.mother_id) {
       const mother = potentialMothers.find(p => p.id.toString() === formData.mother_id.toString());
@@ -79,29 +73,24 @@ export default function AddPlantModal() {
           breeder: mother.breeder || '',
           name: mother.name || '',
         }));
-        // Prevent smart naming from overwriting the mother's name
         setIsNameManuallyEdited(true);
       }
     }
   }, [formData.mother_id, formData.source_type, potentialMothers]);
 
-  // Stage Switch Effect based on Source Type
   useEffect(() => {
     if (formData.source_type === 'Esqueje') {
       setFormData(prev => ({ ...prev, stage: 'Enraizamiento' }));
-    } else {
-       // Reset to Germinación if switching back to seed and current stage is not valid for seed?
-       // Or just default to Germinación.
-       if (!SEED_STAGES.includes(formData.stage) && formData.stage !== 'Germinación') {
-          setFormData(prev => ({ ...prev, stage: 'Germinación' }));
-       }
+    } else if (!SEED_STAGES.includes(formData.stage) && formData.stage !== 'Germinación') {
+      setFormData(prev => ({ ...prev, stage: 'Germinación' }));
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [formData.source_type]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.strain || !formData.cycle_id) {
-      alert("Por favor completa los campos requeridos (Genética, Ciclo).");
+      showToast("Completá la genética y el ciclo", "error");
       return;
     }
 
@@ -136,13 +125,13 @@ export default function AddPlantModal() {
 
       if (error) throw error;
 
-      // Success
       setIsOpen(false);
       resetForm();
+      showToast(quantity > 1 ? `${quantity} plantas creadas` : "Planta creada");
       router.refresh();
 
-    } catch (error: any) {
-      alert("Error al crear plantas: " + error.message);
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "No se pudieron crear las plantas", "error");
     } finally {
       setLoading(false);
     }
@@ -163,213 +152,215 @@ export default function AddPlantModal() {
     setIsNameManuallyEdited(false);
   };
 
+  const sourceOptions: Array<"Semilla" | "Esqueje"> = ["Semilla", "Esqueje"];
+
   return (
     <>
-      <button 
-        onClick={() => setIsOpen(true)}
-        className="bg-brand-primary hover:bg-brand-primary-hover text-brand-bg px-4 py-2 rounded-lg font-title tracking-wide transition-colors text-sm md:text-base shadow-sm shadow-brand-primary/20 flex items-center gap-2"
-      >
-        <Sprout size={18} />
-        NUEVA PLANTA
+      <button type="button" onClick={() => setIsOpen(true)} className="btn btn-primary">
+        <Sprout size={18} aria-hidden="true" />
+        Nueva planta
       </button>
 
-      {isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div 
-            className="absolute inset-0 bg-black/80 backdrop-blur-sm transition-opacity"
-            onClick={() => setIsOpen(false)}
-          ></div>
+      <Modal
+        isOpen={isOpen}
+        onClose={() => setIsOpen(false)}
+        title="Nueva planta"
+        description="Registrá uno o varios ejemplares dentro de un ciclo activo."
+        size="xl"
+        dismissOnBackdrop={false}
+        footer={
+          <>
+            <button type="button" className="btn btn-ghost" onClick={() => setIsOpen(false)}>
+              Cancelar
+            </button>
+            <button type="submit" form="add-plant-form" className="btn btn-primary" disabled={loading}>
+              {loading && <Loader2 size={16} className="animate-spin" aria-hidden="true" />}
+              {loading
+                ? "Guardando..."
+                : formData.quantity > 1
+                  ? `Crear ${formData.quantity} plantas`
+                  : "Crear planta"}
+            </button>
+          </>
+        }
+      >
+        <form id="add-plant-form" onSubmit={handleSubmit} className="space-y-6">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div className="field">
+              <label htmlFor="plant-cycle" className="field-label">
+                Ciclo activo <span aria-hidden="true">*</span>
+              </label>
+              <select
+                id="plant-cycle"
+                data-autofocus
+                required
+                className="field-input"
+                value={formData.cycle_id}
+                onChange={(e) => setFormData({...formData, cycle_id: e.target.value})}
+              >
+                <option value="" disabled>Seleccionar ciclo...</option>
+                {activeCycles.map(cycle => (
+                  <option key={cycle.id} value={cycle.id}>{cycle.name}</option>
+                ))}
+              </select>
+            </div>
 
-          <div className="relative bg-card w-full max-w-2xl rounded-2xl border border-card-border shadow-sm p-6 animate-in fade-in zoom-in duration-200 max-h-[90vh] overflow-y-auto">
-            
-            <h2 className="text-2xl font-title text-brand-primary mb-1 uppercase flex items-center gap-2">
-              <Sprout className="text-brand-primary" /> Nueva Planta
-            </h2>
-            <p className="text-xs text-muted mb-6">Completa los datos para registrar nuevos ejemplares.</p>
-
-            <form onSubmit={handleSubmit} className="space-y-6">
-              
-              {/* SECTION 1: ORIGEN & CICLO */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Ciclo (Required) */}
-                <div>
-                  <label className="block text-muted mb-1 text-xs font-bold uppercase">Ciclo Activo *</label>
-                  <div className="relative">
-                    <select 
-                      required
-                      className={`${INPUT_CLASSES} appearance-none`}
-                      value={formData.cycle_id}
-                      onChange={(e) => setFormData({...formData, cycle_id: e.target.value})}
+            {/* Segmentado real: radiogroup navegable con flechas por el navegador */}
+            <fieldset className="field">
+              <legend className="field-label mb-2">Origen</legend>
+              <div className="flex gap-2 rounded-[var(--radius-md)] border border-line bg-surface-2 p-1">
+                {sourceOptions.map((option) => {
+                  const checked = formData.source_type === option;
+                  return (
+                    <label
+                      key={option}
+                      className={`flex flex-1 cursor-pointer items-center justify-center rounded-[var(--radius-sm)] px-3 py-2 text-sm font-semibold transition-colors has-[:focus-visible]:outline has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-[color:var(--ring)] ${
+                        checked
+                          ? "bg-brand text-[color:var(--brand-fg)]"
+                          : "text-fg-muted hover:text-fg"
+                      }`}
                     >
-                      <option value="" disabled>Seleccionar Ciclo...</option>
-                      {activeCycles.map(cycle => (
-                        <option key={cycle.id} value={cycle.id}>{cycle.name}</option>
-                      ))}
-                    </select>
-                    <Layers className="absolute right-3 top-3 text-muted pointer-events-none" size={16} />
-                  </div>
-                </div>
-
-                 {/* Origen */}
-                 <div>
-                  <label className="block text-muted mb-1 text-xs font-bold uppercase">Origen</label>
-                  <div className="flex bg-brand-bg p-1 rounded-lg border border-card-border">
-                    <button
-                      type="button"
-                      onClick={() => setFormData({...formData, source_type: 'Semilla', mother_id: ""})}
-                      className={`flex-1 py-2 rounded text-xs font-bold uppercase transition-all ${formData.source_type === 'Semilla' ? 'bg-brand-primary text-brand-bg shadow' : 'text-muted hover:text-foreground'}`}
-                    >
-                      Semilla
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setFormData({...formData, source_type: 'Esqueje'})}
-                      className={`flex-1 py-2 rounded text-xs font-bold uppercase transition-all ${formData.source_type === 'Esqueje' ? 'bg-brand-primary text-brand-bg shadow' : 'text-muted hover:text-foreground'}`}
-                    >
-                      Esqueje
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              {/* Si es Esqueje, mostrar Planta Madre */}
-              {formData.source_type === 'Esqueje' && (
-                <div className="bg-brand-primary/5 p-4 rounded-xl border border-brand-primary/10">
-                  <label className="block text-brand-primary mb-1 text-xs font-bold uppercase">Planta Madre (Opcional)</label>
-                  <select
-                    className={`${BASE_INPUT_CLASSES} border border-brand-primary/20`}
-                    value={formData.mother_id}
-                    onChange={(e) => setFormData({...formData, mother_id: e.target.value})}
-                  >
-                    <option value="">-- Sin Madre Asignada --</option>
-                    {potentialMothers.map(plant => (
-                      <option key={plant.id} value={plant.id}>{plant.name} ({plant.strain || '?'})</option>
-                    ))}
-                  </select>
-                </div>
-              )}
-
-              {/* SECTION 2: GENÉTICA */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-muted mb-1 text-xs font-bold uppercase">Genética (Strain) *</label>
-                  <div className="relative">
-                    <input 
-                      type="text"
-                      required
-                      placeholder="Ej: Lemon Haze"
-                      className={`${INPUT_CLASSES} pl-10`}
-                      value={formData.strain}
-                      onChange={(e) => setFormData({...formData, strain: e.target.value})}
-                    />
-                    <Fingerprint className="absolute left-3 top-3 text-muted" size={16} />
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-muted mb-1 text-xs font-bold uppercase">Banco (Breeder)</label>
-                  <input
-                    type="text"
-                    placeholder="Ej: Green House Seeds"
-                    className={INPUT_CLASSES}
-                    value={formData.breeder}
-                    onChange={(e) => setFormData({...formData, breeder: e.target.value})}
-                  />
-                </div>
-              </div>
-
-              {/* SECTION 3: DATOS INDIVIDUALES */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-muted mb-1 text-xs font-bold uppercase">Nombre Identificador</label>
-                  <input
-                    type="text"
-                    required
-                    className={INPUT_CLASSES}
-                    value={formData.name}
-                    onChange={(e) => {
-                      setFormData({...formData, name: e.target.value});
-                      setIsNameManuallyEdited(true);
-                    }}
-                  />
-                  <p className="text-[10px] text-muted mt-1">Se usará para etiquetar las plantas.</p>
-                </div>
-
-                <div className="grid grid-cols-2 gap-2">
-                   <div>
-                      <label className="block text-muted mb-1 text-xs font-bold uppercase">Cantidad</label>
-                      <div className="relative">
-                        <input
-                          type="number"
-                          min="1"
-                          required
-                          className={`${INPUT_CLASSES} pl-9`}
-                          value={formData.quantity}
-                          onChange={(e) => setFormData({...formData, quantity: parseInt(e.target.value)})}
-                        />
-                        <Hash className="absolute left-3 top-3 text-muted" size={16} />
-                      </div>
-                   </div>
-                   <div>
-                      <label className="block text-muted mb-1 text-xs font-bold uppercase">Fecha Inicio</label>
                       <input
-                        type="date"
-                        required
-                        className={INPUT_CLASSES}
-                        value={formData.planted_at}
-                        onChange={(e) => setFormData({...formData, planted_at: e.target.value})}
+                        type="radio"
+                        name="source_type"
+                        value={option}
+                        checked={checked}
+                        onChange={() =>
+                          setFormData({
+                            ...formData,
+                            source_type: option,
+                            ...(option === "Semilla" ? { mother_id: "" } : {}),
+                          })
+                        }
+                        className="sr-only"
                       />
-                   </div>
-                </div>
+                      {option}
+                    </label>
+                  );
+                })}
               </div>
-
-              <div>
-                <label className="block text-muted mb-1 text-xs font-bold uppercase">Etapa Inicial</label>
-                <select
-                  className={INPUT_CLASSES}
-                  value={formData.stage}
-                  onChange={(e) => setFormData({...formData, stage: e.target.value})}
-                >
-                  {formData.source_type === 'Semilla' ? (
-                     <>
-                        <option value="Germinación">🌱 Germinación</option>
-                        <option value="Plántula">🌱 Plántula</option>
-                        <option value="Vegetativo">🌿 Vegetativo</option>
-                        <option value="Floración">🌸 Floración</option>
-                     </>
-                  ) : (
-                     <>
-                        <option value="Enraizamiento">🧬 Enraizamiento</option>
-                        <option value="Vegetativo">🌿 Vegetativo</option>
-                        <option value="Floración">🌸 Floración</option>
-                     </>
-                  )}
-                  <option value="Secado">🍂 Secado</option>
-                  <option value="Curado">🏺 Curado</option>
-                </select>
-              </div>
-
-              {/* ACTIONS */}
-              <div className="flex gap-3 mt-6 pt-4 border-t border-card-border">
-                <button 
-                  type="button"
-                  onClick={() => setIsOpen(false)}
-                  className="flex-1 py-3 text-muted hover:text-foreground font-bold text-xs uppercase transition-colors"
-                >
-                  Cancelar
-                </button>
-                <button 
-                  type="submit"
-                  disabled={loading}
-                  className="flex-1 bg-brand-primary hover:bg-brand-primary-hover text-brand-bg py-3 rounded-lg font-title tracking-wide transition disabled:opacity-50 shadow-sm shadow-brand-primary/20"
-                >
-                  {loading ? "GUARDANDO..." : `CREAR ${formData.quantity > 1 ? `(${formData.quantity})` : ''}`}
-                </button>
-              </div>
-
-            </form>
+            </fieldset>
           </div>
-        </div>
-      )}
+
+          {formData.source_type === 'Esqueje' && (
+            <div className="field rounded-[var(--radius-lg)] border border-line bg-brand-soft p-4">
+              <label htmlFor="plant-mother" className="field-label">Planta madre (opcional)</label>
+              <select
+                id="plant-mother"
+                className="field-input"
+                value={formData.mother_id}
+                onChange={(e) => setFormData({...formData, mother_id: e.target.value})}
+              >
+                <option value="">Sin madre asignada</option>
+                {potentialMothers.map(plant => (
+                  <option key={plant.id} value={plant.id}>{plant.name} ({plant.strain || 'sin genética'})</option>
+                ))}
+              </select>
+              <p className="field-hint">Al elegirla se copian su genética, banco y nombre.</p>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div className="field">
+              <label htmlFor="plant-strain" className="field-label">
+                Genética <span aria-hidden="true">*</span>
+              </label>
+              <input
+                id="plant-strain"
+                type="text"
+                required
+                placeholder="Ej: Lemon Haze"
+                className="field-input"
+                value={formData.strain}
+                onChange={(e) => setFormData({...formData, strain: e.target.value})}
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="plant-breeder" className="field-label">Banco</label>
+              <input
+                id="plant-breeder"
+                type="text"
+                placeholder="Ej: Green House Seeds"
+                className="field-input"
+                value={formData.breeder}
+                onChange={(e) => setFormData({...formData, breeder: e.target.value})}
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div className="field">
+              <label htmlFor="plant-name" className="field-label">Nombre identificador</label>
+              <input
+                id="plant-name"
+                type="text"
+                required
+                className="field-input"
+                value={formData.name}
+                onChange={(e) => {
+                  setFormData({...formData, name: e.target.value});
+                  setIsNameManuallyEdited(true);
+                }}
+              />
+              <p className="field-hint">Se usa para etiquetar las plantas. Con cantidad mayor a 1 se numeran solas.</p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="field">
+                <label htmlFor="plant-quantity" className="field-label">Cantidad</label>
+                <input
+                  id="plant-quantity"
+                  type="number"
+                  inputMode="numeric"
+                  min="1"
+                  required
+                  className="field-input"
+                  value={formData.quantity}
+                  onChange={(e) => setFormData({...formData, quantity: parseInt(e.target.value) || 1})}
+                />
+              </div>
+              <div className="field">
+                <label htmlFor="plant-planted-at" className="field-label">Fecha inicio</label>
+                <input
+                  id="plant-planted-at"
+                  type="date"
+                  required
+                  className="field-input"
+                  value={formData.planted_at}
+                  onChange={(e) => setFormData({...formData, planted_at: e.target.value})}
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="field">
+            <label htmlFor="plant-stage" className="field-label">Etapa inicial</label>
+            <select
+              id="plant-stage"
+              className="field-input"
+              value={formData.stage}
+              onChange={(e) => setFormData({...formData, stage: e.target.value})}
+            >
+              {formData.source_type === 'Semilla' ? (
+                <>
+                  <option value="Germinación">Germinación</option>
+                  <option value="Plántula">Plántula</option>
+                  <option value="Vegetativo">Vegetativo</option>
+                  <option value="Floración">Floración</option>
+                </>
+              ) : (
+                <>
+                  <option value="Enraizamiento">Enraizamiento</option>
+                  <option value="Vegetativo">Vegetativo</option>
+                  <option value="Floración">Floración</option>
+                </>
+              )}
+              <option value="Secado">Secado</option>
+              <option value="Curado">Curado</option>
+            </select>
+          </div>
+        </form>
+      </Modal>
     </>
   );
 }

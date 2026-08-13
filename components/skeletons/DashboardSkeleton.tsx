@@ -1,41 +1,40 @@
 export default function DashboardSkeleton() {
   return (
-    <div className="animate-pulse w-full">
+    <div className="w-full" aria-busy="true" aria-label="Cargando el panel">
       <div className="mb-8">
-        <div className="h-8 w-48 bg-card-border dark:bg-slate-800 rounded mb-2"></div>
-        <div className="h-4 w-32 bg-card-border dark:bg-slate-800 rounded"></div>
+        <div className="skeleton mb-2 h-8 w-48" />
+        <div className="skeleton h-4 w-32" />
       </div>
 
-      {/* KPIs Grid Skeleton */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-        {[1, 2, 3, 4].map((i) => (
-          <div key={i} className="bg-card h-28 rounded-2xl border border-card-border dark:border-slate-800 p-5 flex flex-col justify-between">
-            <div className="h-3 w-2/3 bg-card-border dark:bg-slate-800 rounded"></div>
-            <div className="flex justify-between items-end">
-              <div className="h-8 w-12 bg-card-border dark:bg-slate-800 rounded"></div>
-              <div className="h-8 w-8 bg-card-border dark:bg-slate-800 rounded-full"></div>
+      {/* La silueta replica la grilla real para que no haya salto al cargar */}
+      <div className="mb-10 grid grid-cols-2 gap-4 md:grid-cols-4">
+        {[0, 1, 2, 3].map((i) => (
+          <div key={i} className="surface flex h-28 flex-col justify-between rounded-[var(--radius-lg)] p-5">
+            <div className="skeleton h-3 w-2/3" />
+            <div className="flex items-end justify-between">
+              <div className="skeleton h-8 w-12" />
+              <div className="skeleton h-7 w-7 rounded-full" />
             </div>
           </div>
         ))}
       </div>
 
-      {/* Feed Skeleton */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2 space-y-6">
-          <div className="flex justify-between items-center mb-2">
-             <div className="h-6 w-40 bg-card-border dark:bg-slate-800 rounded"></div>
-             <div className="h-4 w-20 bg-card-border dark:bg-slate-800 rounded"></div>
+      <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
+        <div className="space-y-4 lg:col-span-2">
+          <div className="flex items-center justify-between">
+            <div className="skeleton h-6 w-40" />
+            <div className="skeleton h-4 w-20" />
           </div>
-          <div className="bg-card h-40 rounded-2xl border border-card-border dark:border-slate-800"></div>
-          <div className="bg-card h-40 rounded-2xl border border-card-border dark:border-slate-800"></div>
+          <div className="skeleton h-44 w-full rounded-[var(--radius-lg)]" />
+          <div className="skeleton h-44 w-full rounded-[var(--radius-lg)]" />
         </div>
 
-        <div className="space-y-6">
-          <div className="flex justify-between items-center mb-2">
-             <div className="h-6 w-24 bg-card-border dark:bg-slate-800 rounded"></div>
-             <div className="h-8 w-8 bg-card-border dark:bg-slate-800 rounded-full"></div>
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="skeleton h-6 w-24" />
+            <div className="skeleton h-9 w-9 rounded-full" />
           </div>
-          <div className="bg-card h-80 rounded-2xl border border-card-border dark:border-slate-800"></div>
+          <div className="skeleton h-80 w-full rounded-[var(--radius-lg)]" />
         </div>
       </div>
     </div>

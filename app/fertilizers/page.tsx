@@ -1,13 +1,17 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Plus, FlaskConical, Layers, Edit2, Trash2 } from 'lucide-react'
-import DesktopNavbar from '@/components/DesktopNavbar'
-import BottomNav from '@/components/BottomNav'
+import { Plus, FlaskConical, Layers, Pencil, Trash2 } from 'lucide-react'
 import AddFertilizerModal from '@/components/AddFertilizerModal'
 import AddFertilizerComboModal from '@/components/AddFertilizerComboModal'
+import ConfirmDialog from '@/components/ui/ConfirmDialog'
+import EmptyState from '@/components/EmptyState'
 import { getFertilizers, getFertilizerCombos, createFertilizer, updateFertilizer, deleteFertilizer, createFertilizerCombo, deleteFertilizerCombo, updateFertilizerCombo } from '@/app/actions/fertilizers'
 import { Fertilizer, FertilizerCombo } from '@/app/lib/types'
+
+type PendingDeletion =
+  | { kind: 'product'; id: number; name: string }
+  | { kind: 'combo'; id: number; name: string }
 
 export default function FertilizersPage() {
   const [activeTab, setActiveTab] = useState<'productos' | 'combos'>('productos')
@@ -19,6 +23,7 @@ export default function FertilizersPage() {
   const [isComboModalOpen, setIsComboModalOpen] = useState(false)
   const [editingProduct, setEditingProduct] = useState<Fertilizer | null>(null)
   const [editingCombo, setEditingCombo] = useState<FertilizerCombo | null>(null)
+  const [pendingDeletion, setPendingDeletion] = useState<PendingDeletion | null>(null)
 
   const loadData = async () => {
     setIsLoading(true)
@@ -51,13 +56,6 @@ export default function FertilizersPage() {
     return { error: null }
   }
 
-  const handleDeleteProduct = async (id: number) => {
-    if (confirm('¿Estás seguro de eliminar este producto?')) {
-      await deleteFertilizer(id)
-      await loadData()
-    }
-  }
-
   const handleSaveCombo = async (data: Partial<FertilizerCombo>) => {
     let res;
     if (editingCombo) {
@@ -72,11 +70,14 @@ export default function FertilizersPage() {
     return { error: null }
   }
 
-  const handleDeleteCombo = async (id: number) => {
-    if (confirm('¿Estás seguro de eliminar este combo?')) {
-      await deleteFertilizerCombo(id)
-      await loadData()
+  const handleConfirmDelete = async () => {
+    if (!pendingDeletion) return
+    if (pendingDeletion.kind === 'product') {
+      await deleteFertilizer(pendingDeletion.id)
+    } else {
+      await deleteFertilizerCombo(pendingDeletion.id)
     }
+    await loadData()
   }
 
   const stageLabels: Record<string, string> = {
@@ -84,135 +85,176 @@ export default function FertilizersPage() {
     enraizamiento: 'Enraizamiento',
     vegetativo: 'Vegetativo',
     floracion: 'Floración',
-    lavado: 'Lavado de Raíces'
+    lavado: 'Lavado de raíces'
   }
 
+  const tabs: Array<{ id: 'productos' | 'combos'; label: string }> = [
+    { id: 'productos', label: 'Productos' },
+    { id: 'combos', label: 'Combos' },
+  ]
+
   return (
-    <div className="min-h-screen bg-[#F5F5F1] dark:bg-[#0B0C10] pb-24 lg:pb-8 flex flex-col font-sans">
-      <DesktopNavbar />
+    // La barra superior y la inferior las pone el layout: renderizarlas aquí
+    // duplicaba ambas navegaciones en esta página.
+    <main className="mx-auto w-full max-w-5xl px-5 py-6 md:px-8 md:py-8">
+      <header className="mb-8">
+        <h1 className="font-title text-2xl font-semibold tracking-tight text-fg md:text-[28px]">Nutrición</h1>
+        <p className="mt-1 text-sm text-fg-muted">Gestioná tus fertilizantes y armá tus combos nutricionales.</p>
+      </header>
 
-      <main className="flex-1 w-full max-w-5xl mx-auto px-4 lg:px-8 pt-6">
-        <header className="mb-8">
-          <h1 className="text-3xl font-serif font-bold text-slate-800 dark:text-white">Nutrición</h1>
-          <p className="text-slate-500 mt-2">Gestiona tus fertilizantes y armas tus combos nutricionales.</p>
-        </header>
-
-        {/* Tabs */}
-        <div className="flex gap-4 mb-6 border-b border-slate-200 dark:border-white/10">
+      <div role="tablist" aria-label="Secciones de nutrición" className="mb-6 flex gap-6 border-b border-line">
+        {tabs.map(tab => (
           <button
-            onClick={() => setActiveTab('productos')}
-            className={`pb-3 font-medium transition-colors ${
-              activeTab === 'productos'
-                ? 'text-brand-primary border-b-2 border-brand-primary'
-                : 'text-slate-500 hover:text-slate-800 dark:hover:text-white'
+            key={tab.id}
+            type="button"
+            role="tab"
+            id={`tab-${tab.id}`}
+            aria-selected={activeTab === tab.id}
+            aria-controls={`panel-${tab.id}`}
+            onClick={() => setActiveTab(tab.id)}
+            className={`-mb-px border-b-2 pb-3 text-sm font-semibold transition-colors ${
+              activeTab === tab.id
+                ? 'border-[color:var(--brand)] text-[color:var(--brand-text)]'
+                : 'border-transparent text-fg-muted hover:text-fg'
             }`}
           >
-            Productos
+            {tab.label}
           </button>
-          <button
-            onClick={() => setActiveTab('combos')}
-            className={`pb-3 font-medium transition-colors ${
-              activeTab === 'combos'
-                ? 'text-brand-primary border-b-2 border-brand-primary'
-                : 'text-slate-500 hover:text-slate-800 dark:hover:text-white'
-            }`}
-          >
-            Combos Nutricionales
-          </button>
+        ))}
+      </div>
+
+      {isLoading ? (
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3" aria-busy="true" aria-label="Cargando">
+          {[0, 1, 2].map(i => (
+            <div key={i} className="skeleton h-40 rounded-[var(--radius-lg)]" />
+          ))}
         </div>
+      ) : activeTab === 'productos' ? (
+        <section id="panel-productos" role="tabpanel" aria-labelledby="tab-productos" className="space-y-5">
+          <button
+            type="button"
+            onClick={() => { setEditingProduct(null); setIsProductModalOpen(true); }}
+            className="btn btn-primary"
+          >
+            <Plus size={18} aria-hidden="true" />
+            Agregar producto
+          </button>
 
-        {/* Content */}
-        {isLoading ? (
-          <div className="flex justify-center py-12 text-slate-400">Cargando...</div>
-        ) : activeTab === 'productos' ? (
-          <div className="space-y-4">
-            <button
-              onClick={() => { setEditingProduct(null); setIsProductModalOpen(true); }}
-              className="w-full sm:w-auto flex items-center gap-2 px-4 py-2 bg-brand-primary text-white rounded-xl hover:bg-brand-primary-hover transition-colors font-medium mb-4"
-            >
-              <Plus size={18} />
-              Agregar Producto
-            </button>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {fertilizers.length === 0 ? (
+            <EmptyState
+              icon={FlaskConical}
+              title="Sin productos"
+              description="Cargá los fertilizantes que usás para calcular las dosis automáticamente al agendar tareas."
+            />
+          ) : (
+            <ul className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
               {fertilizers.map(fert => (
-                <div key={fert.id} className="bg-white dark:bg-[#12141C] p-5 rounded-2xl shadow-sm border border-slate-100 dark:border-white/5 relative group">
-                  <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button onClick={() => { setEditingProduct(fert); setIsProductModalOpen(true); }} className="p-1.5 bg-slate-100 dark:bg-white/5 rounded-lg text-slate-500 hover:text-brand-primary">
-                      <Edit2 size={16} />
-                    </button>
-                    <button onClick={() => handleDeleteProduct(fert.id)} className="p-1.5 bg-slate-100 dark:bg-white/5 rounded-lg text-slate-500 hover:text-red-500">
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
-                  <div className="flex items-center gap-3 mb-3">
-                    <div className="w-10 h-10 rounded-full bg-green-500/10 text-green-500 flex items-center justify-center">
-                      <FlaskConical size={20} />
-                    </div>
-                    <div>
-                      <h3 className="font-bold text-slate-800 dark:text-white">{fert.name}</h3>
-                      <p className="text-xs text-slate-500">{fert.brand}</p>
+                <li key={fert.id} className="surface flex flex-col rounded-[var(--radius-lg)] p-5">
+                  <div className="mb-3 flex items-start gap-3">
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-soft text-[color:var(--brand-text)]" aria-hidden="true">
+                      <FlaskConical size={18} />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <h3 className="truncate font-semibold text-fg">{fert.name}</h3>
+                      <p className="truncate text-xs text-fg-muted">{fert.brand}</p>
                     </div>
                   </div>
-                  <div className="space-y-1 text-sm text-slate-600 dark:text-slate-400">
-                    <p><span className="font-medium">Etapa:</span> {stageLabels[fert.stage]}</p>
-                    <p><span className="font-medium">Dosis:</span> {fert.dose_type === 'fija' ? `${fert.dose_fixed} ml/L` : 'Tabla por Semanas'}</p>
+
+                  <dl className="space-y-1 text-sm text-fg-muted">
+                    <div className="flex gap-1.5">
+                      <dt className="font-medium text-fg">Etapa:</dt>
+                      <dd>{stageLabels[fert.stage]}</dd>
+                    </div>
+                    <div className="flex gap-1.5">
+                      <dt className="font-medium text-fg">Dosis:</dt>
+                      <dd>{fert.dose_type === 'fija' ? `${fert.dose_fixed} ml/L` : 'Tabla por semanas'}</dd>
+                    </div>
+                  </dl>
+
+                  <div className="mt-4 flex justify-end gap-1 border-t border-line pt-3">
+                    <button
+                      type="button"
+                      onClick={() => { setEditingProduct(fert); setIsProductModalOpen(true); }}
+                      className="btn-icon h-9 min-h-9 w-9 min-w-9"
+                      aria-label={`Editar ${fert.name}`}
+                    >
+                      <Pencil size={16} aria-hidden="true" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPendingDeletion({ kind: 'product', id: fert.id, name: fert.name })}
+                      className="btn-icon h-9 min-h-9 w-9 min-w-9 text-[color:var(--danger)]"
+                      aria-label={`Eliminar ${fert.name}`}
+                    >
+                      <Trash2 size={16} aria-hidden="true" />
+                    </button>
                   </div>
-                </div>
+                </li>
               ))}
-            </div>
-            {fertilizers.length === 0 && (
-              <div className="text-center py-12 bg-white dark:bg-[#12141C] rounded-2xl border border-slate-100 dark:border-white/5 text-slate-500">
-                No hay productos registrados.
-              </div>
-            )}
-          </div>
-        ) : (
-          <div className="space-y-4">
-            <button
-              onClick={() => { setEditingCombo(null); setIsComboModalOpen(true); }}
-              className="w-full sm:w-auto flex items-center gap-2 px-4 py-2 bg-brand-primary text-white rounded-xl hover:bg-brand-primary-hover transition-colors font-medium mb-4"
-            >
-              <Plus size={18} />
-              Armar Combo
-            </button>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            </ul>
+          )}
+        </section>
+      ) : (
+        <section id="panel-combos" role="tabpanel" aria-labelledby="tab-combos" className="space-y-5">
+          <button
+            type="button"
+            onClick={() => { setEditingCombo(null); setIsComboModalOpen(true); }}
+            className="btn btn-primary"
+          >
+            <Plus size={18} aria-hidden="true" />
+            Armar combo
+          </button>
+
+          {combos.length === 0 ? (
+            <EmptyState
+              icon={Layers}
+              title="Sin combos"
+              description="Un combo agrupa los productos que aplicás juntos, para agendarlos de una sola vez."
+            />
+          ) : (
+            <ul className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
               {combos.map(combo => (
-                <div key={combo.id} className="bg-white dark:bg-[#12141C] p-5 rounded-2xl shadow-sm border border-slate-100 dark:border-white/5 relative group">
-                  <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button onClick={() => { setEditingCombo(combo); setIsComboModalOpen(true); }} className="p-1.5 bg-slate-100 dark:bg-white/5 rounded-lg text-slate-500 hover:text-brand-primary">
-                      <Edit2 size={16} />
+                <li key={combo.id} className="surface flex flex-col rounded-[var(--radius-lg)] p-5">
+                  <div className="mb-4 flex items-center gap-3">
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-soft text-[color:var(--brand-text)]" aria-hidden="true">
+                      <Layers size={18} />
+                    </span>
+                    <h3 className="min-w-0 flex-1 truncate font-semibold text-fg">{combo.name}</h3>
+                  </div>
+
+                  <p className="mb-2 text-xs font-medium text-fg-muted">
+                    {combo.products?.length || 0} productos
+                  </p>
+                  <ul className="flex flex-wrap gap-2">
+                    {combo.products?.map((p, idx) => (
+                      <li key={idx} className="chip border-line bg-surface-2 text-fg-muted">{p.name}</li>
+                    ))}
+                  </ul>
+
+                  <div className="mt-4 flex justify-end gap-1 border-t border-line pt-3">
+                    <button
+                      type="button"
+                      onClick={() => { setEditingCombo(combo); setIsComboModalOpen(true); }}
+                      className="btn-icon h-9 min-h-9 w-9 min-w-9"
+                      aria-label={`Editar ${combo.name}`}
+                    >
+                      <Pencil size={16} aria-hidden="true" />
                     </button>
-                    <button onClick={() => handleDeleteCombo(combo.id)} className="p-1.5 bg-slate-100 dark:bg-white/5 rounded-lg text-slate-500 hover:text-red-500">
-                      <Trash2 size={16} />
+                    <button
+                      type="button"
+                      onClick={() => setPendingDeletion({ kind: 'combo', id: combo.id, name: combo.name })}
+                      className="btn-icon h-9 min-h-9 w-9 min-w-9 text-[color:var(--danger)]"
+                      aria-label={`Eliminar ${combo.name}`}
+                    >
+                      <Trash2 size={16} aria-hidden="true" />
                     </button>
                   </div>
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="w-10 h-10 rounded-full bg-brand-primary/10 text-brand-primary flex items-center justify-center">
-                      <Layers size={20} />
-                    </div>
-                    <h3 className="font-bold text-slate-800 dark:text-white">{combo.name}</h3>
-                  </div>
-                  <div className="space-y-2">
-                    <p className="text-xs font-medium text-slate-500">Productos ({combo.products?.length || 0}):</p>
-                    <div className="flex flex-wrap gap-2">
-                      {combo.products?.map((p, idx) => (
-                        <span key={idx} className="px-2 py-1 bg-[#F5F5F1] dark:bg-white/5 text-slate-600 dark:text-slate-300 text-xs rounded-lg">
-                          {p.name}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                </div>
+                </li>
               ))}
-            </div>
-            {combos.length === 0 && (
-              <div className="text-center py-12 bg-white dark:bg-[#12141C] rounded-2xl border border-slate-100 dark:border-white/5 text-slate-500">
-                No hay combos registrados.
-              </div>
-            )}
-          </div>
-        )}
-      </main>
+            </ul>
+          )}
+        </section>
+      )}
 
       <AddFertilizerModal
         isOpen={isProductModalOpen}
@@ -229,7 +271,14 @@ export default function FertilizersPage() {
         initialData={editingCombo}
       />
 
-      <BottomNav />
-    </div>
+      <ConfirmDialog
+        isOpen={!!pendingDeletion}
+        onClose={() => setPendingDeletion(null)}
+        onConfirm={handleConfirmDelete}
+        title={pendingDeletion?.kind === 'combo' ? 'Eliminar combo' : 'Eliminar producto'}
+        description={`Se eliminará "${pendingDeletion?.name ?? ''}". Esta acción no se puede deshacer.`}
+        confirmLabel="Eliminar"
+      />
+    </main>
   )
 }

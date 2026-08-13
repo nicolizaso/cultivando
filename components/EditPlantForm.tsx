@@ -5,8 +5,10 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/app/lib/supabase";
 import { Plant, Cycle } from "@/app/lib/types";
 import { getStageColor } from "@/app/lib/utils";
-import { Sprout, Leaf, Flower, Wind, Thermometer, Calendar, Save, ArrowLeft, Trash2, Dna } from "lucide-react";
+import { Sprout, Leaf, Flower, Wind, Thermometer, Calendar, Save, ArrowLeft, Trash2, Dna, Loader2 } from "lucide-react";
 import Link from "next/link";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
+import { useToast } from "@/app/context/ToastContext";
 
 interface EditPlantFormProps {
   plant: Plant;
@@ -25,7 +27,9 @@ const STAGE_CONFIG = [
 
 export default function EditPlantForm({ plant, cycles }: EditPlantFormProps) {
   const router = useRouter();
+  const { showToast } = useToast();
   const [loading, setLoading] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   // Basic Info State
   const [basicInfo, setBasicInfo] = useState({
@@ -113,18 +117,17 @@ export default function EditPlantForm({ plant, cycles }: EditPlantFormProps) {
 
       if (error) throw error;
 
+      showToast("Cambios guardados");
       router.push(`/plants/${plant.id}`);
       router.refresh();
     } catch (error) {
-      alert("Error al guardar: " + error);
+      showToast(error instanceof Error ? error.message : "No se pudieron guardar los cambios", "error");
     } finally {
       setLoading(false);
     }
   };
 
   const handleDelete = async () => {
-    if (!confirm(`¿Estás seguro de que deseas eliminar la planta "${plant.name}"? Esta acción no se puede deshacer.`)) return;
-
     setLoading(true);
     try {
         const { error } = await supabase
@@ -134,75 +137,77 @@ export default function EditPlantForm({ plant, cycles }: EditPlantFormProps) {
 
         if (error) throw error;
 
-        router.push('/plants'); // Redirect to inventory
+        showToast(`${plant.name} eliminada`);
+        router.push('/plants');
         router.refresh();
     } catch (error) {
-        alert("Error al eliminar: " + error);
+        showToast(error instanceof Error ? error.message : "No se pudo eliminar la planta", "error");
     } finally {
         setLoading(false);
     }
   };
 
   return (
-    <div className="max-w-2xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-
-      <div className="flex items-center justify-between">
-        <Link href={`/plants/${plant.id}`} className="text-muted hover:text-foreground flex items-center gap-2 text-sm font-bold uppercase tracking-wider transition-colors">
-          <ArrowLeft size={16} /> Volver
+    <div className="mx-auto max-w-2xl space-y-8">
+      <div className="flex items-center justify-between gap-3">
+        <Link href={`/plants/${plant.id}`} className="btn btn-ghost h-10 min-h-10 px-3">
+          <ArrowLeft size={16} aria-hidden="true" />
+          Volver
         </Link>
         <button
-            onClick={handleDelete}
-            className="text-red-500 hover:text-red-400 flex items-center gap-2 text-sm font-bold uppercase tracking-wider transition-colors"
+          type="button"
+          onClick={() => setShowDeleteConfirm(true)}
+          className="btn btn-danger h-10 min-h-10 px-3"
         >
-            <Trash2 size={16} /> Eliminar
+          <Trash2 size={16} aria-hidden="true" />
+          Eliminar
         </button>
       </div>
 
       <form onSubmit={handleSave} className="space-y-8">
+        <section aria-labelledby="info-basica" className="surface space-y-5 rounded-[var(--radius-lg)] p-5 md:p-6">
+          <h2 id="info-basica" className="font-title text-lg font-semibold text-fg">Información básica</h2>
 
-        {/* TOP SECTION: Basic Info */}
-        <section className="bg-card p-6 rounded-2xl border border-card-border space-y-4">
-          <h2 className="text-lg font-title text-foreground mb-4 flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-brand-primary"></span>
-            Información Básica
-          </h2>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-muted mb-1 text-xs font-bold uppercase tracking-wider">Nombre</label>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div className="field">
+              <label htmlFor="edit-plant-name" className="field-label">Nombre</label>
               <input
+                id="edit-plant-name"
                 type="text"
                 required
-                className="w-full bg-background border border-card-border rounded-xl p-3 text-foreground focus:border-brand-primary outline-none transition-colors"
+                className="field-input"
                 value={basicInfo.name}
                 onChange={(e) => handleBasicChange('name', e.target.value)}
               />
             </div>
 
-            <div>
-              <label className="block text-muted mb-1 text-xs font-bold uppercase tracking-wider">Genética (Strain)</label>
+            <div className="field">
+              <label htmlFor="edit-plant-strain" className="field-label">Genética</label>
               <input
+                id="edit-plant-strain"
                 type="text"
-                className="w-full bg-background border border-card-border rounded-xl p-3 text-foreground focus:border-brand-primary outline-none transition-colors"
+                className="field-input"
                 value={basicInfo.strain}
                 onChange={(e) => handleBasicChange('strain', e.target.value)}
               />
             </div>
 
-            <div>
-              <label className="block text-muted mb-1 text-xs font-bold uppercase tracking-wider">Banco (Breeder)</label>
+            <div className="field">
+              <label htmlFor="edit-plant-breeder" className="field-label">Banco</label>
               <input
+                id="edit-plant-breeder"
                 type="text"
-                className="w-full bg-background border border-card-border rounded-xl p-3 text-foreground focus:border-brand-primary outline-none transition-colors"
+                className="field-input"
                 value={basicInfo.breeder}
                 onChange={(e) => handleBasicChange('breeder', e.target.value)}
               />
             </div>
 
-            <div>
-              <label className="block text-muted mb-1 text-xs font-bold uppercase tracking-wider">Origen</label>
+            <div className="field">
+              <label htmlFor="edit-plant-source" className="field-label">Origen</label>
               <select
-                className="w-full bg-background border border-card-border rounded-xl p-3 text-foreground focus:border-brand-primary outline-none transition-colors appearance-none"
+                id="edit-plant-source"
+                className="field-input"
                 value={basicInfo.source_type}
                 onChange={(e) => handleBasicChange('source_type', e.target.value)}
               >
@@ -211,38 +216,36 @@ export default function EditPlantForm({ plant, cycles }: EditPlantFormProps) {
               </select>
             </div>
 
-            <div className="md:col-span-2">
-              <label className="block text-muted mb-1 text-xs font-bold uppercase tracking-wider">Ciclo / Armario</label>
+            <div className="field md:col-span-2">
+              <label htmlFor="edit-plant-cycle" className="field-label">Ciclo</label>
               <select
-                className="w-full bg-background border border-card-border rounded-xl p-3 text-foreground focus:border-brand-primary outline-none transition-colors appearance-none"
+                id="edit-plant-cycle"
+                className="field-input"
                 value={basicInfo.cycle_id || ''}
                 onChange={(e) => handleBasicChange('cycle_id', Number(e.target.value))}
               >
                 {cycles.map(cycle => (
-                  <option key={cycle.id} value={cycle.id}>
-                    {cycle.name}
-                  </option>
+                  <option key={cycle.id} value={cycle.id}>{cycle.name}</option>
                 ))}
               </select>
             </div>
           </div>
         </section>
 
-        {/* TIMELINE SECTION */}
-        <section className="bg-card p-6 rounded-2xl border border-card-border">
-           <h2 className="text-lg font-title text-foreground mb-6 flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-brand-primary"></span>
-            Línea de Tiempo
-          </h2>
+        <section aria-labelledby="linea-tiempo" className="surface rounded-[var(--radius-lg)] p-5 md:p-6">
+          <h2 id="linea-tiempo" className="mb-2 font-title text-lg font-semibold text-fg">Línea de tiempo</h2>
+          <p className="mb-6 text-sm text-fg-muted">
+            Activá cada etapa para registrar la fecha en la que empezó.
+          </p>
 
-          <div className="relative space-y-6 before:absolute before:inset-0 before:ml-6 before:w-0.5 before:bg-card-border">
+          <div className="space-y-3">
             {STAGE_CONFIG.filter(stage => {
               if (basicInfo.source_type === 'Esqueje') {
                 return !['Germinación', 'Plántula'].includes(stage.label);
               } else {
                 return stage.label !== 'Enraizamiento';
               }
-            }).map((stage, index) => {
+            }).map((stage) => {
               const dateKey = stage.key as keyof typeof dates;
               const dateValue = dates[dateKey];
               const isActive = !!dateValue;
@@ -250,64 +253,79 @@ export default function EditPlantForm({ plant, cycles }: EditPlantFormProps) {
               const colors = getStageColor(stage.label);
 
               return (
-                <div key={stage.key} className={`relative pl-16 transition-all duration-300 ${isActive ? 'opacity-100' : 'opacity-50 hover:opacity-80'}`}>
-                  {/* Icon Indicator */}
+                <div
+                  key={stage.key}
+                  className={`flex flex-wrap items-center gap-3 rounded-[var(--radius-md)] border p-3 transition-colors ${
+                    isActive ? `border-line bg-surface-2` : 'border-dashed border-line-strong'
+                  }`}
+                >
+                  {/* Un único control activa la etapa: antes el icono y la fila
+                      disparaban la misma acción por separado. */}
                   <button
                     type="button"
                     onClick={() => activateStage(dateKey)}
-                    className={`absolute left-0 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full flex items-center justify-center border-2 z-10 transition-all duration-300 ${
-                        isActive
-                        ? `${colors.bgColor} ${colors.textColor} ${colors.borderColor}`
-                        : 'bg-background text-muted border-card-border hover:border-brand-primary/50 hover:text-brand-primary'
-                    }`}
+                    aria-pressed={isActive}
+                    className={`flex min-w-0 flex-1 items-center gap-3 text-left ${isActive ? '' : 'opacity-80'}`}
                   >
-                    <Icon size={20} strokeWidth={isActive ? 2 : 1.5} />
+                    <span
+                      className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full border-2 ${
+                        isActive
+                          ? `${colors.bgColor} ${colors.textColor} ${colors.borderColor}`
+                          : 'border-line-strong text-fg-muted'
+                      }`}
+                      aria-hidden="true"
+                    >
+                      <Icon size={18} strokeWidth={isActive ? 2 : 1.5} />
+                    </span>
+
+                    <span className="min-w-0">
+                      <span className={`block text-sm font-semibold ${isActive ? 'text-fg' : 'text-fg-muted'}`}>
+                        {stage.label}
+                      </span>
+                      {!isActive && <span className="block text-xs text-fg-subtle">Tocá para activarla</span>}
+                    </span>
                   </button>
 
-                  {/* Content Row */}
-                  <div
-                    onClick={() => activateStage(dateKey)}
-                    className={`flex items-center justify-between p-4 rounded-xl border transition-all cursor-pointer ${
-                        isActive
-                        ? `bg-background ${colors.borderColor}`
-                        : 'bg-transparent border-transparent hover:bg-card-border'
-                    }`}
-                  >
-                    <div>
-                        <span className={`text-sm font-bold uppercase tracking-wider block ${isActive ? 'text-foreground' : 'text-muted'}`}>
-                            {stage.label}
-                        </span>
-                        {!isActive && <span className="text-[10px] text-muted">Click para activar</span>}
-                    </div>
-
-                    <div onClick={(e) => e.stopPropagation()}>
-                        {isActive ? (
-                             <input
-                                type="date"
-                                className="bg-card border border-card-border rounded-lg px-3 py-1 text-sm text-foreground focus:border-brand-primary outline-none w-36"
-                                value={dateValue ? dateValue.split('T')[0] : ''}
-                                onChange={(e) => handleDateChange(dateKey, e.target.value)}
-                             />
-                        ) : (
-                            <Calendar className="text-foreground" size={20} />
-                        )}
-                    </div>
-                  </div>
+                  {isActive ? (
+                    <>
+                      <label htmlFor={`stage-${stage.key}`} className="sr-only">
+                        Fecha de {stage.label}
+                      </label>
+                      <input
+                        id={`stage-${stage.key}`}
+                        type="date"
+                        className="field-input w-40"
+                        value={dateValue ? dateValue.split('T')[0] : ''}
+                        onChange={(e) => handleDateChange(dateKey, e.target.value)}
+                      />
+                    </>
+                  ) : (
+                    <Calendar className="text-fg-subtle" size={20} aria-hidden="true" />
+                  )}
                 </div>
               );
             })}
           </div>
         </section>
 
-        <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-brand-primary hover:bg-brand-primary-hover text-foreground p-4 rounded-xl font-bold uppercase tracking-widest transition-all hover:scale-[1.01] active:scale-[0.99] disabled:opacity-50 disabled:hover:scale-100 flex items-center justify-center gap-2"
-        >
-            {loading ? "Guardando..." : <><Save size={18} /> Guardar Cambios</>}
+        <button type="submit" disabled={loading} className="btn btn-primary w-full">
+          {loading ? (
+            <Loader2 size={18} className="animate-spin" aria-hidden="true" />
+          ) : (
+            <Save size={18} aria-hidden="true" />
+          )}
+          {loading ? "Guardando..." : "Guardar cambios"}
         </button>
-
       </form>
+
+      <ConfirmDialog
+        isOpen={showDeleteConfirm}
+        onClose={() => setShowDeleteConfirm(false)}
+        onConfirm={handleDelete}
+        title="Eliminar planta"
+        description={`Se eliminará "${plant.name}" y su historial. Esta acción no se puede deshacer.`}
+        confirmLabel="Eliminar"
+      />
     </div>
   );
 }

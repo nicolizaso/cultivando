@@ -1,10 +1,12 @@
 "use client";
 
-import { useState, useTransition, useEffect } from "react";
+import { useState, useTransition, useEffect, useId } from "react";
 import { Space } from "@/app/lib/types";
 import { updateSpace } from "@/app/actions/spaces";
-import { Maximize, Sun, Wind, X, Save } from "lucide-react";
+import { Maximize, Sun, Wind, Save, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
+import Modal from "@/components/ui/Modal";
+import { useToast } from "@/app/context/ToastContext";
 
 interface SpaceConfigModalProps {
   isOpen: boolean;
@@ -13,10 +15,11 @@ interface SpaceConfigModalProps {
 }
 
 export default function SpaceConfigModal({ isOpen, onClose, space }: SpaceConfigModalProps) {
-  // Use 'any' to allow string inputs for numeric fields during editing
+  // Los campos numéricos se editan como texto y se parsean al guardar.
   const [formData, setFormData] = useState<any>({});
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
+  const { showToast } = useToast();
 
   useEffect(() => {
     if (space) {
@@ -24,16 +27,14 @@ export default function SpaceConfigModal({ isOpen, onClose, space }: SpaceConfig
     }
   }, [space]);
 
-  if (!isOpen || !space) return null;
+  if (!space) return null;
 
-  // Helper to handle value updates
   const handleChange = (field: keyof Space, value: any) => {
     setFormData((prev: any) => ({ ...prev, [field]: value }));
   };
 
   const handleSave = () => {
     startTransition(async () => {
-      // Parse numeric fields before saving
       const dataToSave = { ...formData };
       const numericFields = [
         'width', 'length', 'height', 'area_m2',
@@ -58,188 +59,111 @@ export default function SpaceConfigModal({ isOpen, onClose, space }: SpaceConfig
       const res = await updateSpace(space.id, dataToSave);
       if (res.success) {
         onClose();
+        showToast("Configuración guardada");
         router.refresh();
       } else {
-        alert(res.error || "Error al guardar");
+        showToast(res.error || "No se pudo guardar la configuración", "error");
       }
     });
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
-      <div className="bg-card border border-card-border rounded-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto flex flex-col shadow-sm">
-
-        {/* Header */}
-        <div className="flex justify-between items-center p-6 border-b border-card-border sticky top-0 bg-card z-10">
-          <div>
-            <h2 className="text-xl font-light text-foreground flex items-center gap-2">
-              Configuración Técnica <span className="text-muted text-base">| {space.name}</span>
-            </h2>
-          </div>
-          <button onClick={onClose} className="text-muted hover:text-foreground transition-colors">
-            <X size={24} />
-          </button>
-        </div>
-
-        {/* Content */}
-        <div className="p-6 space-y-8">
-
-          {/* Dimensions */}
-          <section>
-            <div className="flex items-center gap-2 mb-4 text-brand-primary">
-              <Maximize size={20} />
-              <h3 className="font-semibold text-lg text-foreground">Dimensiones</h3>
-            </div>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <InputGroup
-                label="Ancho (m)"
-                type="number"
-                value={formData.width}
-                onChange={(v) => handleChange('width', v)}
-                step="0.01"
-              />
-              <InputGroup
-                label="Largo (m)"
-                type="number"
-                value={formData.length}
-                onChange={(v) => handleChange('length', v)}
-                step="0.01"
-              />
-              <InputGroup
-                label="Alto (m)"
-                type="number"
-                value={formData.height}
-                onChange={(v) => handleChange('height', v)}
-                step="0.01"
-              />
-              <InputGroup
-                label="Área (m²)"
-                type="number"
-                value={formData.area_m2}
-                onChange={(v) => handleChange('area_m2', v)}
-                step="0.01"
-              />
-            </div>
-          </section>
-
-          {/* Lighting */}
-          <section>
-            <div className="flex items-center gap-2 mb-4 text-amber-400">
-              <Sun size={20} />
-              <h3 className="font-semibold text-lg text-foreground">Iluminación</h3>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-               <InputGroup
-                 label="Tipo de Luz"
-                 type="text"
-                 value={formData.light_type}
-                 onChange={(v) => handleChange('light_type', v)}
-                 placeholder="Ej: LED, HPS"
-               />
-               <InputGroup
-                 label="Marca / Modelo"
-                 type="text"
-                 value={formData.light_brand_model}
-                 onChange={(v) => handleChange('light_brand_model', v)}
-               />
-               <InputGroup
-                 label="Potencia (Watts)"
-                 type="number"
-                 value={formData.light_watts}
-                 onChange={(v) => handleChange('light_watts', v)}
-               />
-               <InputGroup
-                 label="PPFD Promedio"
-                 type="number"
-                 value={formData.light_ppfd}
-                 onChange={(v) => handleChange('light_ppfd', v)}
-               />
-            </div>
-          </section>
-
-          {/* Climate */}
-          <section>
-            <div className="flex items-center gap-2 mb-4 text-blue-400">
-              <Wind size={20} />
-              <h3 className="font-semibold text-lg text-foreground">Clima y Capacidad</h3>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-               <InputGroup
-                 label="Extracción (m³/h)"
-                 type="number"
-                 value={formData.vent_extraction}
-                 onChange={(v) => handleChange('vent_extraction', v)}
-               />
-               <InputGroup
-                 label="Intracción (m³/h)"
-                 type="number"
-                 value={formData.vent_intraction}
-                 onChange={(v) => handleChange('vent_intraction', v)}
-               />
-               <InputGroup
-                 label="Filtro de Carbón"
-                 type="text"
-                 value={formData.vent_filter_brand}
-                 onChange={(v) => handleChange('vent_filter_brand', v)}
-                 placeholder="Marca/Modelo"
-               />
-               <InputGroup
-                 label="Equipamiento Extra"
-                 type="text"
-                 value={formData.vent_extra_equipment}
-                 onChange={(v) => handleChange('vent_extra_equipment', v)}
-                 placeholder="Humidificador, AC..."
-               />
-               <div className="md:col-span-2">
-                 <InputGroup
-                   label="Capacidad de Macetas"
-                   type="number"
-                   value={formData.pot_capacity}
-                   onChange={(v) => handleChange('pot_capacity', v)}
-                 />
-               </div>
-            </div>
-          </section>
-
-        </div>
-
-        {/* Footer */}
-        <div className="p-6 border-t border-card-border bg-background flex justify-end gap-3 rounded-b-2xl">
-          <button onClick={onClose} className="px-4 py-2 text-muted hover:text-foreground transition-colors">
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title="Configuración técnica"
+      description={space.name}
+      size="xl"
+      dismissOnBackdrop={false}
+      footer={
+        <>
+          <button type="button" className="btn btn-ghost" onClick={onClose}>
             Cancelar
           </button>
-          <button
-            onClick={handleSave}
-            disabled={isPending}
-            className="px-6 py-2 bg-brand-primary hover:bg-brand-primary/80 text-foreground rounded-lg font-medium flex items-center gap-2 disabled:opacity-50"
-          >
-            {isPending ? "Guardando..." : <><Save size={18} /> Guardar Configuración</>}
+          <button type="button" onClick={handleSave} disabled={isPending} className="btn btn-primary">
+            {isPending ? (
+              <Loader2 size={16} className="animate-spin" aria-hidden="true" />
+            ) : (
+              <Save size={16} aria-hidden="true" />
+            )}
+            {isPending ? "Guardando..." : "Guardar configuración"}
           </button>
-        </div>
+        </>
+      }
+    >
+      <div className="space-y-8">
+        <Section icon={<Maximize size={18} aria-hidden="true" />} title="Dimensiones">
+          <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+            <InputGroup label="Ancho (m)" type="number" value={formData.width} onChange={(v) => handleChange('width', v)} step="0.01" autoFocus />
+            <InputGroup label="Largo (m)" type="number" value={formData.length} onChange={(v) => handleChange('length', v)} step="0.01" />
+            <InputGroup label="Alto (m)" type="number" value={formData.height} onChange={(v) => handleChange('height', v)} step="0.01" />
+            <InputGroup label="Área (m²)" type="number" value={formData.area_m2} onChange={(v) => handleChange('area_m2', v)} step="0.01" />
+          </div>
+        </Section>
 
+        <Section icon={<Sun size={18} aria-hidden="true" />} title="Iluminación">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <InputGroup label="Tipo de luz" type="text" value={formData.light_type} onChange={(v) => handleChange('light_type', v)} placeholder="Ej: LED, HPS" />
+            <InputGroup label="Marca o modelo" type="text" value={formData.light_brand_model} onChange={(v) => handleChange('light_brand_model', v)} />
+            <InputGroup label="Potencia (watts)" type="number" value={formData.light_watts} onChange={(v) => handleChange('light_watts', v)} />
+            <InputGroup label="PPFD promedio" type="number" value={formData.light_ppfd} onChange={(v) => handleChange('light_ppfd', v)} />
+          </div>
+        </Section>
+
+        <Section icon={<Wind size={18} aria-hidden="true" />} title="Clima y capacidad">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <InputGroup label="Extracción (m³/h)" type="number" value={formData.vent_extraction} onChange={(v) => handleChange('vent_extraction', v)} />
+            <InputGroup label="Intracción (m³/h)" type="number" value={formData.vent_intraction} onChange={(v) => handleChange('vent_intraction', v)} />
+            <InputGroup label="Filtro de carbón" type="text" value={formData.vent_filter_brand} onChange={(v) => handleChange('vent_filter_brand', v)} placeholder="Marca o modelo" />
+            <InputGroup label="Equipamiento extra" type="text" value={formData.vent_extra_equipment} onChange={(v) => handleChange('vent_extra_equipment', v)} placeholder="Humidificador, aire acondicionado" />
+            <div className="md:col-span-2">
+              <InputGroup label="Capacidad de macetas" type="number" value={formData.pot_capacity} onChange={(v) => handleChange('pot_capacity', v)} />
+            </div>
+          </div>
+        </Section>
       </div>
-    </div>
+    </Modal>
   );
 }
 
-function InputGroup({ label, type, value, onChange, placeholder, step }: {
+function Section({ icon, title, children }: { icon: React.ReactNode; title: string; children: React.ReactNode }) {
+  return (
+    <section>
+      <h3 className="mb-4 flex items-center gap-2 font-title text-base font-semibold text-fg">
+        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-soft text-[color:var(--brand-text)]">
+          {icon}
+        </span>
+        {title}
+      </h3>
+      {children}
+    </section>
+  );
+}
+
+function InputGroup({ label, type, value, onChange, placeholder, step, autoFocus }: {
   label: string;
   type: "text" | "number";
   value: string | number | undefined | null;
   onChange: (val: string) => void;
   placeholder?: string;
   step?: string;
+  autoFocus?: boolean;
 }) {
+  const id = useId();
+
   return (
-    <div className="flex flex-col gap-1.5">
-      <label className="text-xs font-bold text-muted uppercase tracking-wider">{label}</label>
+    <div className="field">
+      <label htmlFor={id} className="field-label">{label}</label>
       <input
+        id={id}
+        data-autofocus={autoFocus || undefined}
         type={type}
+        inputMode={type === "number" ? "decimal" : undefined}
         value={value ?? ""}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
         step={step}
-        className="bg-background border border-card-border rounded-lg px-3 py-2 text-foreground focus:outline-none focus:border-brand-primary/50 transition-colors"
+        className="field-input"
       />
     </div>
   );

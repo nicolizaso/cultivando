@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import { createSpaceInline } from "@/app/actions/spaces";
 import { createCycleWithSpace } from "@/app/cycles/actions";
 import { createPlantsBulk } from "@/app/actions/plants";
-import { Loader2, Warehouse, RefreshCw, Leaf } from "lucide-react";
+import { AlertCircle, Loader2, Warehouse, RefreshCw, Leaf } from "lucide-react";
+import Modal from "@/components/ui/Modal";
 
 export default function OnboardingWizard() {
   const router = useRouter();
@@ -63,123 +64,176 @@ export default function OnboardingWizard() {
     router.refresh();
   };
 
+  const stepTitles = ['Tu espacio', 'Tu primer ciclo', 'Tus plantas'];
+
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-in fade-in duration-300">
-      <div className="bg-card border border-card-border w-full max-w-md rounded-3xl shadow-2xl overflow-hidden">
+    <Modal
+      isOpen={isOpen}
+      onClose={handleSkip}
+      title="Bienvenido a Cultiva con el Primo"
+      description="Configuremos tu entorno inicial en tres pasos."
+      dismissOnBackdrop={false}
+      footer={
+        <>
+          <button type="button" onClick={handleSkip} className="btn btn-ghost">
+            Omitir por ahora
+          </button>
+          <button type="button" onClick={handleNext} disabled={loading} className="btn btn-primary">
+            {loading && <Loader2 className="animate-spin" size={16} aria-hidden="true" />}
+            {loading ? 'Guardando...' : step === 3 ? 'Finalizar' : 'Siguiente'}
+          </button>
+        </>
+      }
+    >
+      <div className="space-y-6">
+        {/* Progreso: lista ordenada, no una fila de círculos decorativos */}
+        <ol className="flex items-center gap-2" aria-label={`Paso ${step} de 3: ${stepTitles[step - 1]}`}>
+          {[1, 2, 3].map(s => (
+            <li key={s} className="flex flex-1 items-center gap-2">
+              <span
+                aria-current={step === s ? 'step' : undefined}
+                className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
+                  step >= s
+                    ? 'bg-brand text-[color:var(--brand-fg)]'
+                    : 'bg-surface-3 text-fg-muted'
+                }`}
+              >
+                {s}
+              </span>
+              {s < 3 && (
+                <span
+                  className={`h-px flex-1 ${step > s ? 'bg-[color:var(--brand)]' : 'bg-[color:var(--border)]'}`}
+                  aria-hidden="true"
+                />
+              )}
+            </li>
+          ))}
+        </ol>
 
-        {/* Header */}
-        <div className="bg-brand-primary/10 p-6 flex flex-col items-center justify-center border-b border-card-border text-center">
-            <h2 className="text-xl font-bold text-foreground font-title tracking-wide mb-1">¡Bienvenido a Cultivapp!</h2>
-            <p className="text-xs text-muted font-body">Configuremos tu entorno inicial</p>
-        </div>
+        {error && (
+          <p className="field-error" role="alert">
+            <AlertCircle size={14} aria-hidden="true" />
+            {error}
+          </p>
+        )}
 
-        {/* Progress Tracker */}
-        <div className="flex items-center justify-center p-4 gap-2 border-b border-card-border/50 bg-background/50">
-            {[1,2,3].map(s => (
-                <div key={s} className="flex items-center gap-2">
-                    <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold ${step >= s ? 'bg-brand-primary text-white' : 'bg-card-border text-muted'}`}>
-                        {s}
-                    </div>
-                    {s < 3 && <div className={`w-6 h-px ${step > s ? 'bg-brand-primary' : 'bg-card-border'}`} />}
-                </div>
-            ))}
-        </div>
+        {step === 1 && (
+          <div className="space-y-5">
+            <h3 className="flex items-center gap-2 text-sm font-semibold text-[color:var(--brand-text)]">
+              <Warehouse size={16} aria-hidden="true" />
+              Paso 1: tu espacio
+            </h3>
 
-        <div className="p-6">
-            {error && (
-                <div className="mb-4 p-3 rounded-xl text-xs font-bold bg-red-500/10 text-red-400 border border-red-500/20 text-center">
-                {error}
-                </div>
-            )}
-
-            {/* STEP 1 */}
-            {step === 1 && (
-                <div className="space-y-4 animate-in slide-in-from-right-4">
-                    <div className="flex items-center gap-2 mb-4 text-brand-primary">
-                        <Warehouse size={18} />
-                        <h3 className="font-bold text-sm">Paso 1: Tu Espacio</h3>
-                    </div>
-                    <div>
-                        <label className="block text-muted mb-1.5 text-[10px] font-bold uppercase tracking-wider">Nombre</label>
-                        <input type="text" className="w-full bg-background border border-card-border rounded-xl p-3 text-sm focus:border-brand-primary outline-none" value={spaceForm.name} onChange={e => setSpaceForm({...spaceForm, name: e.target.value})} />
-                    </div>
-                    <div>
-                        <label className="block text-muted mb-1.5 text-[10px] font-bold uppercase tracking-wider">Tipo</label>
-                        <select className="w-full bg-background border border-card-border rounded-xl p-3 text-sm focus:border-brand-primary outline-none appearance-none" value={spaceForm.type} onChange={e => setSpaceForm({...spaceForm, type: e.target.value})}>
-                            <option value="Indoor">Indoor</option>
-                            <option value="Outdoor">Outdoor</option>
-                            <option value="Mixto">Mixto</option>
-                        </select>
-                    </div>
-                </div>
-            )}
-
-            {/* STEP 2 */}
-            {step === 2 && (
-                <div className="space-y-4 animate-in slide-in-from-right-4">
-                    <div className="flex items-center gap-2 mb-4 text-brand-primary">
-                        <RefreshCw size={18} />
-                        <h3 className="font-bold text-sm">Paso 2: Tu Primer Ciclo</h3>
-                    </div>
-                    <div>
-                        <label className="block text-muted mb-1.5 text-[10px] font-bold uppercase tracking-wider">Nombre del Ciclo</label>
-                        <input type="text" className="w-full bg-background border border-card-border rounded-xl p-3 text-sm focus:border-brand-primary outline-none" value={cycleForm.name} onChange={e => setCycleForm({...cycleForm, name: e.target.value})} />
-                    </div>
-                    <div>
-                        <label className="block text-muted mb-1.5 text-[10px] font-bold uppercase tracking-wider">Fecha de Inicio</label>
-                        <input type="date" className="w-full bg-background border border-card-border rounded-xl p-3 text-sm focus:border-brand-primary outline-none" value={cycleForm.startDate} onChange={e => setCycleForm({...cycleForm, startDate: e.target.value})} />
-                    </div>
-                </div>
-            )}
-
-            {/* STEP 3 */}
-            {step === 3 && (
-                <div className="space-y-4 animate-in slide-in-from-right-4">
-                    <div className="flex items-center gap-2 mb-4 text-brand-primary">
-                        <Leaf size={18} />
-                        <h3 className="font-bold text-sm">Paso 3: Tus Plantas</h3>
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                        <div>
-                            <label className="block text-muted mb-1.5 text-[10px] font-bold uppercase tracking-wider">Cantidad</label>
-                            <input type="number" min="1" max="50" className="w-full bg-background border border-card-border rounded-xl p-3 text-sm focus:border-brand-primary outline-none" value={plantsForm.count} onChange={e => setPlantsForm({...plantsForm, count: Number(e.target.value)})} />
-                        </div>
-                        <div>
-                            <label className="block text-muted mb-1.5 text-[10px] font-bold uppercase tracking-wider">Origen</label>
-                            <select className="w-full bg-background border border-card-border rounded-xl p-3 text-sm focus:border-brand-primary outline-none appearance-none" value={plantsForm.source} onChange={e => setPlantsForm({...plantsForm, source: e.target.value})}>
-                                <option value="Semilla">Semilla</option>
-                                <option value="Esqueje">Esqueje</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div>
-                        <label className="block text-muted mb-1.5 text-[10px] font-bold uppercase tracking-wider">Genética (Nombre)</label>
-                        <input type="text" className="w-full bg-background border border-card-border rounded-xl p-3 text-sm focus:border-brand-primary outline-none" value={plantsForm.strain} onChange={e => setPlantsForm({...plantsForm, strain: e.target.value})} />
-                    </div>
-                </div>
-            )}
-
-            {/* Actions */}
-            <div className="flex gap-3 mt-8 pt-4 border-t border-card-border">
-                <button
-                    type="button"
-                    onClick={handleSkip}
-                    className="flex-1 py-3 text-muted hover:text-foreground font-bold text-xs uppercase transition-colors"
-                >
-                    Omitir por ahora
-                </button>
-                <button
-                    type="button"
-                    onClick={handleNext}
-                    disabled={loading}
-                    className="flex-1 bg-brand-primary hover:bg-brand-primary-hover text-white py-3 rounded-xl font-bold text-sm tracking-wide transition-all active:scale-[0.98] disabled:opacity-50 flex justify-center items-center gap-2"
-                >
-                    {loading ? <Loader2 className="animate-spin" size={16} /> : step === 3 ? "FINALIZAR" : "SIGUIENTE"}
-                </button>
+            <div className="field">
+              <label htmlFor="onb-space-name" className="field-label">Nombre</label>
+              <input
+                id="onb-space-name"
+                data-autofocus
+                type="text"
+                className="field-input"
+                value={spaceForm.name}
+                onChange={e => setSpaceForm({...spaceForm, name: e.target.value})}
+              />
             </div>
-        </div>
 
+            <div className="field">
+              <label htmlFor="onb-space-type" className="field-label">Tipo</label>
+              <select
+                id="onb-space-type"
+                className="field-input"
+                value={spaceForm.type}
+                onChange={e => setSpaceForm({...spaceForm, type: e.target.value})}
+              >
+                <option value="Indoor">Indoor</option>
+                <option value="Outdoor">Outdoor</option>
+                <option value="Mixto">Mixto</option>
+              </select>
+            </div>
+          </div>
+        )}
+
+        {step === 2 && (
+          <div className="space-y-5">
+            <h3 className="flex items-center gap-2 text-sm font-semibold text-[color:var(--brand-text)]">
+              <RefreshCw size={16} aria-hidden="true" />
+              Paso 2: tu primer ciclo
+            </h3>
+
+            <div className="field">
+              <label htmlFor="onb-cycle-name" className="field-label">Nombre del ciclo</label>
+              <input
+                id="onb-cycle-name"
+                data-autofocus
+                type="text"
+                className="field-input"
+                value={cycleForm.name}
+                onChange={e => setCycleForm({...cycleForm, name: e.target.value})}
+              />
+            </div>
+
+            <div className="field">
+              <label htmlFor="onb-cycle-date" className="field-label">Fecha de inicio</label>
+              <input
+                id="onb-cycle-date"
+                type="date"
+                className="field-input"
+                value={cycleForm.startDate}
+                onChange={e => setCycleForm({...cycleForm, startDate: e.target.value})}
+              />
+            </div>
+          </div>
+        )}
+
+        {step === 3 && (
+          <div className="space-y-5">
+            <h3 className="flex items-center gap-2 text-sm font-semibold text-[color:var(--brand-text)]">
+              <Leaf size={16} aria-hidden="true" />
+              Paso 3: tus plantas
+            </h3>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="field">
+                <label htmlFor="onb-plants-count" className="field-label">Cantidad</label>
+                <input
+                  id="onb-plants-count"
+                  data-autofocus
+                  type="number"
+                  inputMode="numeric"
+                  min="1"
+                  max="50"
+                  className="field-input"
+                  value={plantsForm.count}
+                  onChange={e => setPlantsForm({...plantsForm, count: Number(e.target.value)})}
+                />
+              </div>
+
+              <div className="field">
+                <label htmlFor="onb-plants-source" className="field-label">Origen</label>
+                <select
+                  id="onb-plants-source"
+                  className="field-input"
+                  value={plantsForm.source}
+                  onChange={e => setPlantsForm({...plantsForm, source: e.target.value})}
+                >
+                  <option value="Semilla">Semilla</option>
+                  <option value="Esqueje">Esqueje</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="field">
+              <label htmlFor="onb-plants-strain" className="field-label">Genética</label>
+              <input
+                id="onb-plants-strain"
+                type="text"
+                className="field-input"
+                value={plantsForm.strain}
+                onChange={e => setPlantsForm({...plantsForm, strain: e.target.value})}
+              />
+            </div>
+          </div>
+        )}
       </div>
-    </div>
+    </Modal>
   );
 }

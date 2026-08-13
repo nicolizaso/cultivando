@@ -33,48 +33,51 @@ export default async function CycleDetailPage({ params }: { params: Promise<{ id
   const daysDiff = Math.floor((new Date().getTime() - new Date(cycle.start_date).getTime()) / (1000 * 60 * 60 * 24));
 
   return (
-    <main className="min-h-screen bg-background pb-24 text-foreground p-4 md:p-8 font-body">
-      
-      <GlobalHeader userEmail={user?.email} title="Panel de Ciclo" subtitle={cycle.name} />
+    <main className="mx-auto w-full max-w-[1400px] px-5 py-6 md:px-8 md:py-8">
+      <GlobalHeader userEmail={user?.email} title={cycle.name} subtitle="Panel del ciclo" />
 
-      {/* --- HERO SECTION --- */}
-      <div className="bg-card border border-card-border rounded-2xl p-6 mb-8 relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-brand-primary/5 rounded-full blur-3xl -mr-16 -mt-16 pointer-events-none"></div>
-
-        <div className="flex flex-col md:flex-row justify-between items-end gap-6 relative z-10">
-            <div>
-                <div className="flex items-center gap-3 mb-2">
-                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase border flex items-center gap-1 ${
-                        cycle.is_active 
-                        ? 'bg-brand-primary/10 text-brand-primary border-brand-primary/20' 
-                        : 'bg-slate-800 text-muted border-card-border'
-                    }`}>
-                        {cycle.is_active ? <PlayCircle size={10} /> : <StopCircle size={10} />}
-                        {cycle.is_active ? 'Activo' : 'Archivado'}
-                    </span>
-                    <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-slate-800 text-foreground border border-card-border">
-                        {cycle.spaces?.type}
-                    </span>
-                </div>
-                <h1 className="text-3xl md:text-5xl font-light font-title text-foreground mb-2">
-                    {cycle.name}
-                </h1>
-                <div className="flex items-center gap-4 text-muted text-sm font-body">
-                   <div className="flex items-center gap-1"><MapPin size={14} /> {cycle.spaces?.name}</div>
-                   <div className="w-px h-3 bg-card-border"></div>
-                   <div className="flex items-center gap-1"><CalendarDays size={14} /> Día {daysDiff}</div>
-                </div>
+      <div className="surface mb-8 rounded-[var(--radius-lg)] p-5 md:p-6">
+        <div className="flex flex-col justify-between gap-6 md:flex-row md:items-end">
+          <div>
+            <div className="mb-3 flex flex-wrap items-center gap-2">
+              <span
+                className={`chip ${
+                  cycle.is_active
+                    ? 'border-[color:color-mix(in_srgb,var(--brand)_35%,transparent)] bg-brand-soft text-[color:var(--brand-text)]'
+                    : 'border-line bg-surface-3 text-fg-muted'
+                }`}
+              >
+                {cycle.is_active
+                  ? <PlayCircle size={12} aria-hidden="true" />
+                  : <StopCircle size={12} aria-hidden="true" />}
+                {cycle.is_active ? 'Activo' : 'Archivado'}
+              </span>
+              {cycle.spaces?.type && (
+                <span className="chip border-line bg-surface-2 text-fg-muted">{cycle.spaces.type}</span>
+              )}
             </div>
 
-            {/* KPI Rápido */}
-            <div className="flex gap-8 text-right bg-background/50 p-4 rounded-2xl border border-card-border backdrop-blur-sm">
-                <div>
-                    <p className="text-[10px] text-muted uppercase tracking-widest font-bold mb-1 flex items-center justify-end gap-1">
-                        Plantas <Sprout size={10} />
-                    </p>
-                    <p className="text-2xl font-light font-title text-foreground">{plants?.length || 0}</p>
-                </div>
+            <h2 className="font-title text-3xl font-semibold tracking-tight text-fg md:text-4xl">{cycle.name}</h2>
+
+            <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-fg-muted">
+              <span className="flex items-center gap-1.5">
+                <MapPin size={14} aria-hidden="true" />
+                {cycle.spaces?.name || 'Sin espacio'}
+              </span>
+              <span className="flex items-center gap-1.5">
+                <CalendarDays size={14} aria-hidden="true" />
+                Día {daysDiff}
+              </span>
             </div>
+          </div>
+
+          <div className="surface-2 rounded-[var(--radius-lg)] p-4 text-right">
+            <p className="mb-1 flex items-center justify-end gap-1.5 text-xs font-semibold text-fg-muted">
+              Plantas
+              <Sprout size={13} aria-hidden="true" />
+            </p>
+            <p className="font-title text-2xl font-semibold text-fg">{plants?.length || 0}</p>
+          </div>
         </div>
       </div>
 

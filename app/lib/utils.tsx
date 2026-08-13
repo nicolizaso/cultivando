@@ -1,5 +1,5 @@
 import { Plant } from './types';
-import { Dna } from 'lucide-react';
+import { Dna, Droplets, Flower2, Leaf, Package, Sprout, Wind, HelpCircle } from 'lucide-react';
 
 export function formatDateShort(dateString: string): string {
   if (!dateString) return '';
@@ -16,79 +16,102 @@ export function formatDateShort(dateString: string): string {
   });
 }
 
+/**
+ * Paleta de etapas basada en tokens: cada etapa define su color en :root y en
+ * .dark (ver globals.css), así el mismo componente mantiene contraste AA en
+ * ambos temas. Los iconos son vectoriales y decorativos (el texto de la etapa
+ * siempre acompaña), por eso van con aria-hidden.
+ */
+const stageIconProps = {
+  className: 'w-[1em] h-[1em] shrink-0',
+  'aria-hidden': true,
+} as const;
+
+/* Las clases se escriben completas y literales: Tailwind escanea texto y no
+   resuelve nombres construidos por interpolación. */
+const STAGE_STYLES = {
+  bloom: {
+    bgColor: 'bg-[color:var(--stage-bloom-soft)]',
+    textColor: 'text-[color:var(--stage-bloom)]',
+    borderColor: 'border-[color:color-mix(in_srgb,var(--stage-bloom)_35%,transparent)]',
+    accent: 'var(--stage-bloom)',
+  },
+  veg: {
+    bgColor: 'bg-[color:var(--stage-veg-soft)]',
+    textColor: 'text-[color:var(--stage-veg)]',
+    borderColor: 'border-[color:color-mix(in_srgb,var(--stage-veg)_35%,transparent)]',
+    accent: 'var(--stage-veg)',
+  },
+  root: {
+    bgColor: 'bg-[color:var(--stage-root-soft)]',
+    textColor: 'text-[color:var(--stage-root)]',
+    borderColor: 'border-[color:color-mix(in_srgb,var(--stage-root)_35%,transparent)]',
+    accent: 'var(--stage-root)',
+  },
+  seed: {
+    bgColor: 'bg-[color:var(--stage-seed-soft)]',
+    textColor: 'text-[color:var(--stage-seed)]',
+    borderColor: 'border-[color:color-mix(in_srgb,var(--stage-seed)_35%,transparent)]',
+    accent: 'var(--stage-seed)',
+  },
+  germ: {
+    bgColor: 'bg-[color:var(--stage-germ-soft)]',
+    textColor: 'text-[color:var(--stage-germ)]',
+    borderColor: 'border-[color:color-mix(in_srgb,var(--stage-germ)_35%,transparent)]',
+    accent: 'var(--stage-germ)',
+  },
+  dry: {
+    bgColor: 'bg-[color:var(--stage-dry-soft)]',
+    textColor: 'text-[color:var(--stage-dry)]',
+    borderColor: 'border-[color:color-mix(in_srgb,var(--stage-dry)_35%,transparent)]',
+    accent: 'var(--stage-dry)',
+  },
+  cure: {
+    bgColor: 'bg-[color:var(--stage-cure-soft)]',
+    textColor: 'text-[color:var(--stage-cure)]',
+    borderColor: 'border-[color:color-mix(in_srgb,var(--stage-cure)_35%,transparent)]',
+    accent: 'var(--stage-cure)',
+  },
+  none: {
+    bgColor: 'bg-[color:var(--stage-none-soft)]',
+    textColor: 'text-[color:var(--stage-none)]',
+    borderColor: 'border-[color:color-mix(in_srgb,var(--stage-none)_35%,transparent)]',
+    accent: 'var(--stage-none)',
+  },
+} as const;
+
 export function getStageColor(stage?: string) {
   const s = stage?.toLowerCase() || '';
 
   if (s === 'floración' || s === 'floracion') {
-    return {
-      bgColor: 'bg-purple-200/20',
-      textColor: 'text-purple-300',
-      borderColor: 'border-purple-200/30',
-      icon: '🌸'
-    };
+    return { ...STAGE_STYLES.bloom, icon: <Flower2 {...stageIconProps} /> };
   }
 
   if (s === 'vegetativo' || s === 'vegetacion') {
-    return {
-      bgColor: 'bg-green-200/20',
-      textColor: 'text-green-300',
-      borderColor: 'border-green-200/30',
-      icon: '🌿'
-    };
+    return { ...STAGE_STYLES.veg, icon: <Leaf {...stageIconProps} /> };
   }
 
   if (s === 'enraizamiento') {
-    return {
-      bgColor: 'bg-cyan-200/20',
-      textColor: 'text-cyan-400',
-      borderColor: 'border-cyan-200/30',
-      icon: <Dna className="w-[1em] h-[1em]" />
-    };
+    return { ...STAGE_STYLES.root, icon: <Dna {...stageIconProps} /> };
   }
 
   if (s === 'plántula' || s === 'plantula' || s === 'esqueje') {
-    return {
-      bgColor: 'bg-cyan-200/20',
-      textColor: 'text-cyan-300',
-      borderColor: 'border-cyan-200/30',
-      icon: '🌱'
-    };
+    return { ...STAGE_STYLES.seed, icon: <Sprout {...stageIconProps} /> };
   }
 
   if (s === 'germinación' || s === 'germinacion') {
-    return {
-      bgColor: 'bg-yellow-200/20',
-      textColor: 'text-yellow-300',
-      borderColor: 'border-yellow-200/30',
-      icon: '💧'
-    };
+    return { ...STAGE_STYLES.germ, icon: <Droplets {...stageIconProps} /> };
   }
 
   if (s === 'secado') {
-    return {
-      bgColor: 'bg-orange-200/20',
-      textColor: 'text-orange-300',
-      borderColor: 'border-orange-200/30',
-      icon: '🍂'
-    };
+    return { ...STAGE_STYLES.dry, icon: <Wind {...stageIconProps} /> };
   }
 
   if (s === 'curado') {
-    return {
-      bgColor: 'bg-red-200/20',
-      textColor: 'text-red-300',
-      borderColor: 'border-red-200/30',
-      icon: '🍯'
-    };
+    return { ...STAGE_STYLES.cure, icon: <Package {...stageIconProps} /> };
   }
 
-  // Default fallback
-  return {
-    bgColor: 'bg-slate-200/10',
-    textColor: 'text-slate-500',
-    borderColor: 'border-slate-200/30',
-    icon: '❓'
-  };
+  return { ...STAGE_STYLES.none, icon: <HelpCircle {...stageIconProps} /> };
 }
 
 export function getPlantMetrics(plant: Plant) {

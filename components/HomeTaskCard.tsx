@@ -12,23 +12,28 @@ export default function HomeTaskCard({ tasks }: { tasks: Task[] }) {
   ).length;
 
   return (
-    <div className="bg-brand-primary/10 p-5 rounded-2xl border border-brand-primary/20 hover:bg-brand-primary/20 transition-all group flex flex-col h-full relative cursor-default justify-between">
-       
-       <p className="text-[10px] uppercase tracking-widest text-brand-primary font-bold font-body mb-2">Tareas Pendientes</p>
+    <div className="flex h-full flex-col justify-between rounded-[var(--radius-lg)] border border-[color:color-mix(in_srgb,var(--brand)_28%,transparent)] bg-brand-soft p-5">
+      <p className="mb-3 text-xs font-semibold text-[color:var(--brand-text)]">Tareas de hoy</p>
 
-       <div className="flex items-end justify-between">
-         {pendingCount > 0 ? (
-            <span className="text-4xl font-title font-light text-brand-primary group-hover:scale-105 transition-transform origin-left">
-              {pendingCount}
-            </span>
-         ) : (
-            <div className="flex items-center gap-2 text-brand-primary opacity-80 mb-1">
-              <CheckCircle2 size={24} />
-              <span className="text-sm font-bold">¡Todo listo!</span>
-            </div>
-         )}
-         <CalendarDays className="text-brand-primary w-8 h-8 opacity-80 group-hover:rotate-12 transition-transform duration-500" strokeWidth={1.5} />
-       </div>
+      <div className="flex items-end justify-between gap-2">
+        {pendingCount > 0 ? (
+          <span className="font-title text-4xl font-semibold leading-none text-[color:var(--brand-text)]">
+            {pendingCount}
+            <span className="sr-only"> tareas pendientes</span>
+          </span>
+        ) : (
+          <span className="flex items-center gap-2 text-[color:var(--brand-text)]">
+            <CheckCircle2 size={22} aria-hidden="true" />
+            <span className="text-sm font-semibold">Todo listo</span>
+          </span>
+        )}
+
+        <CalendarDays
+          className="h-7 w-7 shrink-0 text-[color:var(--brand-text)] opacity-70"
+          strokeWidth={1.5}
+          aria-hidden="true"
+        />
+      </div>
     </div>
   )
 }

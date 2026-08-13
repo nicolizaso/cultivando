@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { CheckCircle2, AlertCircle, X } from 'lucide-react'
 
 export type ToastType = 'success' | 'error'
@@ -15,68 +15,69 @@ interface ToastProps {
 export default function Toast({ message, type, isVisible, onClose }: ToastProps) {
   const [show, setShow] = useState(false)
 
-  // Manejo de animación de entrada/salida
-  useEffect(() => {
-    if (isVisible) {
-      setShow(true)
-      // Auto-cerrar después de 4 segundos
-      const timer = setTimeout(() => {
-        handleClose()
-      }, 4000)
-      return () => clearTimeout(timer)
-    } else {
-      // Esperar a que termine la animación de salida para desmontar (opcional, aquí simple)
-      setShow(false)
-    }
-  }, [isVisible])
-
-  const handleClose = () => {
+  const handleClose = useCallback(() => {
     setShow(false)
-    setTimeout(onClose, 300) // Tiempo para la animación de salida
-  }
+    // Deja terminar la transición de salida antes de desmontar.
+    setTimeout(onClose, 220)
+  }, [onClose])
+
+  useEffect(() => {
+    if (!isVisible) {
+      setShow(false)
+      return
+    }
+
+    setShow(true)
+    const timer = setTimeout(handleClose, 5000)
+    return () => clearTimeout(timer)
+  }, [isVisible, handleClose])
 
   if (!isVisible && !show) return null
 
   const isSuccess = type === 'success'
 
   return (
-    <div 
-      className={`fixed top-6 left-1/2 -translate-x-1/2 z-100 w-[90%] max-w-sm
-        transition-all duration-300 ease-in-out transform
-        ${show ? 'translate-y-0 opacity-100' : '-translate-y-8 opacity-0'}
-      `}
+    // El contenedor es un live region: los errores interrumpen, los éxitos no.
+    <div
+      role={isSuccess ? 'status' : 'alert'}
+      aria-live={isSuccess ? 'polite' : 'assertive'}
+      className={`fixed inset-x-4 top-4 z-[150] mx-auto w-auto max-w-sm transition-[opacity,transform] duration-200 ease-out sm:inset-x-0 ${
+        show ? 'translate-y-0 opacity-100' : '-translate-y-3 opacity-0'
+      }`}
     >
-      <div className={`
-        relative flex items-center gap-3 p-4 rounded-2xl shadow-sm backdrop-blur-md border
-        ${isSuccess 
-          ? 'bg-card/90 border-brand-primary/30 shadow-[0_4px_20px_rgba(0,165,153,0.2)]'
-          : 'bg-card/90 border-red-500/30 shadow-[0_4px_20px_rgba(239,68,68,0.2)]'
-        }
-      `}>
-        {/* Icono */}
-        <div className={`
-          p-2 rounded-full shrink-0
-          ${isSuccess ? 'bg-brand-primary/20 text-brand-primary' : 'bg-red-500/20 text-red-500'}
-        `}>
-          {isSuccess ? <CheckCircle2 size={20} /> : <AlertCircle size={20} />}
-        </div>
-
-        {/* Texto */}
-        <div className="flex-1">
-          <p className={`text-sm font-bold ${isSuccess ? 'text-foreground' : 'text-red-100'}`}>
-            {isSuccess ? '¡Éxito!' : 'Algo salió mal'}
-          </p>
-          <p className="text-xs text-muted mt-0.5 leading-snug">
-            {message}
-          </p>
-        </div>
-
-        {/* Botón Cerrar */}
-        <button 
-          onClick={handleClose}
-          className="p-1 rounded-full text-muted hover:bg-card-border hover:text-foreground transition-colors"
+      <div
+        className="flex items-start gap-3 rounded-[var(--radius-lg)] border bg-surface p-4 shadow-[var(--shadow-lg)]"
+        style={{
+          borderColor: isSuccess
+            ? 'color-mix(in srgb, var(--success) 35%, transparent)'
+            : 'color-mix(in srgb, var(--danger) 35%, transparent)',
+        }}
+      >
+        <span
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
+          style={{
+            backgroundColor: isSuccess ? 'var(--success-soft)' : 'var(--danger-soft)',
+            color: isSuccess ? 'var(--success)' : 'var(--danger)',
+          }}
+          aria-hidden="true"
         >
-          <X size={16} />
+          {isSuccess ? <CheckCircle2 size={18} /> : <AlertCircle size={18} />}
+        </span>
+
+        <div className="min-w-0 flex-1 pt-0.5">
+          <p className="text-sm font-semibold text-fg">
+            {isSuccess ? 'Listo' : 'Algo salió mal'}
+          </p>
+          <p className="mt-0.5 text-sm leading-snug text-fg-muted">{message}</p>
+        </div>
+
+        <button
+          type="button"
+          onClick={handleClose}
+          className="btn-icon -mr-1 -mt-1 h-9 min-h-9 w-9 min-w-9 shrink-0"
+          aria-label="Cerrar notificación"
+        >
+          <X size={16} aria-hidden="true" />
         </button>
       </div>
     </div>

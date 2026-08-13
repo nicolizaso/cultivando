@@ -14,7 +14,7 @@ export default async function Home() {
   if (!user) redirect('/login');
 
   return (
-    <main className="min-h-screen bg-background text-foreground px-6 py-4 md:p-8 pb-24 font-body relative">
+    <main className="mx-auto w-full max-w-[1400px] px-5 py-6 md:px-8 md:py-8">
       <GlobalHeader userEmail={user.email} title="Panel de Control" />
 
       <Suspense fallback={<DashboardSkeleton />}>

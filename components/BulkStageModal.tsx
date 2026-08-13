@@ -3,6 +3,9 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { bulkChangeStage } from "@/app/cycles/actions";
+import { Loader2 } from "lucide-react";
+import Modal from "@/components/ui/Modal";
+import { useToast } from "@/app/context/ToastContext";
 
 const stageColumnMap: Record<string, string> = {
   'Germinación': 'date_germinacion',
@@ -24,11 +27,10 @@ interface BulkStageModalProps {
 
 export default function BulkStageModal({ isOpen, onClose, selectedIds, onSuccess, cycleId }: BulkStageModalProps) {
   const router = useRouter();
+  const { showToast } = useToast();
   const [loading, setLoading] = useState(false);
   const [stage, setStage] = useState("Floración");
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
-
-  if (!isOpen) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -51,70 +53,62 @@ export default function BulkStageModal({ isOpen, onClose, selectedIds, onSuccess
       router.refresh();
       onSuccess();
       onClose();
+      showToast(`Etapa actualizada a ${stage}`);
     } else {
-      alert("Error: " + res?.error);
+      showToast(res?.error || "No se pudo cambiar la etapa", "error");
     }
   };
 
+  const plantsLabel = `${selectedIds.length} ${selectedIds.length === 1 ? "planta" : "plantas"}`;
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={onClose}></div>
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title="Cambio de etapa"
+      description={`Se moverá ${plantsLabel}.`}
+      size="sm"
+      footer={
+        <>
+          <button type="button" className="btn btn-ghost" onClick={onClose}>
+            Cancelar
+          </button>
+          <button type="submit" form="bulk-stage-form" className="btn btn-primary" disabled={loading}>
+            {loading && <Loader2 size={16} className="animate-spin" aria-hidden="true" />}
+            {loading ? "Procesando..." : "Cambiar etapa"}
+          </button>
+        </>
+      }
+    >
+      <form id="bulk-stage-form" onSubmit={handleSubmit} className="space-y-5">
+        <div className="field">
+          <label htmlFor="bulk-stage-select" className="field-label">Nueva etapa</label>
+          <select
+            id="bulk-stage-select"
+            data-autofocus
+            className="field-input"
+            value={stage}
+            onChange={(e) => setStage(e.target.value)}
+          >
+            {Object.keys(stageColumnMap).map((label) => (
+              <option key={label} value={label}>{label}</option>
+            ))}
+          </select>
+        </div>
 
-      <div className="relative bg-brand-card w-full max-w-sm rounded-2xl border border-card-border shadow-sm p-6 animate-in zoom-in duration-200">
-        <h2 className="text-xl font-title text-purple-400 mb-1 uppercase">Cambio de Etapa</h2>
-        <p className="text-xs text-brand-muted mb-6">
-            Moviendo <span className="font-bold text-foreground">{selectedIds.length} plantas</span>.
-        </p>
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          
-          <div>
-            <label className="block text-brand-muted mb-1 text-xs font-bold uppercase">Nueva Etapa</label>
-            <select 
-              className="w-full bg-slate-50 border border-card-border rounded-lg p-3 text-foreground focus:border-brand-primary outline-none"
-              value={stage}
-              onChange={(e) => setStage(e.target.value)}
-            >
-              <option value="Germinación">🌱 Germinación</option>
-              <option value="Plántula">🌱 Plántula</option>
-              <option value="Enraizamiento">🧬 Enraizamiento</option>
-              <option value="Vegetativo">🌿 Vegetativo</option>
-              <option value="Floración">🌸 Floración</option>
-              <option value="Secado">🍂 Secado</option>
-              <option value="Curado">🏺 Curado</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-brand-muted mb-1 text-xs font-bold uppercase">Fecha del Cambio</label>
-            <input 
-              type="date"
-              required
-              className="w-full bg-slate-50 border border-card-border rounded-lg p-3 text-foreground focus:border-brand-primary outline-none"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-            />
-          </div>
-
-          <div className="flex gap-3 mt-6 pt-2">
-            <button 
-              type="button" 
-              onClick={onClose}
-              className="flex-1 py-3 text-brand-muted hover:text-foreground font-bold text-xs uppercase"
-            >
-              Cancelar
-            </button>
-            <button 
-              type="submit" 
-              disabled={loading}
-              className="flex-1 bg-purple-500 hover:bg-purple-600 text-foreground py-3 rounded-lg font-title tracking-wide transition disabled:opacity-50"
-            >
-              {loading ? "PROCESANDO..." : "CAMBIAR ETAPA"}
-            </button>
-          </div>
-
-        </form>
-      </div>
-    </div>
+        <div className="field">
+          <label htmlFor="bulk-stage-date" className="field-label">Fecha del cambio</label>
+          <input
+            id="bulk-stage-date"
+            type="date"
+            required
+            className="field-input"
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
+          />
+          <p className="field-hint">La edad en etapa se cuenta desde esta fecha.</p>
+        </div>
+      </form>
+    </Modal>
   );
 }

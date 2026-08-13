@@ -29,30 +29,37 @@ export default function CalendarView({ logs, tasks, plants, spaces, cycles = [] 
 
   return (
     <>
-      <div className="max-w-6xl mx-auto pb-32">
-        <div className="flex items-center justify-between mb-2">
-          {/* Filter Scroller */}
+      <div className="pb-28">
+        <div className="mb-4 flex items-start justify-between gap-3">
           {cycles.length > 0 ? (
-            <div className="flex gap-2 overflow-x-auto pb-4 scrollbar-hide flex-1 mr-4">
+            <div
+              role="group"
+              aria-label="Filtrar por ciclo"
+              className="custom-scrollbar -mx-1 flex flex-1 gap-2 overflow-x-auto px-1 pb-2"
+            >
               <button
+                type="button"
                 onClick={() => setSelectedCycleId('all')}
-                className={`px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap transition-colors
-                  ${selectedCycleId === 'all'
-                    ? 'bg-brand-primary text-foreground'
-                    : 'bg-card text-muted border border-card-border hover:border-brand-primary/50 hover:text-foreground'}
-                `}
+                aria-pressed={selectedCycleId === 'all'}
+                className={`whitespace-nowrap rounded-full border px-4 py-2 text-xs font-semibold transition-colors ${
+                  selectedCycleId === 'all'
+                    ? 'border-transparent bg-brand text-[color:var(--brand-fg)]'
+                    : 'border-line bg-surface text-fg-muted hover:border-line-strong hover:text-fg'
+                }`}
               >
                 Todos
               </button>
               {cycles.map(cycle => (
                 <button
                   key={cycle.id}
+                  type="button"
                   onClick={() => setSelectedCycleId(cycle.id)}
-                  className={`px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap transition-colors
-                    ${selectedCycleId === cycle.id
-                      ? 'bg-brand-primary text-foreground'
-                      : 'bg-card text-muted border border-card-border hover:border-brand-primary/50 hover:text-foreground'}
-                  `}
+                  aria-pressed={selectedCycleId === cycle.id}
+                  className={`whitespace-nowrap rounded-full border px-4 py-2 text-xs font-semibold transition-colors ${
+                    selectedCycleId === cycle.id
+                      ? 'border-transparent bg-brand text-[color:var(--brand-fg)]'
+                      : 'border-line bg-surface text-fg-muted hover:border-line-strong hover:text-fg'
+                  }`}
                 >
                   {cycle.name}
                 </button>
@@ -60,13 +67,13 @@ export default function CalendarView({ logs, tasks, plants, spaces, cycles = [] 
             </div>
           ) : <div className="flex-1" />}
 
-          {/* Agenda Button */}
           <button
+            type="button"
             onClick={() => setIsAgendaOpen(true)}
-            className="flex items-center gap-2 bg-card hover:bg-card-border border border-card-border text-brand-primary px-4 py-2 rounded-full transition-colors mb-4"
+            className="btn btn-secondary h-10 min-h-10 shrink-0 px-3"
           >
-            <ClipboardList size={18} />
-            <span className="text-xs font-bold uppercase hidden md:inline">Agenda</span>
+            <ClipboardList size={16} aria-hidden="true" />
+            <span className="hidden md:inline">Agenda</span>
           </button>
         </div>
 

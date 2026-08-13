@@ -1,14 +1,16 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/app/lib/supabase";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
-import { motion, AnimatePresence } from "framer-motion";
-import { Check, MoreVertical, Trash2, Droplet, Pencil } from "lucide-react";
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
+import { CalendarDays, Check, MoreVertical, Trash2, Droplet, Pencil } from "lucide-react";
 import { Plant } from "@/app/lib/types";
 import { getStageColor, getPlantMetrics } from "@/app/lib/utils";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
+import { useToast } from "@/app/context/ToastContext";
 
 interface PlantCardProps {
   plant: Plant;
@@ -27,45 +29,65 @@ export default function PlantCard({
 }: PlantCardProps) {
   const { id, name, strain, stage, last_water: lastWater, image_url: imageUrl } = plant;
   const router = useRouter();
+  const { showToast } = useToast();
+  const reduceMotion = useReducedMotion();
   const [isWatered, setIsWatered] = useState(lastWater === "Hoy");
   const [loading, setLoading] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     setIsMounted(true);
   }, []);
 
-  // Lógica de Riego
-  const handleWater = async (e: React.MouseEvent) => {
-    e.stopPropagation();
+  // Cierre del menú contextual por clic fuera o Escape.
+  useEffect(() => {
+    if (!showMenu) return;
+
+    const onPointerDown = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setShowMenu(false);
+      }
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setShowMenu(false);
+        menuButtonRef.current?.focus();
+      }
+    };
+
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [showMenu]);
+
+  const handleWater = async () => {
     if (loading) return;
     setLoading(true);
+    setShowMenu(false);
     try {
       const { error } = await supabase
         .from('plants')
-        .update({ last_water: 'Hoy' }) 
+        .update({ last_water: 'Hoy' })
         .eq('id', id);
       if (error) throw error;
       setIsWatered(true);
-      setTimeout(() => setIsWatered(false), 2000);
+      showToast(`Riego registrado en ${name}`);
     } catch (error) {
-      console.error("Error al regar:", error);
-      alert("Hubo un error al guardar el riego");
+      showToast(error instanceof Error ? error.message : "No se pudo registrar el riego", "error");
     } finally {
       setLoading(false);
     }
   };
 
-  // Borrar Planta
-  const handleDelete = async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    const confirm = window.confirm(`¿Seguro que quieres eliminar a ${name}? Esta acción no se puede deshacer.`);
-    
-    if (!confirm) return;
-
-    setIsDeleting(true);
+  const handleDelete = async () => {
     try {
       const { error } = await supabase
         .from('plants')
@@ -73,17 +95,11 @@ export default function PlantCard({
         .eq('id', id);
 
       if (error) throw error;
-      router.refresh(); 
+      setIsDeleting(true);
+      showToast(`${name} eliminada`);
+      router.refresh();
     } catch (error) {
-      alert("Error al eliminar");
-      setIsDeleting(false);
-    }
-  };
-
-  const handleCardClick = (e: React.MouseEvent) => {
-    if (selectionMode && onToggleSelection) {
-        e.preventDefault();
-        onToggleSelection();
+      showToast(error instanceof Error ? error.message : "No se pudo eliminar la planta", "error");
     }
   };
 
@@ -95,160 +111,181 @@ export default function PlantCard({
   const displayStage = (rawStage === 'Esqueje' || rawStage === 'Plántula') ? 'Plántula' : rawStage;
   const stageInfo = getStageColor(displayStage);
 
-  // Content wrapper to handle Link vs Div based on selection mode
-  const ContentWrapper = ({ children }: { children: React.ReactNode }) => {
-    if (selectionMode) {
-        return <div onClick={handleCardClick} className="flex-1 flex flex-col p-3 min-w-0">{children}</div>;
-    }
-    return (
-        <Link href={`/plants/${id}`} className="flex-1 flex flex-col p-3 min-w-0 hover:bg-slate-50 dark:hover:bg-card-border transition-colors">
-            {children}
-        </Link>
-    );
-  };
+  const content = (
+    <>
+      <div className="flex min-w-0 items-start justify-between gap-2">
+        <div className="min-w-0">
+          <h3 className="truncate text-[15px] font-semibold leading-tight text-fg">{name}</h3>
+          {strain && <p className="mt-0.5 truncate text-xs text-fg-muted">{strain}</p>}
+        </div>
+      </div>
+
+      <span className={`chip mt-2 w-fit ${stageInfo.bgColor} ${stageInfo.textColor} ${stageInfo.borderColor}`}>
+        {stageInfo.icon}
+        {displayStage}
+      </span>
+
+      <div className="mt-auto pt-2 text-xs text-fg-muted">
+        <span className="flex items-center gap-1.5 font-medium text-fg">
+          <CalendarDays className="h-3.5 w-3.5" aria-hidden="true" />
+          {/* Las edades se calculan con la fecha del cliente: hasta montar se
+              reserva el espacio para no provocar un salto de layout. */}
+          {isMounted ? `${totalAge} días` : <span className="opacity-0">0 días</span>}
+          {cycleName && <span className="truncate border-l border-line pl-1.5 font-normal">{cycleName}</span>}
+        </span>
+        <span className="mt-0.5 block text-[11px] text-fg-subtle">
+          En {displayStage.toLowerCase()} hace {isMounted ? daysInCurrentStage : 0} días
+        </span>
+      </div>
+    </>
+  );
 
   return (
-    <motion.div 
-      className={`group relative flex flex-row bg-card dark:bg-[#12141C] border rounded-xl overflow-hidden h-28 transition-all duration-300 ${
-        selectionMode && isSelected
-          ? 'border-brand-primary ring-1 ring-brand-primary bg-brand-primary/5'
-          : 'border-black/5 dark:border-card-border hover:border-brand-primary dark:hover:border-brand-primary'
-      }`}
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      layout
-      onClick={handleCardClick}
-    >
-        {/* Left Side: Image/Icon */}
-        <div className="w-24 md:w-28 relative shrink-0 border-r border-card-border dark:border-slate-800 bg-black/20">
-            {imageUrl ? (
-                <Image
-                    src={imageUrl}
-                    alt={name}
-                    fill
-                    sizes="120px"
-                    className="object-cover transition-transform duration-500 group-hover:scale-105"
-                />
-            ) : (
-                <div className={`w-full h-full flex items-center justify-center ${stageInfo.bgColor}`}>
-                    <span className="text-3xl">{stageInfo.icon}</span>
-                </div>
-            )}
+    <>
+      <motion.div
+        className={`group relative flex h-28 flex-row overflow-hidden rounded-[var(--radius-lg)] border bg-surface transition-colors ${
+          selectionMode && isSelected
+            ? 'border-[color:var(--brand)] ring-1 ring-[color:var(--brand)]'
+            : 'border-line hover:border-line-strong'
+        }`}
+        initial={reduceMotion ? false : { opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+        layout={!reduceMotion}
+      >
+        <div className="relative w-24 shrink-0 border-r border-line bg-surface-2 md:w-28">
+          {imageUrl ? (
+            <Image
+              src={imageUrl}
+              alt=""
+              fill
+              sizes="120px"
+              className="object-cover transition-transform duration-500 group-hover:scale-105"
+            />
+          ) : (
+            <div className={`flex h-full w-full items-center justify-center ${stageInfo.bgColor} ${stageInfo.textColor}`}>
+              <span className="text-3xl">{stageInfo.icon}</span>
+            </div>
+          )}
 
-            {/* Selection Overlay (Image Area) */}
-            {selectionMode && (
-                <div className={`absolute inset-0 z-20 flex items-center justify-center bg-black/40 backdrop-blur-[1px] transition-opacity ${isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
-                    <div className={`rounded-full p-1 ${isSelected ? 'bg-brand-primary text-foreground' : 'border-2 border-card-border text-transparent'}`}>
-                        <Check size={16} strokeWidth={3} />
-                    </div>
-                </div>
-            )}
+          {selectionMode && (
+            <span
+              className={`absolute inset-0 z-20 flex items-center justify-center bg-[color-mix(in_srgb,var(--fg)_45%,transparent)] transition-opacity ${
+                isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+              }`}
+              aria-hidden="true"
+            >
+              <span
+                className={`rounded-full p-1 ${
+                  isSelected
+                    ? 'bg-brand text-[color:var(--brand-fg)]'
+                    : 'border-2 border-white/70 text-transparent'
+                }`}
+              >
+                <Check size={16} strokeWidth={3} />
+              </span>
+            </span>
+          )}
         </div>
 
-        {/* Right Side: Info */}
-        <div className="flex-1 flex flex-col min-w-0 relative">
+        <div className="relative flex min-w-0 flex-1 flex-col">
+          {selectionMode ? (
+            <button
+              type="button"
+              onClick={onToggleSelection}
+              aria-pressed={isSelected}
+              className="flex min-w-0 flex-1 flex-col p-3 text-left"
+            >
+              {content}
+            </button>
+          ) : (
+            <Link
+              href={`/plants/${id}`}
+              className="flex min-w-0 flex-1 flex-col p-3 pr-11 transition-colors hover:bg-surface-2"
+            >
+              {content}
+            </Link>
+          )}
 
-            {/* Main Content */}
-            <ContentWrapper>
-                {/* Header: Name + Strain */}
-                <div className="flex justify-between items-start gap-2 pr-6">
-                    <div className="min-w-0">
-                        <h3 className="font-bold text-brand-text text-base leading-tight truncate">{name}</h3>
-                        {strain && (
-                            <p className="text-xs text-brand-muted truncate mt-0.5">{strain}</p>
-                        )}
-                    </div>
-                </div>
+          {!selectionMode && (
+            <div ref={menuRef} className="absolute right-1.5 top-1.5 z-10">
+              <button
+                ref={menuButtonRef}
+                type="button"
+                onClick={() => setShowMenu(!showMenu)}
+                aria-expanded={showMenu}
+                aria-haspopup="menu"
+                aria-label={`Acciones para ${name}`}
+                className="btn-icon h-9 min-h-9 w-9 min-w-9"
+              >
+                <MoreVertical size={16} aria-hidden="true" />
+              </button>
 
-                {/* Badges: Stage */}
-                <div className="mt-2">
-                    <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border ${stageInfo.bgColor} ${stageInfo.textColor} ${stageInfo.borderColor}`}>
-                        {stageInfo.icon} {displayStage}
-                    </span>
-                </div>
-
-                {/* Metrics: Age & Cycle */}
-                <div className="mt-auto pt-2 flex flex-col gap-1 text-xs text-brand-muted">
-                    <div className="flex items-center gap-3">
-                        <span className="flex items-center gap-1 font-medium text-foreground dark:text-slate-300">
-                            📅 {isMounted ? totalAge : <span className="opacity-0">0</span>} días
-                        </span>
-                        {cycleName && (
-                            <span className="truncate border-l border-card-border dark:border-slate-700 pl-3">
-                                {cycleName}
-                            </span>
-                        )}
-                    </div>
-                    <span className="text-[10px] text-brand-muted">
-                       en etapa de {displayStage} hace {isMounted ? daysInCurrentStage : <span className="opacity-0">0</span>} días
-                    </span>
-                </div>
-            </ContentWrapper>
-
-            {/* Actions (Absolute Top Right) - Only show if not in selection mode */}
-            {!selectionMode && (
-                <div className="absolute top-2 right-2 z-10 flex flex-col items-end gap-1">
+              <AnimatePresence>
+                {showMenu && (
+                  <motion.div
+                    role="menu"
+                    aria-label={`Acciones para ${name}`}
+                    initial={reduceMotion ? false : { opacity: 0, scale: 0.96, y: -6 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    exit={reduceMotion ? { opacity: 0 } : { opacity: 0, scale: 0.96, y: -6 }}
+                    transition={{ duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
+                    className="absolute right-0 top-full z-50 mt-1 flex min-w-[150px] flex-col overflow-hidden rounded-[var(--radius-md)] border border-line bg-surface py-1 shadow-[var(--shadow-lg)]"
+                  >
                     <button
-                        onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            setShowMenu(!showMenu);
-                        }}
-                        className="p-1.5 text-muted hover:text-foreground hover:bg-card-border rounded-lg transition-colors"
+                      type="button"
+                      role="menuitem"
+                      onClick={handleWater}
+                      disabled={loading}
+                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-medium text-fg transition-colors hover:bg-surface-3 disabled:opacity-50"
                     >
-                        <MoreVertical size={16} />
+                      <Droplet
+                        size={14}
+                        className={isWatered ? "text-[color:var(--info)]" : ""}
+                        aria-hidden="true"
+                      />
+                      {isWatered ? 'Regada hoy' : 'Regar'}
                     </button>
 
-                    <AnimatePresence>
-                        {showMenu && (
-                            <motion.div
-                                initial={{ opacity: 0, scale: 0.9, y: -10 }}
-                                animate={{ opacity: 1, scale: 1, y: 0 }}
-                                exit={{ opacity: 0, scale: 0.9, y: -10 }}
-                                className="absolute top-full right-0 mt-1 bg-card border border-card-border rounded-lg shadow-sm py-1 min-w-[120px] flex flex-col z-50 overflow-hidden"
-                            >
-                                <button
-                                    onClick={handleWater}
-                                    className="flex items-center gap-2 px-3 py-2 text-xs font-medium text-foreground hover:bg-card-border hover:text-blue-400 w-full text-left transition-colors"
-                                >
-                                    <Droplet size={14} className={isWatered ? "text-blue-500" : ""} />
-                                    {isWatered ? 'Regada' : 'Regar'}
-                                </button>
+                    <Link
+                      href={`/plants/${id}`}
+                      role="menuitem"
+                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-medium text-fg transition-colors hover:bg-surface-3"
+                    >
+                      <Pencil size={14} aria-hidden="true" />
+                      Detalles
+                    </Link>
 
-                                <Link
-                                    href={`/plants/${id}`}
-                                    className="flex items-center gap-2 px-3 py-2 text-xs font-medium text-foreground hover:bg-card-border hover:text-brand-primary w-full text-left transition-colors"
-                                >
-                                    <Pencil size={14} />
-                                    Detalles
-                                </Link>
+                    <span className="my-1 h-px bg-[color:var(--border)]" aria-hidden="true" />
 
-                                <div className="h-px bg-card-border my-1" />
-
-                                <button
-                                    onClick={handleDelete}
-                                    className="flex items-center gap-2 px-3 py-2 text-xs font-medium text-red-400 hover:bg-red-500/10 w-full text-left transition-colors"
-                                >
-                                    <Trash2 size={14} />
-                                    Eliminar
-                                </button>
-                            </motion.div>
-                        )}
-                    </AnimatePresence>
-                </div>
-            )}
-            
-            {/* Overlay to close menu when clicking outside */}
-            {showMenu && (
-                <div
-                    className="fixed inset-0 z-0"
-                    onClick={(e) => {
-                        e.stopPropagation();
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
                         setShowMenu(false);
-                    }}
-                />
-            )}
+                        setShowConfirm(true);
+                      }}
+                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-medium text-[color:var(--danger)] transition-colors hover:bg-[color:var(--danger-soft)]"
+                    >
+                      <Trash2 size={14} aria-hidden="true" />
+                      Eliminar
+                    </button>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          )}
         </div>
-    </motion.div>
+      </motion.div>
+
+      <ConfirmDialog
+        isOpen={showConfirm}
+        onClose={() => setShowConfirm(false)}
+        onConfirm={handleDelete}
+        title="Eliminar planta"
+        description={`Se eliminará "${name}" y su historial. Esta acción no se puede deshacer.`}
+        confirmLabel="Eliminar"
+      />
+    </>
   );
 }

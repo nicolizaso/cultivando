@@ -26,9 +26,8 @@ export default async function EditPlantPage({ params }: { params: Promise<{ id: 
     .order('created_at', { ascending: false });
 
   return (
-    <main className="min-h-screen bg-background pb-24 text-foreground p-4 md:p-8 font-body">
-
-      <GlobalHeader userEmail={user?.email} title="Editar Planta" subtitle={plant.name} />
+    <main className="mx-auto w-full max-w-[1400px] px-5 py-6 md:px-8 md:py-8">
+      <GlobalHeader userEmail={user?.email} title="Editar planta" subtitle={plant.name} />
 
       <EditPlantForm
         plant={plant as Plant}

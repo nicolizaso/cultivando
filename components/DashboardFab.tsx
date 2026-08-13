@@ -12,19 +12,23 @@ export default function DashboardFab({ plants, spaces, cycles, initialDate }: { 
 
   return (
     <>
-      {/* Botón Flotante (FAB) */}
-      <button 
+      {/* Se apoya en el área segura del dispositivo y despeja la barra inferior */}
+      <button
+        type="button"
         onClick={() => setIsModalOpen(true)}
-        // CAMBIO AQUÍ: Usamos bottom-[110px] para darle la altura exacta que pediste
-        className="fixed bottom-[110px] right-6 z-40 w-14 h-14 bg-brand-primary hover:bg-brand-primary-hover rounded-full shadow-sm flex items-center justify-center text-white transition-transform hover:scale-105 active:scale-95 group"
-        aria-label="Crear Tarea"
+        className="group fixed right-5 bottom-[calc(5.5rem+env(safe-area-inset-bottom))] z-40 flex h-14 w-14 items-center justify-center rounded-full bg-brand text-[color:var(--brand-fg)] shadow-[var(--shadow-lg)] transition-transform hover:scale-105 active:scale-95 md:bottom-8"
+        aria-label="Crear tarea"
       >
-        <Plus size={32} strokeWidth={2.5} className="group-hover:rotate-90 transition-transform duration-300" />
+        <Plus
+          size={28}
+          strokeWidth={2.5}
+          className="transition-transform duration-300 group-hover:rotate-90"
+          aria-hidden="true"
+        />
       </button>
 
-      {/* Modal de Creación */}
-      <AddTaskModal 
-        isOpen={isModalOpen} 
+      <AddTaskModal
+        isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         plants={plants}
         spaces={spaces}

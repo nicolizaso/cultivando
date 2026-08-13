@@ -5,7 +5,8 @@ import { supabase } from "@/app/lib/supabase";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/app/context/ToastContext";
 import imageCompression from 'browser-image-compression';
-import { Camera } from "lucide-react";
+import { Camera, Check, ImagePlus, Loader2 } from "lucide-react";
+import Modal from "@/components/ui/Modal";
 
 interface Props {
   plantId: number;
@@ -19,8 +20,7 @@ export default function LogModal({ plantId, plantName }: Props) {
   const [loading, setLoading] = useState(false);
   const [note, setNote] = useState("");
   const [file, setFile] = useState<File | null>(null);
-  
-  // Referencia oculta para el input de archivo (para abrirlo con un botón bonito)
+
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -37,79 +37,69 @@ export default function LogModal({ plantId, plantName }: Props) {
         let publicUrl = null;
 
         if (file) {
-          // 1. CONFIGURACIÓN DE COMPRESIÓN
           const options = {
-            maxSizeMB: 1,          // Máximo 1MB
-            maxWidthOrHeight: 1920, // Reducir dimensiones si es gigante (4K)
-            useWebWorker: true,    // Usar hilo secundario para no congelar la app
+            maxSizeMB: 1,
+            maxWidthOrHeight: 1920,
+            useWebWorker: true,
           };
-  
+
           try {
-            // 2. COMPRIMIR
-            // "compressedFile" será mucho más ligero
             const compressedFile = await imageCompression(file, options);
 
-            // 3. PREPARAR NOMBRE Y RUTA
             const fileExt = file.name.split('.').pop();
             const fileName = `plant_${plantId}_${Date.now()}.${fileExt}`;
             const filePath = `${fileName}`;
-  
-            // 4. SUBIR EL ARCHIVO YA COMPRIMIDO
+
             const { error: uploadError } = await supabase.storage
               .from('images')
-              .upload(filePath, compressedFile); // <--- OJO: Subimos compressedFile
-  
+              .upload(filePath, compressedFile);
+
             if (uploadError) throw uploadError;
-  
+
             const { data } = supabase.storage
               .from('images')
               .getPublicUrl(filePath);
-              
+
             publicUrl = data.publicUrl;
-  
+
           } catch (error) {
             console.error("Error en compresión/subida:", error);
-            alert("Error al procesar la imagen");
+            showToast("No se pudo procesar la imagen", "error");
             setLoading(false);
             return;
           }
         }
 
-      // 2. GUARDAMOS EL REGISTRO EN LA TABLA LOGS
-      // Usamos los ENUMS que definimos en SQL (type: 'Foto' o 'Nota')
       const { error: dbError } = await supabase
         .from('logs')
         .insert([
           {
             plant_id: plantId,
-            title: file ? "Nueva Foto 📷" : "Nota de Bitácora 📝",
+            title: file ? "Nueva foto" : "Nota de bitácora",
             notes: note,
-            type: file ? 'Foto' : 'Nota', 
-            media_url: publicUrl ? [publicUrl] : [], // Guardamos como array
+            type: file ? 'Foto' : 'Nota',
+            media_url: publicUrl ? [publicUrl] : [],
           }
         ]);
 
       if (dbError) throw dbError;
 
-      // --- NUEVO: 3. ACTUALIZAR FOTO DE PORTADA ---
-      // Si subimos una foto, actualizamos la planta para que esta sea su nueva cara
+      // Si subimos una foto, pasa a ser la portada de la planta.
       if (publicUrl) {
         await supabase
           .from('plants')
-          .update({ image_url: publicUrl }) // Guardamos la URL en la planta
+          .update({ image_url: publicUrl })
           .eq('id', plantId);
       }
 
-      // 3. LIMPIEZA Y CIERRE
       setIsOpen(false);
       setNote("");
       setFile(null);
-      showToast('Imagen Actualizada', 'success');
+      showToast(publicUrl ? 'Foto agregada a la bitácora' : 'Nota agregada a la bitácora', 'success');
       router.refresh();
 
     } catch (error) {
-      console.error(error);
-      alert("Error al guardar");
+      showToast(error instanceof Error ? error.message : "No se pudo guardar el registro", "error");
     } finally {
       setLoading(false);
     }
@@ -117,93 +107,83 @@ export default function LogModal({ plantId, plantName }: Props) {
 
   return (
     <>
-      {/* BOTÓN DISPARADOR (Cámara Pequeña) */}
-      <button 
+      <button
+        type="button"
         onClick={() => setIsOpen(true)}
-        className="text-brand-muted hover:text-brand-primary transition-colors p-2 rounded-full hover:bg-brand-card border border-transparent hover:border-brand-primary/30"
-        title="Agregar Foto/Nota"
+        className="btn-icon text-[color:var(--brand-text)]"
+        aria-label={`Agregar foto o nota a ${plantName}`}
       >
-        <Camera className="w-6 h-6 text-brand-primary" />
+        <Camera className="h-5 w-5" aria-hidden="true" />
       </button>
 
-      {/* MODAL */}
-      {isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div 
-            className="absolute inset-0 bg-black/80 backdrop-blur-sm"
-            onClick={() => setIsOpen(false)}
-          ></div>
+      <Modal
+        isOpen={isOpen}
+        onClose={() => setIsOpen(false)}
+        title="Bitácora"
+        description={`Nuevo registro para ${plantName}.`}
+        size="sm"
+        footer={
+          <>
+            <button type="button" className="btn btn-ghost" onClick={() => setIsOpen(false)}>
+              Cancelar
+            </button>
+            <button type="submit" form="log-form" className="btn btn-primary" disabled={loading}>
+              {loading && <Loader2 size={16} className="animate-spin" aria-hidden="true" />}
+              {loading ? "Subiendo..." : "Guardar"}
+            </button>
+          </>
+        }
+      >
+        <form id="log-form" onSubmit={handleSubmit} className="space-y-5">
+          <div className="field">
+            <span className="field-label">Foto</span>
+            {/* El input real conserva el foco y el teclado; el bloque es sólo la piel visual. */}
+            <label
+              htmlFor="log-file"
+              className={`flex cursor-pointer flex-col items-center justify-center gap-2 rounded-[var(--radius-lg)] border-2 border-dashed p-6 text-center transition-colors ${
+                file
+                  ? "border-[color:var(--brand)] bg-brand-soft"
+                  : "border-line-strong hover:border-[color:var(--brand)] hover:bg-surface-2"
+              }`}
+            >
+              <input
+                id="log-file"
+                type="file"
+                ref={fileInputRef}
+                onChange={handleFileChange}
+                accept="image/*"
+                className="sr-only"
+              />
 
-          <div className="relative bg-brand-card w-full max-w-sm rounded-2xl border border-card-border shadow-sm p-6 animate-in zoom-in duration-200">
-            
-            <h3 className="text-xl font-title text-foreground mb-1">Bitácora</h3>
-            <p className="text-xs text-brand-muted mb-4">Para: <span className="text-brand-primary">{plantName}</span></p>
-
-            <form onSubmit={handleSubmit} className="space-y-4">
-              
-              {/* INPUT DE FOTO (Oculto + Botón Visual) */}
-              <div 
-                onClick={() => fileInputRef.current?.click()}
-                className={`border-2 border-dashed rounded-xl p-6 flex flex-col items-center justify-center cursor-pointer transition-colors ${
-                  file ? 'border-brand-primary bg-brand-primary/10' : 'border-[#444] hover:border-brand-muted hover:bg-slate-200'
-                }`}
-              >
-                <input 
-                  type="file" 
-                  ref={fileInputRef}
-                  onChange={handleFileChange}
-                  accept="image/*"
-                  className="hidden"
-                />
-                
-                {file ? (
-                  <>
-                    <span className="text-2xl mb-2">✅</span>
-                    <p className="text-xs text-brand-primary font-bold text-center break-all">{file.name}</p>
-                    <p className="text-[10px] text-brand-muted mt-1">(Toca para cambiar)</p>
-                  </>
-                ) : (
-                  <>
-                    <span className="text-2xl mb-2 text-brand-muted">📸</span>
-                    <p className="text-xs text-brand-muted font-bold">Subir Foto</p>
-                  </>
-                )}
-              </div>
-
-              {/* NOTA DE TEXTO */}
-              <div>
-                <label className="block text-brand-muted mb-1 text-xs font-bold uppercase">Nota (Opcional)</label>
-                <textarea 
-                  rows={3}
-                  className="w-full bg-slate-50 border border-card-border rounded-lg p-3 text-foreground focus:border-brand-primary outline-none text-sm resize-none"
-                  placeholder="¿Cómo la ves hoy? Hojas amarillas, creció mucho..."
-                  value={note}
-                  onChange={(e) => setNote(e.target.value)}
-                />
-              </div>
-
-              {/* BOTONES */}
-              <div className="flex gap-3 mt-2">
-                <button 
-                  type="button" 
-                  onClick={() => setIsOpen(false)}
-                  className="flex-1 py-3 text-brand-muted hover:text-foreground font-bold text-xs uppercase"
-                >
-                  Cancelar
-                </button>
-                <button 
-                  type="submit" 
-                  disabled={loading}
-                  className="flex-1 bg-brand-primary hover:bg-brand-primary-hover text-brand-bg py-3 rounded-lg font-title tracking-wide transition disabled:opacity-50"
-                >
-                  {loading ? "SUBIENDO..." : "GUARDAR"}
-                </button>
-              </div>
-
-            </form>
+              {file ? (
+                <>
+                  <Check className="h-6 w-6 text-[color:var(--brand-text)]" aria-hidden="true" />
+                  <span className="break-all text-xs font-semibold text-[color:var(--brand-text)]">{file.name}</span>
+                  <span className="text-xs text-fg-muted">Tocá para cambiarla</span>
+                </>
+              ) : (
+                <>
+                  <ImagePlus className="h-6 w-6 text-fg-muted" aria-hidden="true" />
+                  <span className="text-sm font-semibold text-fg">Subir foto</span>
+                  <span className="text-xs text-fg-muted">Se comprime antes de subirla</span>
+                </>
+              )}
+            </label>
           </div>
-        </div>
-      )}
+
+          <div className="field">
+            <label htmlFor="log-note" className="field-label">Nota (opcional)</label>
+            <textarea
+              id="log-note"
+              rows={3}
+              className="field-input resize-none"
+              placeholder="¿Cómo la ves hoy? Hojas amarillas, creció mucho..."
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+            />
+          </div>
+        </form>
+      </Modal>
     </>
   );
 }

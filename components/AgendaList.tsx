@@ -7,6 +7,7 @@ import EditTaskModal from "./EditTaskModal"
 import { toggleTaskStatus, deleteTasks } from "@/app/actions/tasks"
 import { useToast } from "@/app/context/ToastContext"
 import { CheckCircle2, Trash2, X, Loader2 } from "lucide-react"
+import ConfirmDialog from "@/components/ui/ConfirmDialog"
 
 interface AgendaListProps {
   tasks: Task[]
@@ -21,6 +22,7 @@ export default function AgendaList({ tasks, disableDateFilter = false, groupBySt
   const [isSelectionMode, setIsSelectionMode] = useState(false)
   const [selectedTasks, setSelectedTasks] = useState<Set<string | number>>(new Set())
   const [isDeleting, setIsDeleting] = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [editingTask, setEditingTask] = useState<Task | null>(null)
 
   // Filter tasks for today using local time
@@ -77,18 +79,15 @@ export default function AgendaList({ tasks, disableDateFilter = false, groupBySt
   const handleDeleteSelected = async () => {
     if (selectedTasks.size === 0) return
 
-    // Simple confirm dialog
-    if (!window.confirm(`¿Estás seguro de que quieres eliminar ${selectedTasks.size} tarea(s)?`)) return
-
     setIsDeleting(true)
     // Convert all IDs to strings for the server action
     const res = await deleteTasks(Array.from(selectedTasks).map(String))
     setIsDeleting(false)
 
     if (res?.error) {
-      showToast('Error al eliminar tareas', 'error')
+      showToast('No se pudieron eliminar las tareas', 'error')
     } else {
-      showToast('Tareas eliminadas correctamente', 'success')
+      showToast('Tareas eliminadas', 'success')
       exitSelectionMode()
     }
   }
@@ -105,9 +104,11 @@ export default function AgendaList({ tasks, disableDateFilter = false, groupBySt
 
   if (!tasksToDisplay || tasksToDisplay.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center h-full opacity-60">
-        <CheckCircle2 size={32} className="text-brand-primary mb-2" />
-        <span className="text-sm text-muted font-medium">No hay tareas {disableDateFilter ? 'para esta fecha' : 'para hoy'}</span>
+      <div className="flex h-full flex-col items-center justify-center gap-2 py-8 text-center">
+        <CheckCircle2 size={28} className="text-fg-subtle" aria-hidden="true" />
+        <span className="text-sm text-fg-muted">
+          No hay tareas {disableDateFilter ? 'para esta fecha' : 'para hoy'}
+        </span>
       </div>
     )
   }
@@ -122,7 +123,7 @@ export default function AgendaList({ tasks, disableDateFilter = false, groupBySt
            {/* Pending Section */}
            {pendingTasks.length > 0 && (
               <div className="mb-4">
-                 <h4 className="text-xs font-bold text-muted uppercase tracking-wider mb-2 sticky top-0 bg-card z-10 py-2 border-b border-card-border">Pendientes ({pendingTasks.length})</h4>
+                 <h4 className="sticky top-0 z-10 mb-2 border-b border-line bg-surface py-2 text-xs font-bold uppercase tracking-widest text-fg-subtle">Pendientes ({pendingTasks.length})</h4>
                  <div className="space-y-2">
                     {pendingTasks.map(task => (
                        <TaskPill
@@ -144,7 +145,7 @@ export default function AgendaList({ tasks, disableDateFilter = false, groupBySt
            {/* Completed Section */}
            {completedTasks.length > 0 && (
               <div className="mb-4">
-                 <h4 className="text-xs font-bold text-muted uppercase tracking-wider mb-2 sticky top-0 bg-card z-10 py-2 border-b border-card-border">Completadas ({completedTasks.length})</h4>
+                 <h4 className="sticky top-0 z-10 mb-2 border-b border-line bg-surface py-2 text-xs font-bold uppercase tracking-widest text-fg-subtle">Completadas ({completedTasks.length})</h4>
                  <div className="space-y-2">
                     {completedTasks.map(task => (
                        <TaskPill
@@ -181,6 +182,15 @@ export default function AgendaList({ tasks, disableDateFilter = false, groupBySt
         ))
       )}
 
+      <ConfirmDialog
+        isOpen={showDeleteConfirm}
+        onClose={() => setShowDeleteConfirm(false)}
+        onConfirm={handleDeleteSelected}
+        title="Eliminar tareas"
+        description={`Se eliminarán ${selectedTasks.size} tareas seleccionadas. Esta acción no se puede deshacer.`}
+        confirmLabel="Eliminar"
+      />
+
       {editingTask && (
         <EditTaskModal
            isOpen={!!editingTask}
@@ -191,28 +201,36 @@ export default function AgendaList({ tasks, disableDateFilter = false, groupBySt
 
       {/* Floating Action Bar */}
       {isSelectionMode && (
-        <div className="fixed bottom-24 md:bottom-6 left-1/2 -translate-x-1/2 w-[90%] max-w-md bg-card border border-card-border shadow-sm rounded-2xl p-3 flex items-center justify-between z-[60] animate-in slide-in-from-bottom-5 fade-in duration-200">
-           <div className="flex items-center gap-3 px-2">
-              <div className="bg-brand-primary/20 text-brand-primary p-2 rounded-full">
-                <CheckCircle2 size={20} />
-              </div>
-              <span className="font-bold text-foreground text-sm">{selectedTasks.size} seleccionada{selectedTasks.size !== 1 ? 's' : ''}</span>
-           </div>
+        <div
+          role="toolbar"
+          aria-label="Acciones sobre las tareas seleccionadas"
+          className="animate-sheet-in surface fixed bottom-[calc(6rem+env(safe-area-inset-bottom))] left-1/2 z-[60] flex w-[90%] max-w-md -translate-x-1/2 items-center justify-between gap-3 rounded-[var(--radius-lg)] p-3 shadow-[var(--shadow-lg)] md:bottom-6"
+        >
+           <p className="flex items-center gap-2.5 pl-1 text-sm font-semibold text-fg" aria-live="polite">
+              <span className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-soft text-[color:var(--brand-text)]" aria-hidden="true">
+                <CheckCircle2 size={18} />
+              </span>
+              {selectedTasks.size} seleccionada{selectedTasks.size !== 1 ? 's' : ''}
+           </p>
 
-           <div className="flex items-center gap-2">
+           <div className="flex items-center gap-1">
              <button
+               type="button"
                onClick={exitSelectionMode}
-               className="p-2.5 rounded-xl bg-slate-800 text-foreground hover:bg-slate-700 transition-colors"
+               className="btn-icon"
                disabled={isDeleting}
+               aria-label="Salir del modo selección"
              >
-               <X size={20} />
+               <X size={20} aria-hidden="true" />
              </button>
              <button
-               onClick={handleDeleteSelected}
+               type="button"
+               onClick={() => setShowDeleteConfirm(true)}
                disabled={isDeleting}
-               className="p-2.5 rounded-xl bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors disabled:opacity-50"
+               className="btn-icon text-[color:var(--danger)]"
+               aria-label={`Eliminar ${selectedTasks.size} tareas`}
              >
-               {isDeleting ? <Loader2 size={20} className="animate-spin" /> : <Trash2 size={20} />}
+               {isDeleting ? <Loader2 size={20} className="animate-spin" aria-hidden="true" /> : <Trash2 size={20} aria-hidden="true" />}
              </button>
            </div>
         </div>
