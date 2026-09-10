@@ -52,7 +52,7 @@ export default function TimelineSection({ pendingTasks, historyItems }: Timeline
         <div className="mb-1.5 flex flex-wrap items-start justify-between gap-2">
           <h3 className="flex items-center gap-2 text-sm font-semibold text-fg">
             {item.title}
-            <span className="chip border-line bg-surface-2 text-fg-muted">Pendiente</span>
+            <span className="chip chip-neutral">Pendiente</span>
           </h3>
           <time className="text-xs font-medium text-fg-muted" dateTime={item.date}>
             {formatDateShort(item.date)}
@@ -80,7 +80,7 @@ export default function TimelineSection({ pendingTasks, historyItems }: Timeline
                 type="button"
                 onClick={() => setShowAllPending(!showAllPending)}
                 aria-expanded={showAllPending}
-                className="btn btn-secondary h-10 min-h-10 rounded-full px-4 text-xs"
+                className="btn btn-sm btn-secondary rounded-full"
               >
                 {showAllPending ? (
                   <>
@@ -120,7 +120,7 @@ export default function TimelineSection({ pendingTasks, historyItems }: Timeline
                 <h3 className="flex items-center gap-2 text-sm font-semibold text-fg">
                   {item.title}
                   {item.type === 'image' && (
-                    <span className="chip border-[color:color-mix(in_srgb,var(--brand)_35%,transparent)] bg-brand-soft text-[color:var(--brand-text)]">
+                    <span className="chip chip-brand">
                       Foto
                     </span>
                   )}

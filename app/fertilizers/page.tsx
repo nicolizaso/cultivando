@@ -1,20 +1,37 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { Plus, FlaskConical, Layers, Pencil, Trash2 } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { FlaskConical, Layers, Pencil, Plus, Trash2 } from 'lucide-react'
+
 import AddFertilizerModal from '@/components/AddFertilizerModal'
 import AddFertilizerComboModal from '@/components/AddFertilizerComboModal'
 import ConfirmDialog from '@/components/ui/ConfirmDialog'
 import EmptyState from '@/components/EmptyState'
-import { getFertilizers, getFertilizerCombos, createFertilizer, updateFertilizer, deleteFertilizer, createFertilizerCombo, deleteFertilizerCombo, updateFertilizerCombo } from '@/app/actions/fertilizers'
+import PageShell from '@/components/layout/PageShell'
+import PageHeader from '@/components/layout/PageHeader'
+import SegmentedControl from '@/components/ui/SegmentedControl'
+import {
+  getFertilizers, getFertilizerCombos, createFertilizer, updateFertilizer, deleteFertilizer,
+  createFertilizerCombo, deleteFertilizerCombo, updateFertilizerCombo
+} from '@/app/actions/fertilizers'
 import { Fertilizer, FertilizerCombo } from '@/app/lib/types'
+
+type Tab = 'productos' | 'combos'
 
 type PendingDeletion =
   | { kind: 'product'; id: number; name: string }
   | { kind: 'combo'; id: number; name: string }
 
+const STAGE_LABELS: Record<string, string> = {
+  todo: 'Todo el ciclo',
+  enraizamiento: 'Enraizamiento',
+  vegetativo: 'Vegetativo',
+  floracion: 'Floración',
+  lavado: 'Lavado de raíces',
+}
+
 export default function FertilizersPage() {
-  const [activeTab, setActiveTab] = useState<'productos' | 'combos'>('productos')
+  const [activeTab, setActiveTab] = useState<Tab>('productos')
   const [fertilizers, setFertilizers] = useState<Fertilizer[]>([])
   const [combos, setCombos] = useState<FertilizerCombo[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -41,141 +58,130 @@ export default function FertilizersPage() {
   }, [])
 
   const handleSaveProduct = async (data: Partial<Fertilizer>) => {
-    let res;
-    if (editingProduct) {
-      res = await updateFertilizer(editingProduct.id, data)
-    } else {
-      res = await createFertilizer(data)
-    }
+    const res = editingProduct
+      ? await updateFertilizer(editingProduct.id, data)
+      : await createFertilizer(data)
 
-    if (res && res.error) {
-      return res;
-    }
+    if (res && res.error) return res
 
     await loadData()
     return { error: null }
   }
 
   const handleSaveCombo = async (data: Partial<FertilizerCombo>) => {
-    let res;
-    if (editingCombo) {
-      res = await updateFertilizerCombo(editingCombo.id, data)
-    } else {
-      res = await createFertilizerCombo(data)
-    }
-    if (res && res.error) {
-      return res;
-    }
+    const res = editingCombo
+      ? await updateFertilizerCombo(editingCombo.id, data)
+      : await createFertilizerCombo(data)
+
+    if (res && res.error) return res
+
     await loadData()
     return { error: null }
   }
 
   const handleConfirmDelete = async () => {
     if (!pendingDeletion) return
-    if (pendingDeletion.kind === 'product') {
-      await deleteFertilizer(pendingDeletion.id)
-    } else {
-      await deleteFertilizerCombo(pendingDeletion.id)
-    }
+    if (pendingDeletion.kind === 'product') await deleteFertilizer(pendingDeletion.id)
+    else await deleteFertilizerCombo(pendingDeletion.id)
     await loadData()
   }
 
-  const stageLabels: Record<string, string> = {
-    todo: 'Todo el ciclo',
-    enraizamiento: 'Enraizamiento',
-    vegetativo: 'Vegetativo',
-    floracion: 'Floración',
-    lavado: 'Lavado de raíces'
-  }
-
-  const tabs: Array<{ id: 'productos' | 'combos'; label: string }> = [
-    { id: 'productos', label: 'Productos' },
-    { id: 'combos', label: 'Combos' },
-  ]
+  const openProductModal = () => { setEditingProduct(null); setIsProductModalOpen(true) }
+  const openComboModal = () => { setEditingCombo(null); setIsComboModalOpen(true) }
 
   return (
-    // La barra superior y la inferior las pone el layout: renderizarlas aquí
-    // duplicaba ambas navegaciones en esta página.
-    <main className="mx-auto w-full max-w-5xl px-5 py-6 md:px-8 md:py-8">
-      <header className="mb-8">
-        <h1 className="font-title text-2xl font-semibold tracking-tight text-fg md:text-[28px]">Nutrición</h1>
-        <p className="mt-1 text-sm text-fg-muted">Gestioná tus fertilizantes y armá tus combos nutricionales.</p>
-      </header>
+    // La navegación la pone el layout: renderizarla acá duplicaba las barras.
+    <PageShell>
+      <PageHeader
+        title="Nutrición"
+        subtitle="Tus fertilizantes y los combos que aplicás juntos"
+        actions={
+          activeTab === 'productos' ? (
+            <button type="button" onClick={openProductModal} className="btn btn-primary">
+              <Plus size={18} strokeWidth={2.4} aria-hidden="true" />
+              Nuevo producto
+            </button>
+          ) : (
+            <button type="button" onClick={openComboModal} className="btn btn-primary">
+              <Plus size={18} strokeWidth={2.4} aria-hidden="true" />
+              Nuevo combo
+            </button>
+          )
+        }
+      />
 
-      <div role="tablist" aria-label="Secciones de nutrición" className="mb-6 flex gap-6 border-b border-line">
-        {tabs.map(tab => (
-          <button
-            key={tab.id}
-            type="button"
-            role="tab"
-            id={`tab-${tab.id}`}
-            aria-selected={activeTab === tab.id}
-            aria-controls={`panel-${tab.id}`}
-            onClick={() => setActiveTab(tab.id)}
-            className={`-mb-px border-b-2 pb-3 text-sm font-semibold transition-colors ${
-              activeTab === tab.id
-                ? 'border-[color:var(--brand)] text-[color:var(--brand-text)]'
-                : 'border-transparent text-fg-muted hover:text-fg'
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
+      <div className="mb-5">
+        <SegmentedControl<Tab>
+          label="Secciones de nutrición"
+          variant="tabs"
+          value={activeTab}
+          onChange={setActiveTab}
+          options={[
+            { value: 'productos', label: 'Productos', icon: FlaskConical, count: fertilizers.length },
+            { value: 'combos', label: 'Combos', icon: Layers, count: combos.length },
+          ]}
+        />
       </div>
 
       {isLoading ? (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3" aria-busy="true" aria-label="Cargando">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3" aria-busy="true" aria-label="Cargando">
           {[0, 1, 2].map(i => (
-            <div key={i} className="skeleton h-40 rounded-[var(--radius-lg)]" />
+            <div key={i} className="skeleton h-44 rounded-[var(--radius-lg)]" />
           ))}
         </div>
       ) : activeTab === 'productos' ? (
-        <section id="panel-productos" role="tabpanel" aria-labelledby="tab-productos" className="space-y-5">
-          <button
-            type="button"
-            onClick={() => { setEditingProduct(null); setIsProductModalOpen(true); }}
-            className="btn btn-primary"
-          >
-            <Plus size={18} aria-hidden="true" />
-            Agregar producto
-          </button>
-
+        <section id="panel-productos" role="tabpanel" aria-labelledby="tab-productos">
           {fertilizers.length === 0 ? (
             <EmptyState
               icon={FlaskConical}
-              title="Sin productos"
-              description="Cargá los fertilizantes que usás para calcular las dosis automáticamente al agendar tareas."
+              title="Todavía no hay productos"
+              description="Cargá los fertilizantes que usás con su dosis y su etapa. Después, al agendar un riego, la app calcula los mililitros por litro sola."
+              action={
+                <button type="button" onClick={openProductModal} className="btn btn-primary">
+                  <Plus size={18} aria-hidden="true" />
+                  Nuevo producto
+                </button>
+              }
             />
           ) : (
-            <ul className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {fertilizers.map(fert => (
-                <li key={fert.id} className="surface flex flex-col rounded-[var(--radius-lg)] p-5">
-                  <div className="mb-3 flex items-start gap-3">
-                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-soft text-[color:var(--brand-text)]" aria-hidden="true">
+            <ul className="stagger grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              {fertilizers.map((fert, i) => (
+                <li
+                  key={fert.id}
+                  style={{ ['--i' as string]: i }}
+                  className="surface flex flex-col rounded-[var(--radius-lg)] p-5"
+                >
+                  <div className="mb-4 flex items-start gap-3">
+                    <span
+                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-[color:var(--accent-green-soft)] text-[color:var(--accent-green)]"
+                      aria-hidden="true"
+                    >
                       <FlaskConical size={18} />
                     </span>
                     <div className="min-w-0 flex-1">
                       <h3 className="truncate font-semibold text-fg">{fert.name}</h3>
-                      <p className="truncate text-xs text-fg-muted">{fert.brand}</p>
+                      <p className="truncate text-xs text-fg-muted">{fert.brand || 'Sin marca'}</p>
                     </div>
                   </div>
 
-                  <dl className="space-y-1 text-sm text-fg-muted">
-                    <div className="flex gap-1.5">
-                      <dt className="font-medium text-fg">Etapa:</dt>
-                      <dd>{stageLabels[fert.stage]}</dd>
+                  <dl className="mb-4 flex flex-wrap gap-2">
+                    <div>
+                      <dt className="sr-only">Etapa</dt>
+                      <dd className="chip chip-neutral">{STAGE_LABELS[fert.stage] ?? fert.stage}</dd>
                     </div>
-                    <div className="flex gap-1.5">
-                      <dt className="font-medium text-fg">Dosis:</dt>
-                      <dd>{fert.dose_type === 'fija' ? `${fert.dose_fixed} ml/L` : 'Tabla por semanas'}</dd>
+                    <div>
+                      <dt className="sr-only">Dosis</dt>
+                      <dd className="chip chip-brand">
+                        {fert.dose_type === 'fija' ? `${fert.dose_fixed} ml/L` : 'Tabla por semanas'}
+                      </dd>
                     </div>
                   </dl>
 
-                  <div className="mt-4 flex justify-end gap-1 border-t border-line pt-3">
+                  <div className="mt-auto flex justify-end gap-1 border-t border-line pt-3">
                     <button
                       type="button"
                       onClick={() => { setEditingProduct(fert); setIsProductModalOpen(true); }}
-                      className="btn-icon h-9 min-h-9 w-9 min-w-9"
+                      className="btn-icon btn-icon-sm"
                       aria-label={`Editar ${fert.name}`}
                     >
                       <Pencil size={16} aria-hidden="true" />
@@ -183,7 +189,7 @@ export default function FertilizersPage() {
                     <button
                       type="button"
                       onClick={() => setPendingDeletion({ kind: 'product', id: fert.id, name: fert.name })}
-                      className="btn-icon h-9 min-h-9 w-9 min-w-9 text-[color:var(--danger)]"
+                      className="btn-icon btn-icon-sm text-[color:var(--danger)]"
                       aria-label={`Eliminar ${fert.name}`}
                     >
                       <Trash2 size={16} aria-hidden="true" />
@@ -195,47 +201,53 @@ export default function FertilizersPage() {
           )}
         </section>
       ) : (
-        <section id="panel-combos" role="tabpanel" aria-labelledby="tab-combos" className="space-y-5">
-          <button
-            type="button"
-            onClick={() => { setEditingCombo(null); setIsComboModalOpen(true); }}
-            className="btn btn-primary"
-          >
-            <Plus size={18} aria-hidden="true" />
-            Armar combo
-          </button>
-
+        <section id="panel-combos" role="tabpanel" aria-labelledby="tab-combos">
           {combos.length === 0 ? (
             <EmptyState
               icon={Layers}
-              title="Sin combos"
-              description="Un combo agrupa los productos que aplicás juntos, para agendarlos de una sola vez."
+              title="Todavía no hay combos"
+              description="Un combo agrupa los productos que aplicás en el mismo riego, para agendarlos de una sola vez en lugar de cargarlos uno por uno."
+              action={
+                <button type="button" onClick={openComboModal} className="btn btn-primary">
+                  <Plus size={18} aria-hidden="true" />
+                  Nuevo combo
+                </button>
+              }
             />
           ) : (
-            <ul className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {combos.map(combo => (
-                <li key={combo.id} className="surface flex flex-col rounded-[var(--radius-lg)] p-5">
-                  <div className="mb-4 flex items-center gap-3">
-                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-soft text-[color:var(--brand-text)]" aria-hidden="true">
+            <ul className="stagger grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              {combos.map((combo, i) => (
+                <li
+                  key={combo.id}
+                  style={{ ['--i' as string]: i }}
+                  className="surface flex flex-col rounded-[var(--radius-lg)] p-5"
+                >
+                  <div className="mb-4 flex items-start gap-3">
+                    <span
+                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-[color:var(--accent-violet-soft)] text-[color:var(--accent-violet)]"
+                      aria-hidden="true"
+                    >
                       <Layers size={18} />
                     </span>
-                    <h3 className="min-w-0 flex-1 truncate font-semibold text-fg">{combo.name}</h3>
+                    <div className="min-w-0 flex-1">
+                      <h3 className="truncate font-semibold text-fg">{combo.name}</h3>
+                      <p className="text-xs text-fg-muted">
+                        {combo.products?.length || 0} producto{combo.products?.length === 1 ? '' : 's'}
+                      </p>
+                    </div>
                   </div>
 
-                  <p className="mb-2 text-xs font-medium text-fg-muted">
-                    {combo.products?.length || 0} productos
-                  </p>
-                  <ul className="flex flex-wrap gap-2">
+                  <ul className="mb-4 flex flex-wrap gap-2">
                     {combo.products?.map((p, idx) => (
-                      <li key={idx} className="chip border-line bg-surface-2 text-fg-muted">{p.name}</li>
+                      <li key={idx} className="chip chip-neutral">{p.name}</li>
                     ))}
                   </ul>
 
-                  <div className="mt-4 flex justify-end gap-1 border-t border-line pt-3">
+                  <div className="mt-auto flex justify-end gap-1 border-t border-line pt-3">
                     <button
                       type="button"
                       onClick={() => { setEditingCombo(combo); setIsComboModalOpen(true); }}
-                      className="btn-icon h-9 min-h-9 w-9 min-w-9"
+                      className="btn-icon btn-icon-sm"
                       aria-label={`Editar ${combo.name}`}
                     >
                       <Pencil size={16} aria-hidden="true" />
@@ -243,7 +255,7 @@ export default function FertilizersPage() {
                     <button
                       type="button"
                       onClick={() => setPendingDeletion({ kind: 'combo', id: combo.id, name: combo.name })}
-                      className="btn-icon h-9 min-h-9 w-9 min-w-9 text-[color:var(--danger)]"
+                      className="btn-icon btn-icon-sm text-[color:var(--danger)]"
                       aria-label={`Eliminar ${combo.name}`}
                     >
                       <Trash2 size={16} aria-hidden="true" />
@@ -279,6 +291,6 @@ export default function FertilizersPage() {
         description={`Se eliminará "${pendingDeletion?.name ?? ''}". Esta acción no se puede deshacer.`}
         confirmLabel="Eliminar"
       />
-    </main>
+    </PageShell>
   )
 }

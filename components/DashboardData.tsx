@@ -1,16 +1,18 @@
+import Link from "next/link";
+import { CalendarCheck, LayoutGrid, RefreshCw, Sprout, Warehouse } from "lucide-react";
+
 import OnboardingWizard from "./OnboardingWizard";
 import { createClient } from "@/app/lib/supabase-server";
-import Link from "next/link";
-import DashboardFab from "@/components/DashboardFab";
-import HomeTaskCard from "@/components/HomeTaskCard";
+import PageHeader from "@/components/layout/PageHeader";
+import CreateTaskAction from "@/components/CreateTaskAction";
 import AgendaList from "@/components/AgendaList";
 import TaskManagerModal from "@/components/TaskManagerModal";
 import CycleStatusCard from "@/components/CycleStatusCard";
-import { Plant, Task } from "@/app/lib/types";
-import { Leaf, RefreshCw, Warehouse, Plus, ArrowRight } from "lucide-react";
-import Logo from "@/components/Logo";
+import StatCard from "@/components/ui/StatCard";
+import EmptyState from "@/components/EmptyState";
 import StageSuggester from "@/components/StageSuggester";
-import { mapTaskCycles } from "@/app/lib/utils";
+import { Plant, Task } from "@/app/lib/types";
+import { daysSince, mapTaskCycles } from "@/app/lib/utils";
 
 interface SpaceInfo { id: number; name: string; type: string; }
 interface CycleWithPlantsAndSpace {
@@ -97,133 +99,140 @@ export default async function DashboardData({ user }: { user: { id: string } }) 
 
   const flatPlantsList: Plant[] = activeCycles.flatMap(c => c.plants || []);
 
+  // Recuento del día: la fecha se compara en local para no desplazarse de huso.
+  const todayStr = new Date().toLocaleDateString('en-CA');
+  const todaysTasks = allTodayTasks.filter(t => t.due_date && t.due_date.split('T')[0] === todayStr);
+  const pendingToday = todaysTasks.filter(t => t.status === 'pending').length;
+  const doneToday = todaysTasks.length - pendingToday;
+
+  const todayLabel = new Date().toLocaleDateString('es-ES', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+  });
+
   return (
     <>
       {activeSpacesCount === 0 && totalCycles === 0 && <OnboardingWizard />}
 
       <StageSuggester plants={flatPlantsList} />
 
-      {username && (
-        <div className="mb-8">
-          <p className="font-title text-2xl font-semibold tracking-tight text-fg md:text-3xl">
-            Hola, {username}
-          </p>
-          <p className="mt-1 text-sm capitalize text-fg-muted">
-            {new Date().toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })}
-          </p>
-        </div>
-      )}
+      <PageHeader
+        title={username ? `Hola, ${username}` : 'Tu cultivo hoy'}
+        subtitle={todayLabel.charAt(0).toUpperCase() + todayLabel.slice(1)}
+        actions={
+          <CreateTaskAction
+            plants={allPlants}
+            spaces={allSpaces || []}
+            cycles={mappedCyclesList}
+          />
+        }
+      />
 
-      {/* Resumen: cuatro indicadores, tres de ellos navegables */}
-      <div className="stagger mb-10 grid grid-cols-2 gap-4 md:grid-cols-4">
+      {/* Resumen: cuatro indicadores del mismo tipo, los cuatro navegables. */}
+      <div className="stagger mb-8 grid grid-cols-2 gap-3 sm:gap-4 lg:mb-10 lg:grid-cols-4">
         <div style={{ ['--i' as string]: 0 }}>
-          <HomeTaskCard tasks={allTodayTasks} />
+          <StatCard
+            label="Tareas de hoy"
+            value={pendingToday}
+            icon={CalendarCheck}
+            href="/calendar"
+            tone="brand"
+            hint={
+              pendingToday === 0
+                ? todaysTasks.length > 0 ? 'Todo hecho' : 'Nada agendado'
+                : `${doneToday} ya hechas`
+            }
+          />
         </div>
 
-        <div style={{ ['--i' as string]: 1 }} className="h-full">
-          {totalCycles > 0 ? (
-            <Link href="/cycles" className="surface-interactive group flex h-full flex-col justify-between rounded-[var(--radius-lg)] p-5">
-              <p className="mb-3 text-xs font-semibold text-fg-muted">Ciclos en curso</p>
-              <div className="flex items-end justify-between gap-2">
-                <span className="font-title text-4xl font-semibold leading-none text-fg">{totalCycles}</span>
-                <RefreshCw
-                  className="h-7 w-7 shrink-0 text-[color:var(--info)] transition-transform duration-700 group-hover:rotate-180"
-                  strokeWidth={1.5}
-                  aria-hidden="true"
-                />
-              </div>
-            </Link>
-          ) : (
-            <Link href="/cycles" className="surface-interactive group flex h-full flex-col items-center justify-center gap-2 rounded-[var(--radius-lg)] p-5 text-center">
-              <span className="flex h-11 w-11 items-center justify-center rounded-full bg-brand-soft text-[color:var(--brand-text)] transition-transform group-hover:scale-105">
-                <Plus size={22} strokeWidth={2.5} aria-hidden="true" />
-              </span>
-              <p className="text-xs leading-snug text-fg-muted">
-                Sin ciclos activos.
-                <span className="mt-0.5 block font-semibold text-[color:var(--brand-text)]">Iniciá uno acá</span>
-              </p>
-            </Link>
-          )}
+        <div style={{ ['--i' as string]: 1 }}>
+          <StatCard
+            label="Ciclos activos"
+            value={totalCycles}
+            icon={RefreshCw}
+            href="/cycles"
+            hint={totalCycles === 0 ? 'Empezá el primero' : 'Ver historial'}
+          />
         </div>
 
-        <div style={{ ['--i' as string]: 2 }} className="surface flex h-full flex-col justify-between rounded-[var(--radius-lg)] p-5">
-          <p className="mb-3 text-xs font-semibold text-fg-muted">Plantas activas</p>
-          <div className="flex items-end justify-between gap-2">
-            <span className="font-title text-4xl font-semibold leading-none text-fg">{totalPlants}</span>
-            <Leaf
-              className="h-7 w-7 shrink-0 text-[color:var(--brand-text)]"
-              strokeWidth={1.5}
-              aria-hidden="true"
-            />
-          </div>
+        <div style={{ ['--i' as string]: 2 }}>
+          <StatCard
+            label="Plantas en curso"
+            value={totalPlants}
+            icon={Sprout}
+            href="/plants"
+            hint={totalPlants === 0 ? 'Sin plantas cargadas' : 'Ver inventario'}
+          />
         </div>
 
-        <div style={{ ['--i' as string]: 3 }} className="h-full">
-          <Link href="/spaces" className="surface-interactive group flex h-full flex-col justify-between rounded-[var(--radius-lg)] p-5">
-            <p className="mb-3 text-xs font-semibold text-fg-muted">Mis espacios</p>
-            <div className="flex items-end justify-between gap-2">
-              <span className="font-title text-4xl font-semibold leading-none text-fg">{activeSpacesCount}</span>
-              <Warehouse
-                className="h-7 w-7 shrink-0 text-fg-muted transition-colors group-hover:text-fg"
-                strokeWidth={1.5}
-                aria-hidden="true"
-              />
-            </div>
-          </Link>
+        <div style={{ ['--i' as string]: 3 }}>
+          <StatCard
+            label="Espacios"
+            value={(allSpaces || []).length}
+            icon={Warehouse}
+            href="/spaces"
+            hint={activeSpacesCount > 0 ? `${activeSpacesCount} en uso` : 'Ninguno en uso'}
+          />
         </div>
       </div>
 
       {/* --- FEED PRINCIPAL --- */}
-      <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3 lg:gap-8">
         <section aria-labelledby="cultivo-activo" className="space-y-4 lg:col-span-2">
           <div className="flex items-center justify-between gap-3">
-            <h2 id="cultivo-activo" className="font-title text-lg font-semibold text-fg">
-              Cultivo activo
-            </h2>
-            <Link
-              href="/cycles"
-              className="flex items-center gap-1 text-sm font-semibold text-fg-muted transition-colors hover:text-fg"
-            >
-              Ver todos
-              <ArrowRight className="h-4 w-4" aria-hidden="true" />
-            </Link>
+            <h2 id="cultivo-activo" className="section-title">Cultivo activo</h2>
+            {activeCycles.length > 0 && (
+              <Link
+                href="/cycles"
+                className="text-sm font-semibold text-fg-muted transition-colors hover:text-fg"
+              >
+                Ver todos
+              </Link>
+            )}
           </div>
 
           {activeCycles.length > 0 ? (
-            <div className={activeCycles.length > 3 ? "grid grid-cols-1 gap-4 md:grid-cols-2" : "space-y-4"}>
+            <div className={activeCycles.length > 2 ? "grid grid-cols-1 gap-4 xl:grid-cols-2" : "space-y-4"}>
               {activeCycles.map((cycle) => (
                 <CycleStatusCard
                   key={cycle.id}
                   cycle={cycle}
-                  isCompact={activeCycles.length > 3}
+                  days={daysSince(cycle.start_date)}
+                  isCompact={activeCycles.length > 2}
                 />
               ))}
             </div>
           ) : (
-            <div className="flex flex-col items-center justify-center rounded-[var(--radius-lg)] border border-dashed border-line-strong bg-surface p-10 text-center">
-              <Logo className="mb-4 h-10 w-10 text-fg-subtle" aria-hidden="true" />
-              <p className="mb-4 text-sm text-fg-muted">No hay ciclos activos en este momento.</p>
-              <Link href="/cycles" className="btn btn-primary">Iniciar un nuevo ciclo</Link>
-            </div>
+            <EmptyState
+              icon={LayoutGrid}
+              title="Todavía no hay nada creciendo"
+              description="Un ciclo agrupa las plantas que cultivás juntas en un espacio. Creá el primero y el panel se llena solo."
+              action={<Link href="/cycles" className="btn btn-primary">Iniciar un ciclo</Link>}
+            />
           )}
         </section>
 
-        <section aria-labelledby="agenda" className="space-y-4">
-          <div className="flex items-center justify-between gap-3">
-            <h2 id="agenda" className="font-title text-lg font-semibold text-fg">Agenda</h2>
+        <section aria-labelledby="tareas-hoy" className="space-y-4">
+          <div className="flex items-center justify-between gap-2">
+            <h2 id="tareas-hoy" className="section-title">Tareas de hoy</h2>
             <TaskManagerModal />
           </div>
-          <div className="custom-scrollbar surface h-80 overflow-y-auto rounded-[var(--radius-lg)] p-4">
-            <AgendaList tasks={allTodayTasks} />
+
+          <div className="surface flex flex-col rounded-[var(--radius-lg)]">
+            <div className="custom-scrollbar max-h-[26rem] min-h-[12rem] flex-1 overflow-y-auto p-3">
+              <AgendaList tasks={allTodayTasks} />
+            </div>
+
+            <Link
+              href="/calendar"
+              className="border-t border-line px-4 py-3 text-center text-sm font-semibold text-[color:var(--brand-text)] transition-colors hover:bg-surface-2"
+            >
+              Abrir la agenda
+            </Link>
           </div>
         </section>
       </div>
-
-      <DashboardFab
-        plants={allPlants}
-        spaces={allSpaces || []}
-        cycles={mappedCyclesList}
-      />
     </>
   );
 }

@@ -1,8 +1,9 @@
 'use client'
 
 import { useRef } from 'react'
-import { Check, Trash2, Droplets, FlaskConical, ShieldAlert, Shovel, Scissors, Activity, ArrowRightLeft, CloudRain, Flower, Skull, FileText, RotateCcw, CheckCircle2, Circle, Pencil, ArrowRightCircle, Leaf } from 'lucide-react'
+import { Check, Trash2, RotateCcw, CheckCircle2, Circle, Pencil, Leaf } from 'lucide-react'
 import { Task } from '@/app/lib/types'
+import { getTaskType } from '@/app/lib/constants'
 
 interface TaskPillProps {
   task: Task
@@ -18,30 +19,16 @@ interface TaskPillProps {
 }
 
 /**
- * Acento por tipo de tarea. Sólo tiñe el icono y el borde: el texto se queda
- * sobre la superficie normal, que es la única forma de garantizar contraste
- * AA en los dos temas.
+ * Fila de tarea.
+ *
+ * El acento del tipo tiñe sólo el icono y su cuadro: el texto se queda sobre la
+ * superficie normal, que es la única forma de garantizar contraste AA en los
+ * dos temas. El color y el icono salen de la taxonomía compartida, no de una
+ * tabla propia como antes.
  */
-const getTaskStyle = (type: string) => {
-  switch (type.toLowerCase()) {
-    case 'riego': return { accent: 'text-sky-700 dark:text-sky-300', tint: 'bg-sky-500/10', icon: Droplets }
-    case 'fertilizante': return { accent: 'text-emerald-700 dark:text-emerald-300', tint: 'bg-emerald-500/10', icon: FlaskConical }
-    case 'repelente': return { accent: 'text-orange-700 dark:text-orange-300', tint: 'bg-orange-500/10', icon: ShieldAlert }
-    case 'trasplante': return { accent: 'text-amber-700 dark:text-amber-300', tint: 'bg-amber-600/10', icon: Shovel }
-    case 'poda': return { accent: 'text-slate-700 dark:text-slate-300', tint: 'bg-slate-500/10', icon: Scissors }
-    case 'entrenamiento': return { accent: 'text-teal-700 dark:text-teal-300', tint: 'bg-teal-500/10', icon: Activity }
-    case 'ambiente': return { accent: 'text-indigo-700 dark:text-indigo-300', tint: 'bg-indigo-500/10', icon: ArrowRightLeft }
-    case 'cambio_etapa': return { accent: 'text-purple-700 dark:text-purple-300', tint: 'bg-purple-500/10', icon: ArrowRightCircle }
-    case 'lavado': return { accent: 'text-cyan-700 dark:text-cyan-300', tint: 'bg-cyan-500/10', icon: CloudRain }
-    case 'cosechar': return { accent: 'text-violet-700 dark:text-violet-300', tint: 'bg-violet-500/10', icon: Flower }
-    case 'muerta': return { accent: 'text-rose-700 dark:text-rose-300', tint: 'bg-rose-500/10', icon: Skull }
-    default: return { accent: 'text-stone-700 dark:text-stone-300', tint: 'bg-stone-500/10', icon: FileText }
-  }
-}
-
 export default function TaskPill({ task, onComplete, onDelete, onEdit, onClick, readOnly, selectionMode, isSelected, onSelect, onLongPress }: TaskPillProps) {
-  const style = getTaskStyle(task.type || 'otro')
-  const Icon = style.icon
+  const taskType = getTaskType(task.type || 'otro')
+  const Icon = taskType.icon
   const isCompleted = task.status === 'completed'
 
   const timerRef = useRef<NodeJS.Timeout | null>(null)
@@ -100,19 +87,24 @@ export default function TaskPill({ task, onComplete, onDelete, onEdit, onClick, 
         </span>
       )}
 
-      <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius-sm)] ${style.tint} ${style.accent}`} aria-hidden="true">
+      <span
+        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius-sm)] ${taskType.bg} ${taskType.color}`}
+        aria-hidden="true"
+      >
         <Icon size={16} />
       </span>
 
       <span className="flex min-w-0 flex-col text-left">
-        <span className={`truncate text-sm font-semibold text-fg ${isCompleted && !selectionMode ? 'line-through decoration-2' : ''}`}>
+        {/* Completada se marca con tachado y color apagado, no bajando la
+            opacidad de toda la fila: eso hundía el contraste del texto. */}
+        <span className={`truncate text-sm font-semibold ${isCompleted && !selectionMode ? 'text-fg-muted line-through decoration-2' : 'text-fg'}`}>
           {task.title}
         </span>
         {task.description && (
           <span className="mt-0.5 truncate text-xs text-fg-muted">{task.description}</span>
         )}
         <span className="mt-0.5 flex items-center gap-1.5 truncate text-[11px] text-fg-subtle">
-          <time dateTime={new Date(task.due_date).toISOString()}>
+          <time className="mono" dateTime={new Date(task.due_date).toISOString()}>
             {new Date(task.due_date).toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })}
           </time>
           {targetLabel && (
@@ -128,9 +120,9 @@ export default function TaskPill({ task, onComplete, onDelete, onEdit, onClick, 
 
   return (
     <div
-      className={`mb-2 flex w-full items-center gap-2 rounded-[var(--radius-md)] border bg-surface-2 pr-2 transition-colors ${
+      className={`flex w-full items-center gap-2 rounded-[var(--radius-md)] border bg-surface-2 pr-2 transition-colors ${
         isSelected ? 'border-[color:var(--brand)] bg-brand-soft' : 'border-line hover:border-line-strong'
-      } ${isCompleted && !selectionMode ? 'opacity-70' : ''}`}
+      }`}
     >
       {/* El área principal es un botón real: antes era un div con onClick,
           inalcanzable con teclado. La pulsación larga sigue disponible. */}
@@ -161,12 +153,12 @@ export default function TaskPill({ task, onComplete, onDelete, onEdit, onClick, 
       )}
 
       {!readOnly && !selectionMode && (
-        <div className="flex shrink-0 items-center gap-1">
+        <div className="flex shrink-0 items-center gap-0.5">
           {onComplete && (
             <button
               type="button"
               onClick={() => onComplete(task.id)}
-              className={`btn-icon h-9 min-h-9 w-9 min-w-9 ${
+              className={`btn-icon btn-icon-sm ${
                 isCompleted ? 'text-[color:var(--warning)]' : 'text-[color:var(--success)]'
               }`}
               aria-label={isCompleted ? `Reabrir ${task.title}` : `Completar ${task.title}`}
@@ -179,7 +171,7 @@ export default function TaskPill({ task, onComplete, onDelete, onEdit, onClick, 
             <button
               type="button"
               onClick={() => onEdit(task)}
-              className="btn-icon h-9 min-h-9 w-9 min-w-9"
+              className="btn-icon btn-icon-sm"
               aria-label={`Editar ${task.title}`}
               title="Editar"
             >
@@ -190,7 +182,7 @@ export default function TaskPill({ task, onComplete, onDelete, onEdit, onClick, 
             <button
               type="button"
               onClick={() => onDelete(task.id)}
-              className="btn-icon h-9 min-h-9 w-9 min-w-9 text-[color:var(--danger)]"
+              className="btn-icon btn-icon-sm text-[color:var(--danger)]"
               aria-label={`Eliminar ${task.title}`}
               title="Eliminar"
             >

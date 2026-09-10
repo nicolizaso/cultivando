@@ -5,7 +5,14 @@ type LogoProps = React.SVGProps<SVGSVGElement> & {
   strokeWidth?: number;
 };
 
-export default function Logo({ className = "w-6 h-6", strokeWidth = 2, ...props }: LogoProps) {
+/**
+ * Marca de Cultivando: un brote de tres trazos.
+ *
+ * Se dibuja con la misma gramática que los iconos de la interfaz (viewBox de
+ * 24, trazo redondeado, `currentColor`) para que funcione indistintamente como
+ * logotipo a 40px y como icono de pestaña a 22px sin empastarse.
+ */
+export default function Logo({ className = 'w-6 h-6', strokeWidth = 2, ...props }: LogoProps) {
   return (
     <svg
       className={className}
@@ -19,15 +26,9 @@ export default function Logo({ className = "w-6 h-6", strokeWidth = 2, ...props 
       focusable="false"
       {...props}
     >
-      <path d="M12 21a9 9 0 0 0 9-9c0-5-3.5-9-9-9S3 7 3 12a9 9 0 0 0 9 9z" strokeOpacity="0.2"/>
-      <path d="M12 21c-4.5 0-7-4-7-9 0-4 2.5-7 7-7" />
-      <path d="M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z" />
-      <circle cx="12" cy="7" r="1" fill="currentColor" stroke="none" />
-      <circle cx="17" cy="15" r="1.5" fill="currentColor" stroke="none" />
-      <circle cx="7" cy="15" r="1.5" fill="currentColor" stroke="none" />
-      <path d="M12 11l5 4" />
-      <path d="M12 11l-5 4" />
-      <path d="M7 15l10 0" strokeOpacity="0.3" strokeDasharray="2 2" />
+      <path d="M12 21V10.5" />
+      <path d="M12 11c0-4.42 3.58-8 8-8 0 4.42-3.58 8-8 8z" />
+      <path d="M12 15.5c-3.31 0-6-2.69-6-6 3.31 0 6 2.69 6 6z" />
     </svg>
   );
 }

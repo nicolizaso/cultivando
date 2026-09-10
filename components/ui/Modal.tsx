@@ -135,7 +135,7 @@ export default function Modal({
       onKeyDown={handleKeyDown}
     >
       <div
-        className="absolute inset-0 bg-[color-mix(in_srgb,var(--fg)_55%,transparent)] animate-fade-in"
+        className="absolute inset-0 bg-[color:var(--scrim)] animate-fade-in"
         onClick={dismissOnBackdrop ? onClose : undefined}
         aria-hidden="true"
       />

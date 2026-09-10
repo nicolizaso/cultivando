@@ -3,17 +3,23 @@
 import { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import imageCompression from 'browser-image-compression';
+import {
+  ArrowRight, ArrowUpRight, Camera, CloudRain, LayoutGrid, Leaf,
+  List as ListIcon, Loader2, Archive, Thermometer, Trash2, Gauge
+} from "lucide-react";
+
 import { Plant, CycleImage } from "@/app/lib/types";
 import { getPlantMetrics, getStageColor } from "@/app/lib/utils";
-import { Thermometer, CloudRain, Activity, ArrowRight, LayoutGrid, List as ListIcon, Camera, X, Trash2, Archive, Loader2 } from "lucide-react";
 import BulkStageModal from "./BulkStageModal";
 import BulkArchiveModal from "./BulkArchiveModal";
 import MeasurementModal from "./MeasurementModal";
 import { useToast } from "@/app/context/ToastContext";
 import Modal from "@/components/ui/Modal";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
+import SegmentedControl from "@/components/ui/SegmentedControl";
+import SelectionBar from "@/components/ui/SelectionBar";
 import { uploadCycleImage, deleteCycleImages, updateCycleImage } from "@/app/cycles/actions";
-import imageCompression from 'browser-image-compression';
 
 interface CycleDetailViewProps {
   cycle: { id: number; name: string; start_date: string; spaces: { name: string; type: string }; };
@@ -22,6 +28,8 @@ interface CycleDetailViewProps {
   history: any[];
   cycleImages?: CycleImage[];
 }
+
+type ViewMode = 'table' | 'grid';
 
 export default function CycleDetailView({ cycle, plants, lastMeasurement, cycleImages = [] }: CycleDetailViewProps) {
   const { showToast } = useToast();
@@ -35,7 +43,7 @@ export default function CycleDetailView({ cycle, plants, lastMeasurement, cycleI
   const longPressTimerRef = useRef<NodeJS.Timeout | null>(null);
   const ignoreNextClick = useRef(false);
 
-  const [viewMode, setViewMode] = useState<'grid' | 'table'>('table');
+  const [viewMode, setViewMode] = useState<ViewMode>('table');
   const [selectedPlants, setSelectedPlants] = useState<number[]>([]);
   const [isArchiveModalOpen, setIsArchiveModalOpen] = useState(false);
   const [isStageModalOpen, setIsStageModalOpen] = useState(false);
@@ -125,23 +133,19 @@ export default function CycleDetailView({ cycle, plants, lastMeasurement, cycleI
       setIsUploading(true);
 
       try {
-        const options = {
+        const compressedFile = await imageCompression(file, {
           maxSizeMB: 1,
           maxWidthOrHeight: 1920,
           useWebWorker: true,
-        };
-
-        const compressedFile = await imageCompression(file, options);
+        });
 
         const formData = new FormData();
         formData.append('file', compressedFile);
 
         const result = await uploadCycleImage(cycle.id, formData);
-
         if (result.error) throw new Error(result.error);
 
         showToast('Foto subida correctamente', 'success');
-
       } catch (error) {
         console.error(error);
         showToast('Error al subir la foto', 'error');
@@ -152,255 +156,274 @@ export default function CycleDetailView({ cycle, plants, lastMeasurement, cycleI
     }
   };
 
-  const vpd = lastMeasurement 
-    ? ((0.61078 * Math.exp((17.27 * lastMeasurement.temperature) / (lastMeasurement.temperature + 237.3))) * (1 - (lastMeasurement.humidity / 100))).toFixed(2)
-    : "-";
+  const vpdValue = lastMeasurement
+    ? (0.61078 * Math.exp((17.27 * lastMeasurement.temperature) / (lastMeasurement.temperature + 237.3))) *
+      (1 - lastMeasurement.humidity / 100)
+    : null;
+
+  // El rango sano se dice con palabras además de con color: quien no distingue
+  // el verde del rojo tiene que poder leer el diagnóstico igual.
+  const vpdStatus = vpdValue === null
+    ? { label: 'Sin medición', tone: 'text-fg-muted' }
+    : vpdValue < 0.4
+      ? { label: 'Bajo, riesgo de hongos', tone: 'text-[color:var(--danger)]' }
+      : vpdValue > 1.6
+        ? { label: 'Alto, la planta transpira de más', tone: 'text-[color:var(--danger)]' }
+        : { label: 'En rango', tone: 'text-[color:var(--success)]' };
 
   const toggleSelectAll = () => {
-    selectedPlants.length === activePlants.length ? setSelectedPlants([]) : setSelectedPlants(activePlants.map(p => p.id));
+    setSelectedPlants(
+      selectedPlants.length === activePlants.length ? [] : activePlants.map(p => p.id)
+    );
   };
 
   const toggleSelectPlant = (id: number) => {
-    selectedPlants.includes(id) ? setSelectedPlants(selectedPlants.filter(p => p !== id)) : setSelectedPlants([...selectedPlants, id]);
+    setSelectedPlants(prev => prev.includes(id) ? prev.filter(p => p !== id) : [...prev, id]);
   };
 
+  const allPlantsSelected = activePlants.length > 0 && selectedPlants.length === activePlants.length;
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       {/* 1. Clima del espacio */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <button
-          type="button"
-          onClick={() => setIsMeasureModalOpen(true)}
-          className="surface-interactive flex items-center justify-between gap-3 rounded-[var(--radius-lg)] p-5 text-left"
-        >
-          <span>
-            <span className="mb-1 block text-xs font-semibold text-fg-muted">Temperatura</span>
-            <span className="block font-title text-3xl font-semibold text-fg">
-              {lastMeasurement ? `${lastMeasurement.temperature}°C` : "--"}
-            </span>
-          </span>
-          <Thermometer className="h-7 w-7 shrink-0 text-[color:var(--brand-text)]" strokeWidth={1.5} aria-hidden="true" />
-        </button>
+      <section aria-labelledby="clima" className="space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          <h2 id="clima" className="section-title">Clima del espacio</h2>
+          <button
+            type="button"
+            onClick={() => setIsMeasureModalOpen(true)}
+            className="btn btn-sm btn-secondary"
+          >
+            <Thermometer size={15} aria-hidden="true" />
+            Registrar medición
+          </button>
+        </div>
 
-        <div className="surface flex items-center justify-between gap-3 rounded-[var(--radius-lg)] p-5">
-          <div>
-            <p className="mb-1 text-xs font-semibold text-fg-muted">Humedad</p>
-            <p className="font-title text-3xl font-semibold text-fg">
-              {lastMeasurement ? `${lastMeasurement.humidity}%` : "--"}
+        {/* Los tres indicadores se leen igual: antes sólo el primero era
+            clicable y no había forma de saber por qué. Ahora ninguno lo es y
+            la acción vive en la cabecera de la sección. */}
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+          <div className="surface rounded-[var(--radius-lg)] p-4 sm:p-5">
+            <p className="metric-label flex items-center gap-1.5">
+              <Thermometer size={13} className="text-[color:var(--accent-rose)]" aria-hidden="true" />
+              Temperatura
             </p>
-          </div>
-          <CloudRain className="h-7 w-7 shrink-0 text-[color:var(--info)]" strokeWidth={1.5} aria-hidden="true" />
-        </div>
-
-        <div className="surface flex items-center justify-between gap-3 rounded-[var(--radius-lg)] p-5">
-          <div>
-            <p className="mb-1 text-xs font-semibold text-fg-muted">VPD (kPa)</p>
-            <p
-              className={`font-title text-3xl font-semibold ${
-                !lastMeasurement
-                  ? 'text-fg-muted'
-                  : parseFloat(vpd) < 0.4 || parseFloat(vpd) > 1.6
-                    ? 'text-[color:var(--danger)]'
-                    : 'text-[color:var(--success)]'
-              }`}
-            >
-              {lastMeasurement ? `${vpd}` : "--"}
+            <p className="metric mt-2 text-3xl text-fg">
+              {lastMeasurement ? `${lastMeasurement.temperature}°` : '--'}
             </p>
+            <p className="mt-1 text-xs text-fg-subtle">Celsius</p>
           </div>
-          <Activity className="h-7 w-7 shrink-0 text-[color:var(--stage-bloom)]" strokeWidth={1.5} aria-hidden="true" />
+
+          <div className="surface rounded-[var(--radius-lg)] p-4 sm:p-5">
+            <p className="metric-label flex items-center gap-1.5">
+              <CloudRain size={13} className="text-[color:var(--accent-cyan)]" aria-hidden="true" />
+              Humedad
+            </p>
+            <p className="metric mt-2 text-3xl text-fg">
+              {lastMeasurement ? `${lastMeasurement.humidity}%` : '--'}
+            </p>
+            <p className="mt-1 text-xs text-fg-subtle">Relativa</p>
+          </div>
+
+          <div className="surface col-span-2 rounded-[var(--radius-lg)] p-4 sm:p-5 lg:col-span-1">
+            <p className="metric-label flex items-center gap-1.5">
+              <Gauge size={13} className="text-[color:var(--accent-violet)]" aria-hidden="true" />
+              VPD
+            </p>
+            <p className="metric mt-2 text-3xl text-fg">
+              {vpdValue !== null ? vpdValue.toFixed(2) : '--'}
+              {vpdValue !== null && <span className="ml-1 text-sm font-medium text-fg-muted">kPa</span>}
+            </p>
+            <p className={`mt-1 text-xs font-medium ${vpdStatus.tone}`}>{vpdStatus.label}</p>
+          </div>
         </div>
-      </div>
+      </section>
 
-      {/* 2. Barra de acciones sobre la selección */}
-      <div className="surface sticky top-20 z-30 flex flex-col items-stretch justify-between gap-3 rounded-[var(--radius-lg)] p-3 md:flex-row md:items-center">
-        <div className="flex flex-wrap items-center gap-2">
-          <p className="px-1 text-sm font-semibold text-fg" aria-live="polite">
-            {selectedPlants.length} seleccionadas
-          </p>
+      {/* 2. Plantas del ciclo */}
+      <section aria-labelledby="plantas" className="space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 id="plantas" className="section-title">
+            Plantas del ciclo
+            <span className="mono ml-2 text-sm font-medium text-fg-muted">{activePlants.length}</span>
+          </h2>
 
-          <button
-            type="button"
-            disabled={selectedPlants.length === 0}
-            onClick={() => setIsArchiveModalOpen(true)}
-            className="btn btn-secondary h-10 min-h-10 px-3 text-xs"
-          >
-            <Archive size={14} aria-hidden="true" />
-            Archivar
-          </button>
-          <button
-            type="button"
-            disabled={selectedPlants.length === 0}
-            onClick={() => setIsStageModalOpen(true)}
-            className="btn btn-secondary h-10 min-h-10 px-3 text-xs"
-          >
-            <ArrowRight size={14} aria-hidden="true" />
-            Cambiar etapa
-          </button>
+          <div className="flex items-center gap-2">
+            {activePlants.length > 0 && (
+              <button type="button" onClick={toggleSelectAll} className="btn btn-sm btn-ghost">
+                {allPlantsSelected ? 'Quitar todas' : 'Seleccionar todas'}
+              </button>
+            )}
+
+            <SegmentedControl<ViewMode>
+              label="Modo de vista"
+              value={viewMode}
+              onChange={setViewMode}
+              iconOnly
+              options={[
+                { value: 'table', label: 'Lista', icon: ListIcon, srLabel: 'Ver como lista' },
+                { value: 'grid', label: 'Cuadrícula', icon: LayoutGrid, srLabel: 'Ver como cuadrícula' },
+              ]}
+            />
+          </div>
         </div>
 
-        <div role="group" aria-label="Modo de vista" className="flex gap-1 self-end rounded-[var(--radius-md)] border border-line bg-surface-2 p-1">
-          <button
-            type="button"
-            onClick={() => setViewMode('table')}
-            aria-pressed={viewMode === 'table'}
-            aria-label="Ver como lista"
-            className={`flex h-9 w-9 items-center justify-center rounded-[var(--radius-sm)] transition-colors ${
-              viewMode === 'table' ? 'bg-brand text-[color:var(--brand-fg)]' : 'text-fg-muted hover:text-fg'
-            }`}
-          >
-            <ListIcon size={16} aria-hidden="true" />
-          </button>
-          <button
-            type="button"
-            onClick={() => setViewMode('grid')}
-            aria-pressed={viewMode === 'grid'}
-            aria-label="Ver como cuadrícula"
-            className={`flex h-9 w-9 items-center justify-center rounded-[var(--radius-sm)] transition-colors ${
-              viewMode === 'grid' ? 'bg-brand text-[color:var(--brand-fg)]' : 'text-fg-muted hover:text-fg'
-            }`}
-          >
-            <LayoutGrid size={16} aria-hidden="true" />
-          </button>
-        </div>
-      </div>
+        {activePlants.length === 0 ? (
+          <div className="flex flex-col items-center gap-2 rounded-[var(--radius-lg)] border border-dashed border-line-strong bg-surface py-12 text-center">
+            <Leaf className="h-7 w-7 text-fg-subtle" aria-hidden="true" />
+            <p className="text-sm font-semibold text-fg">Este ciclo no tiene plantas activas</p>
+            <p className="text-xs text-fg-muted">Agregá plantas desde la sección Plantas y asignalas a este ciclo.</p>
+          </div>
+        ) : viewMode === 'table' ? (
+          <div className="surface overflow-x-auto rounded-[var(--radius-lg)]">
+            <table className="w-full min-w-[540px] text-left text-sm">
+              <caption className="sr-only">Plantas activas del ciclo {cycle.name}</caption>
+              <thead className="border-b border-line bg-surface-2 text-xs font-semibold text-fg-muted">
+                <tr>
+                  <th scope="col" className="w-12 p-3.5">
+                    <input
+                      type="checkbox"
+                      onChange={toggleSelectAll}
+                      checked={allPlantsSelected}
+                      aria-label="Seleccionar todas las plantas"
+                      className="field-check"
+                    />
+                  </th>
+                  <th scope="col" className="p-3.5">Planta</th>
+                  <th scope="col" className="p-3.5">Etapa</th>
+                  <th scope="col" className="p-3.5 text-right">En etapa</th>
+                  <th scope="col" className="p-3.5 text-right">Edad</th>
+                  <th scope="col" className="w-12 p-3.5"><span className="sr-only">Abrir ficha</span></th>
+                </tr>
+              </thead>
+              <tbody>
+                {activePlants.map(plant => {
+                  const { currentStage, daysInCurrentStage, totalAge } = getPlantMetrics(plant);
+                  const rawStage = currentStage || plant.stage;
+                  const displayStage = (rawStage === 'Esqueje' || rawStage === 'Plántula') ? 'Plántula' : rawStage;
+                  const stageInfo = getStageColor(displayStage);
+                  const isSelected = selectedPlants.includes(plant.id);
 
-      {/* 3. Plantas del ciclo */}
-      {viewMode === 'table' ? (
-        <div className="surface overflow-x-auto rounded-[var(--radius-lg)]">
-          <table className="w-full text-left text-sm">
-            <caption className="sr-only">Plantas activas del ciclo {cycle.name}</caption>
-            <thead className="border-b border-line bg-surface-2 text-xs font-semibold uppercase tracking-wide text-fg-muted">
-              <tr>
-                <th scope="col" className="w-12 p-4">
-                  <input
-                    type="checkbox"
-                    onChange={toggleSelectAll}
-                    checked={selectedPlants.length === activePlants.length && activePlants.length > 0}
-                    aria-label="Seleccionar todas las plantas"
-                    className="h-4 w-4 accent-[color:var(--brand)]"
-                  />
-                </th>
-                <th scope="col" className="p-4">Planta</th>
-                <th scope="col" className="p-4">Etapa</th>
-                <th scope="col" className="p-4">Días en etapa</th>
-                <th scope="col" className="p-4 text-right">Acción</th>
-              </tr>
-            </thead>
-            <tbody>
-              {activePlants.map(plant => {
-                const { currentStage, daysInCurrentStage } = getPlantMetrics(plant);
-                const rawStage = currentStage || plant.stage;
-                const displayStage = (rawStage === 'Esqueje' || rawStage === 'Plántula') ? 'Plántula' : rawStage;
-                const stageInfo = getStageColor(displayStage);
+                  return (
+                    <tr
+                      key={plant.id}
+                      className={`border-b border-line last:border-0 transition-colors ${
+                        isSelected ? 'bg-brand-soft' : 'hover:bg-surface-2'
+                      }`}
+                    >
+                      <td className="p-3.5">
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => toggleSelectPlant(plant.id)}
+                          aria-label={`Seleccionar ${plant.name}`}
+                          className="field-check"
+                        />
+                      </td>
+                      <td className="p-3.5">
+                        <Link href={`/plants/${plant.id}`} className="font-semibold text-fg hover:text-[color:var(--brand-text)]">
+                          {plant.name}
+                        </Link>
+                        {plant.strain && <p className="text-xs text-fg-subtle">{plant.strain}</p>}
+                      </td>
+                      <td className="p-3.5">
+                        <span className={`chip ${stageInfo.bgColor} ${stageInfo.textColor} ${stageInfo.borderColor}`}>
+                          {stageInfo.icon}
+                          {displayStage}
+                        </span>
+                      </td>
+                      <td className="mono p-3.5 text-right text-fg-muted" suppressHydrationWarning>
+                        {isMounted ? `${daysInCurrentStage} d` : '– d'}
+                      </td>
+                      <td className="mono p-3.5 text-right text-fg-muted" suppressHydrationWarning>
+                        {isMounted ? `${totalAge} d` : '– d'}
+                      </td>
+                      <td className="p-3.5 text-right">
+                        <Link
+                          href={`/plants/${plant.id}`}
+                          className="btn-icon btn-icon-sm"
+                          aria-label={`Abrir la ficha de ${plant.name}`}
+                        >
+                          <ArrowUpRight size={16} aria-hidden="true" />
+                        </Link>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+            {activePlants.map(plant => {
+              const { currentStage, daysInCurrentStage } = getPlantMetrics(plant);
+              const rawStage = currentStage || plant.stage;
+              const displayStage = (rawStage === 'Esqueje' || rawStage === 'Plántula') ? 'Plántula' : rawStage;
+              const stageInfo = getStageColor(displayStage);
+              const isSelected = selectedPlants.includes(plant.id);
 
-                return (
-                  <tr
-                    key={plant.id}
-                    className={`border-b border-line last:border-0 ${
-                      selectedPlants.includes(plant.id) ? 'bg-brand-soft' : ''
+              return (
+                <li key={plant.id}>
+                  {/* Casilla real envolviendo la tarjeta: seleccionable con teclado */}
+                  <label
+                    className={`group relative block cursor-pointer overflow-hidden rounded-[var(--radius-lg)] border bg-surface transition-colors has-[:focus-visible]:outline has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-[color:var(--ring)] ${
+                      isSelected ? 'border-[color:var(--brand)] ring-1 ring-[color:var(--brand)]' : 'border-line hover:border-line-strong'
                     }`}
                   >
-                    <td className="p-4">
-                      <input
-                        type="checkbox"
-                        checked={selectedPlants.includes(plant.id)}
-                        onChange={() => toggleSelectPlant(plant.id)}
-                        aria-label={`Seleccionar ${plant.name}`}
-                        className="h-4 w-4 accent-[color:var(--brand)]"
-                      />
-                    </td>
-                    <td className="p-4 font-semibold text-fg">
-                      <Link href={`/plants/${plant.id}`} className="hover:text-[color:var(--brand-text)] hover:underline">
-                        {plant.name}
-                      </Link>
-                    </td>
-                    <td className="p-4">
-                      <span className={`chip ${stageInfo.bgColor} ${stageInfo.textColor} ${stageInfo.borderColor}`}>
-                        {stageInfo.icon}
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onChange={() => toggleSelectPlant(plant.id)}
+                      className="sr-only"
+                    />
+                    <span
+                      className={`absolute left-2 top-2 z-10 flex h-5 w-5 items-center justify-center rounded-[6px] border transition-colors ${
+                        isSelected ? 'border-[color:var(--brand)] bg-brand' : 'border-line-strong bg-surface'
+                      }`}
+                      aria-hidden="true"
+                    >
+                      {isSelected && <span className="h-2.5 w-2.5 rounded-[2px] bg-[color:var(--brand-fg)]" />}
+                    </span>
+
+                    <span className={`relative block aspect-square ${stageInfo.bgColor}`}>
+                      {(plant as any).image_url ? (
+                        <Image src={(plant as any).image_url} alt="" fill sizes="220px" className="object-cover" />
+                      ) : (
+                        <span className={`flex h-full items-center justify-center text-3xl ${stageInfo.textColor}`}>
+                          {stageInfo.icon}
+                        </span>
+                      )}
+                    </span>
+
+                    <span className="block p-3">
+                      <span className="block truncate text-sm font-semibold text-fg">{plant.name}</span>
+                      <span className={`block truncate text-xs font-semibold ${stageInfo.textColor}`}>
                         {displayStage}
+                        <span className="mono ml-1 font-normal text-fg-subtle" suppressHydrationWarning>
+                          {isMounted ? `${daysInCurrentStage} d` : ''}
+                        </span>
                       </span>
-                    </td>
-                    <td className="p-4 text-fg-muted">
-                      {isMounted ? `${daysInCurrentStage} d` : <span className="opacity-0">0 d</span>}
-                    </td>
-                    <td className="p-4 text-right">
-                      <Link
-                        href={`/plants/${plant.id}`}
-                        className="inline-flex items-center gap-1 text-xs font-semibold text-[color:var(--brand-text)] hover:underline"
-                      >
-                        Ver
-                        <ArrowRight size={12} aria-hidden="true" />
-                      </Link>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      ) : (
-        <ul className="grid grid-cols-2 gap-4 md:grid-cols-4 lg:grid-cols-5">
-          {activePlants.map(plant => {
-            const { currentStage } = getPlantMetrics(plant);
-            const rawStage = currentStage || plant.stage;
-            const displayStage = (rawStage === 'Esqueje' || rawStage === 'Plántula') ? 'Plántula' : rawStage;
-            const stageInfo = getStageColor(displayStage);
-            const isSelected = selectedPlants.includes(plant.id);
+                    </span>
+                  </label>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </section>
 
-            return (
-              <li key={plant.id}>
-                {/* Casilla real envolviendo la tarjeta: seleccionable con teclado */}
-                <label
-                  className={`group relative block cursor-pointer overflow-hidden rounded-[var(--radius-lg)] border bg-surface transition-colors has-[:focus-visible]:outline has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-[color:var(--ring)] ${
-                    isSelected ? 'border-[color:var(--brand)] ring-1 ring-[color:var(--brand)]' : 'border-line hover:border-line-strong'
-                  }`}
-                >
-                  <input
-                    type="checkbox"
-                    checked={isSelected}
-                    onChange={() => toggleSelectPlant(plant.id)}
-                    className="sr-only"
-                  />
-                  <span className="absolute left-2 top-2 z-10 flex h-5 w-5 items-center justify-center rounded border border-line-strong bg-surface" aria-hidden="true">
-                    {isSelected && <span className="h-3 w-3 rounded-sm bg-brand" />}
-                  </span>
-
-                  <span className={`relative block aspect-square ${stageInfo.bgColor}`}>
-                    {(plant as any).image_url ? (
-                      <Image src={(plant as any).image_url} alt="" fill sizes="200px" className="object-cover" />
-                    ) : (
-                      <span className={`flex h-full items-center justify-center ${stageInfo.textColor}`}>
-                        <LayoutGrid size={28} aria-hidden="true" />
-                      </span>
-                    )}
-                  </span>
-
-                  <span className="block p-3">
-                    <span className="block truncate text-sm font-semibold text-fg">{plant.name}</span>
-                    <span className={`block text-xs font-semibold ${stageInfo.textColor}`}>{displayStage}</span>
-                  </span>
-                </label>
-              </li>
-            );
-          })}
-        </ul>
-      )}
-
-      {/* 4. Galería del ciclo */}
-      <section aria-labelledby="galeria" className="surface rounded-[var(--radius-lg)] p-5">
-        <div className="mb-4 flex items-center justify-between gap-3">
-          <h3 id="galeria" className="font-title text-lg font-semibold text-fg">Seguimiento visual</h3>
+      {/* 3. Galería del ciclo */}
+      <section aria-labelledby="galeria" className="space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          <h2 id="galeria" className="section-title">Seguimiento visual</h2>
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
             disabled={isUploading}
-            className="btn btn-secondary h-10 min-h-10 px-3 text-xs"
+            className="btn btn-sm btn-secondary"
           >
-            {isUploading ? (
-              <Loader2 className="animate-spin" size={16} aria-hidden="true" />
-            ) : (
-              <Camera size={16} aria-hidden="true" />
-            )}
+            {isUploading
+              ? <Loader2 className="animate-spin" size={15} aria-hidden="true" />
+              : <Camera size={15} aria-hidden="true" />}
             {isUploading ? 'Subiendo...' : 'Subir foto'}
           </button>
           <input
@@ -414,10 +437,12 @@ export default function CycleDetailView({ cycle, plants, lastMeasurement, cycleI
         </div>
 
         {cycleImages && cycleImages.length > 0 ? (
-          <ul className="custom-scrollbar flex snap-x gap-4 overflow-x-auto pb-3">
+          <ul className="custom-scrollbar flex snap-x gap-3 overflow-x-auto pb-3">
             {cycleImages.map((img) => {
               const isSelected = selectedImages.includes(img.id);
-              const dayNumber = Math.floor((new Date(img.taken_at).getTime() - new Date(cycle.start_date).getTime()) / (1000 * 60 * 60 * 24));
+              const dayNumber = Math.max(0, Math.floor(
+                (new Date(img.taken_at).getTime() - new Date(cycle.start_date).getTime()) / (1000 * 60 * 60 * 24)
+              ));
 
               return (
                 <li key={img.id} className="shrink-0 snap-center">
@@ -434,7 +459,7 @@ export default function CycleDetailView({ cycle, plants, lastMeasurement, cycleI
                         ? `Seleccionar foto del día ${dayNumber}`
                         : `Ver foto del día ${dayNumber}`
                     }
-                    className={`group relative block aspect-[3/4] w-40 overflow-hidden rounded-[var(--radius-md)] border transition-colors md:w-48 ${
+                    className={`group relative block aspect-[3/4] w-36 overflow-hidden rounded-[var(--radius-md)] border transition-colors sm:w-44 ${
                       isSelected
                         ? 'border-[color:var(--brand)] ring-2 ring-[color:var(--brand)]'
                         : 'border-line hover:border-line-strong'
@@ -442,10 +467,12 @@ export default function CycleDetailView({ cycle, plants, lastMeasurement, cycleI
                   >
                     {isSelectionMode && (
                       <span
-                        className="absolute left-2 top-2 z-20 flex h-5 w-5 items-center justify-center rounded border border-line-strong bg-surface"
+                        className={`absolute left-2 top-2 z-20 flex h-5 w-5 items-center justify-center rounded-[6px] border ${
+                          isSelected ? 'border-[color:var(--brand)] bg-brand' : 'border-line-strong bg-surface'
+                        }`}
                         aria-hidden="true"
                       >
-                        {isSelected && <span className="h-3 w-3 rounded-sm bg-brand" />}
+                        {isSelected && <span className="h-2.5 w-2.5 rounded-[2px] bg-[color:var(--brand-fg)]" />}
                       </span>
                     )}
 
@@ -453,15 +480,15 @@ export default function CycleDetailView({ cycle, plants, lastMeasurement, cycleI
                       src={img.public_url}
                       alt={img.description || ""}
                       fill
-                      sizes="192px"
+                      sizes="176px"
                       className={`object-cover transition-transform duration-500 ${isSelected ? 'scale-105 opacity-70' : 'group-hover:scale-105'}`}
                     />
 
-                    <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 to-transparent p-3 text-left">
-                      <span className="block text-xs font-semibold text-white">
+                    <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 to-transparent p-2.5 text-left">
+                      <span className="mono block text-[11px] font-semibold text-white">Día {dayNumber}</span>
+                      <span className="block text-[10px] text-white/75">
                         {new Date(img.taken_at).toLocaleDateString('es-AR')}
                       </span>
-                      <span className="block text-[11px] text-white/80">Día {dayNumber}</span>
                     </span>
                   </button>
                 </li>
@@ -469,10 +496,12 @@ export default function CycleDetailView({ cycle, plants, lastMeasurement, cycleI
             })}
           </ul>
         ) : (
-          <div className="flex flex-col items-center justify-center rounded-[var(--radius-md)] border border-dashed border-line-strong py-10 text-center">
-            <Camera className="mb-2 text-fg-subtle" size={28} aria-hidden="true" />
-            <p className="text-sm font-semibold text-fg">Sin fotos del ciclo</p>
-            <p className="mt-1 text-xs text-fg-muted">Subí una foto para seguir el progreso visual.</p>
+          <div className="flex flex-col items-center justify-center gap-2 rounded-[var(--radius-lg)] border border-dashed border-line-strong bg-surface py-12 text-center">
+            <Camera className="h-7 w-7 text-fg-subtle" aria-hidden="true" />
+            <p className="text-sm font-semibold text-fg">Sin fotos de este ciclo</p>
+            <p className="max-w-xs text-xs text-fg-muted">
+              Subí una foto por semana y vas a tener la evolución completa del cultivo en una tira.
+            </p>
           </div>
         )}
       </section>
@@ -530,36 +559,45 @@ export default function CycleDetailView({ cycle, plants, lastMeasurement, cycleI
         )}
       </Modal>
 
-      {/* Barra de selección de fotos */}
-      {isSelectionMode && (
-        <div
-          role="toolbar"
-          aria-label="Acciones sobre las fotos seleccionadas"
-          className="animate-sheet-in surface fixed bottom-[calc(6rem+env(safe-area-inset-bottom))] left-1/2 z-50 flex -translate-x-1/2 items-center gap-3 rounded-full py-2 pl-4 pr-2 shadow-[var(--shadow-lg)] md:bottom-10"
+      {/* Una sola barra flotante, compartida por plantas y fotos: nunca hay dos
+          selecciones activas a la vez. */}
+      <SelectionBar
+        count={selectedPlants.length}
+        onClear={() => setSelectedPlants([])}
+        label="Acciones sobre las plantas seleccionadas"
+      >
+        <button
+          type="button"
+          onClick={() => setIsStageModalOpen(true)}
+          className="btn btn-sm btn-secondary rounded-full"
         >
-          <span className="whitespace-nowrap text-sm font-semibold text-fg" aria-live="polite">
-            {selectedImages.length} seleccionadas
-          </span>
+          <ArrowRight size={15} aria-hidden="true" />
+          Cambiar etapa
+        </button>
+        <button
+          type="button"
+          onClick={() => setIsArchiveModalOpen(true)}
+          className="btn btn-sm btn-secondary rounded-full"
+        >
+          <Archive size={15} aria-hidden="true" />
+          Archivar
+        </button>
+      </SelectionBar>
 
-          <button
-            type="button"
-            onClick={() => { setIsSelectionMode(false); setSelectedImages([]); }}
-            className="btn-icon h-10 min-h-10 w-10 min-w-10"
-            aria-label="Salir del modo selección"
-          >
-            <X size={18} aria-hidden="true" />
-          </button>
-          <button
-            type="button"
-            onClick={() => setShowDeleteImagesConfirm(true)}
-            disabled={selectedImages.length === 0}
-            className="btn-icon h-10 min-h-10 w-10 min-w-10 text-[color:var(--danger)]"
-            aria-label={`Eliminar ${selectedImages.length} fotos`}
-          >
-            <Trash2 size={18} aria-hidden="true" />
-          </button>
-        </div>
-      )}
+      <SelectionBar
+        count={isSelectionMode ? selectedImages.length : 0}
+        onClear={() => { setIsSelectionMode(false); setSelectedImages([]); }}
+        label="Acciones sobre las fotos seleccionadas"
+      >
+        <button
+          type="button"
+          onClick={() => setShowDeleteImagesConfirm(true)}
+          className="btn btn-sm btn-danger rounded-full"
+        >
+          <Trash2 size={15} aria-hidden="true" />
+          Eliminar
+        </button>
+      </SelectionBar>
 
       <ConfirmDialog
         isOpen={showDeleteImagesConfirm}

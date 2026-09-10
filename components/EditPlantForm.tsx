@@ -150,14 +150,14 @@ export default function EditPlantForm({ plant, cycles }: EditPlantFormProps) {
   return (
     <div className="mx-auto max-w-2xl space-y-8">
       <div className="flex items-center justify-between gap-3">
-        <Link href={`/plants/${plant.id}`} className="btn btn-ghost h-10 min-h-10 px-3">
+        <Link href={`/plants/${plant.id}`} className="btn btn-sm btn-ghost">
           <ArrowLeft size={16} aria-hidden="true" />
           Volver
         </Link>
         <button
           type="button"
           onClick={() => setShowDeleteConfirm(true)}
-          className="btn btn-danger h-10 min-h-10 px-3"
+          className="btn btn-sm btn-danger"
         >
           <Trash2 size={16} aria-hidden="true" />
           Eliminar
