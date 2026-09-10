@@ -1,10 +1,16 @@
 import { createClient } from "@/app/lib/supabase-server";
-import GlobalHeader from "@/components/GlobalHeader";
+import PageShell from "@/components/layout/PageShell";
+import PageHeader from "@/components/layout/PageHeader";
 import PlantsGridManager from "@/components/PlantsGridManager";
+import AddPlantModal from "@/components/AddPlantModal";
+import { Cycle, Plant, Space } from "@/app/lib/types";
+
+type PlantWithCycle = Plant & { cycles?: { id: number; name: string; space_id: number } | null };
+
+export const metadata = { title: "Plantas" };
 
 export default async function PlantsPage() {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
 
   const [
     { data: plants },
@@ -32,20 +38,18 @@ export default async function PlantsPage() {
   ]);
 
   return (
-    <main className="mx-auto w-full max-w-[1400px] px-5 py-6 md:px-8 md:py-8">
-      
-      <GlobalHeader 
-        userEmail={user?.email} 
+    <PageShell>
+      <PageHeader
         title="Plantas"
-        subtitle="Todo tu inventario"
+        subtitle="Todos tus ejemplares, con su etapa y su edad al día"
+        actions={<AddPlantModal />}
       />
 
       <PlantsGridManager
-        plants={plants as any[] || []}
-        cycles={cycles as any[] || []}
-        spaces={spaces as any[] || []}
+        plants={(plants ?? []) as PlantWithCycle[]}
+        cycles={(cycles ?? []) as Pick<Cycle, 'id' | 'name' | 'space_id'>[]}
+        spaces={(spaces ?? []) as Pick<Space, 'id' | 'name'>[]}
       />
-
-    </main>
+    </PageShell>
   );
 }

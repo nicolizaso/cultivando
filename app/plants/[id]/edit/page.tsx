@@ -1,13 +1,13 @@
 import { createClient } from "@/app/lib/supabase-server";
 import { notFound } from "next/navigation";
-import GlobalHeader from "@/components/GlobalHeader";
+import PageShell from "@/components/layout/PageShell";
+import PageHeader from "@/components/layout/PageHeader";
 import EditPlantForm from "@/components/EditPlantForm";
 import { Plant, Cycle } from "@/app/lib/types";
 
 export default async function EditPlantPage({ params }: { params: Promise<{ id: string }> }) {
   const supabase = await createClient();
   const { id } = await params;
-  const { data: { user } } = await supabase.auth.getUser();
 
   // Fetch Plant
   const { data: plant, error } = await supabase
@@ -26,14 +26,18 @@ export default async function EditPlantPage({ params }: { params: Promise<{ id: 
     .order('created_at', { ascending: false });
 
   return (
-    <main className="mx-auto w-full max-w-[1400px] px-5 py-6 md:px-8 md:py-8">
-      <GlobalHeader userEmail={user?.email} title="Editar planta" subtitle={plant.name} />
+    <PageShell size="narrow">
+      <PageHeader
+        title="Editar planta"
+        subtitle={plant.name}
+        backHref={`/plants/${plant.id}`}
+        backLabel="Ficha de la planta"
+      />
 
       <EditPlantForm
         plant={plant as Plant}
         cycles={(cycles as Cycle[]) || []}
       />
-
-    </main>
+    </PageShell>
   );
 }

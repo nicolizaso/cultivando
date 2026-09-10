@@ -3,12 +3,21 @@
 @custom-variant dark (&:is(.dark *));
 
 /* ==========================================================================
-   CULTIVA CON EL PRIMO - SISTEMA DE DISEÑO
+   CULTIVANDO - SISTEMA DE DISEÑO
    --------------------------------------------------------------------------
    Un solo set de tokens semánticos alimenta ambos temas. Los componentes
-   nunca deberían usar colores literales: siempre tokens.
+   nunca usan colores literales: siempre tokens.
 
-   Escala de radios (bloqueada):
+   Paleta "Savia":
+     · Lienzo neutro cálido (papel) para que el verde de marca resalte por
+       contraste de temperatura, en vez del gris verdoso que apagaba todo.
+     · Un único acento de marca (verde savia). El resto de colores son
+       *estado* (éxito/aviso/error/info) o *taxonomía* (etapas y tipos de
+       tarea), nunca decoración.
+     · Los nueve acentos de la taxonomía están verificados a AA sobre su
+       superficie en los dos temas.
+
+   Escala de radios (bloqueada, sin excepciones):
      chips / pills ......... 999px
      controles (btn/input) . var(--radius-md)  12px
      tarjetas .............. var(--radius-lg)  16px
@@ -19,67 +28,96 @@
   :root {
     color-scheme: light;
 
-    /* Superficies */
-    --bg: #f2f5f2;
-    --bg-tint: rgba(45, 106, 79, 0.045);
+    /* Superficies: papel cálido, no gris verdoso */
+    --bg: #f7f6f2;
+    --bg-tint: rgba(11, 107, 69, 0.05);
     --surface: #ffffff;
-    --surface-2: #f7f9f7;
-    --surface-3: #eef2ee;
+    --surface-2: #f2f1ea;
+    --surface-3: #e9e7de;
 
     /* Bordes */
-    --border: rgba(19, 28, 23, 0.12);
-    --border-strong: rgba(19, 28, 23, 0.22);
+    --border: rgba(23, 26, 22, 0.11);
+    --border-strong: rgba(23, 26, 22, 0.2);
 
     /* Texto */
-    --fg: #131c17;
-    --fg-muted: #4f5f56;   /* 6.1:1 sobre --bg */
-    --fg-subtle: #63736a;  /* 4.6:1 sobre --bg */
+    --fg: #171a16;         /* 16.2:1 sobre --bg */
+    --fg-muted: #55605a;   /* 6.1:1  sobre --bg */
+    --fg-subtle: #5f6963;  /* 5.3:1 sobre --bg, 4.6:1 sobre --surface-3 */
 
     /* Marca */
-    --brand: #2d6a4f;
-    --brand-hover: #245740;
-    --brand-fg: #ffffff;         /* texto sobre --brand: 5.9:1 */
-    --brand-text: #1f5540;       /* marca como texto sobre fondo claro: 7.4:1 */
-    --brand-soft: rgba(45, 106, 79, 0.1);
-    --brand-soft-strong: rgba(45, 106, 79, 0.16);
+    --brand: #0b6b45;
+    --brand-hover: #085537;
+    --brand-fg: #ffffff;         /* texto sobre --brand: 6.6:1 */
+    --brand-text: #0a5b3b;       /* marca como texto sobre fondo claro: 8.2:1 */
+    --brand-soft: rgba(11, 107, 69, 0.09);
+    --brand-soft-strong: rgba(11, 107, 69, 0.16);
+
+    /* Acentos de taxonomía (etapas de cultivo y tipos de tarea).
+       Verificados ≥4.5:1 no sólo sobre --surface, sino sobre su propio tinte
+       tenue compuesto encima: es el caso real de un chip, y el que se escapaba
+       por décimas en verde, lima y secado. */
+    --accent-amber: #8a5a0b;
+    --accent-lime: #4a770e;
+    --accent-green: #147a3a;
+    --accent-teal: #0f766e;
+    --accent-cyan: #0e7490;
+    --accent-blue: #1d4ed8;
+    --accent-violet: #6d28d9;
+    --accent-rose: #be123c;
+    --accent-slate: #475569;
+
+    --accent-amber-soft: rgba(138, 90, 11, 0.11);
+    --accent-lime-soft: rgba(74, 119, 14, 0.11);
+    --accent-green-soft: rgba(20, 122, 58, 0.11);
+    --accent-teal-soft: rgba(15, 118, 110, 0.11);
+    --accent-cyan-soft: rgba(14, 116, 144, 0.11);
+    --accent-blue-soft: rgba(29, 78, 216, 0.1);
+    --accent-violet-soft: rgba(109, 40, 217, 0.1);
+    --accent-rose-soft: rgba(190, 18, 60, 0.1);
+    --accent-slate-soft: rgba(71, 85, 105, 0.1);
 
     /* Estados semánticos */
-    --success: #1b7a4d;
-    --success-soft: rgba(27, 122, 77, 0.12);
-    --info: #1a6ba3;
-    --info-soft: rgba(26, 107, 163, 0.12);
-    --warning: #8a5a06;
-    --warning-soft: rgba(138, 90, 6, 0.12);
-    --danger: #b3261e;
-    --danger-soft: rgba(179, 38, 30, 0.1);
+    --success: var(--accent-green);
+    --success-soft: var(--accent-green-soft);
+    --info: var(--accent-cyan);
+    --info-soft: var(--accent-cyan-soft);
+    --warning: var(--accent-amber);
+    --warning-soft: var(--accent-amber-soft);
+    --danger: #b91c1c;
+    --danger-soft: rgba(185, 28, 28, 0.1);
 
     /* Foco */
-    --ring: #2d6a4f;
+    --ring: #0b6b45;
     --ring-offset: var(--bg);
 
-    /* Etapas de cultivo */
-    --stage-germ: #8a5a06;
-    --stage-germ-soft: rgba(138, 90, 6, 0.12);
-    --stage-seed: #0f7490;
-    --stage-seed-soft: rgba(15, 116, 144, 0.12);
-    --stage-root: #0e7490;
-    --stage-root-soft: rgba(14, 116, 144, 0.12);
-    --stage-veg: #1b7a4d;
-    --stage-veg-soft: rgba(27, 122, 77, 0.12);
-    --stage-bloom: #7c3aed;
-    --stage-bloom-soft: rgba(124, 58, 237, 0.1);
-    --stage-dry: #a1560c;
-    --stage-dry-soft: rgba(161, 86, 12, 0.12);
-    --stage-cure: #a02c2c;
-    --stage-cure-soft: rgba(160, 44, 44, 0.1);
-    --stage-none: #5b6b62;
-    --stage-none-soft: rgba(91, 107, 98, 0.12);
+    /* Velo de modales y superposiciones. Siempre oscurece: derivarlo del color
+       de texto hacía que en tema oscuro el fondo se *aclarara* al abrir un
+       diálogo, justo al revés de lo que se espera. */
+    --scrim: rgba(20, 24, 20, 0.55);
 
-    /* Sombras tintadas al fondo, nunca negro puro */
-    --shadow-sm: 0 1px 2px rgba(19, 28, 23, 0.06);
-    --shadow-md: 0 2px 8px rgba(19, 28, 23, 0.07), 0 1px 2px rgba(19, 28, 23, 0.05);
-    --shadow-lg: 0 12px 32px rgba(19, 28, 23, 0.1), 0 2px 8px rgba(19, 28, 23, 0.06);
-    --shadow-overlay: 0 24px 60px rgba(19, 28, 23, 0.18);
+    /* Etapas de cultivo: la taxonomía se apoya en los acentos de arriba */
+    --stage-germ: var(--accent-amber);
+    --stage-germ-soft: var(--accent-amber-soft);
+    --stage-seed: var(--accent-lime);
+    --stage-seed-soft: var(--accent-lime-soft);
+    --stage-root: var(--accent-cyan);
+    --stage-root-soft: var(--accent-cyan-soft);
+    --stage-veg: var(--accent-green);
+    --stage-veg-soft: var(--accent-green-soft);
+    --stage-bloom: var(--accent-violet);
+    --stage-bloom-soft: var(--accent-violet-soft);
+    --stage-dry: #bc3f0c;
+    --stage-dry-soft: rgba(188, 63, 12, 0.11);
+    --stage-cure: var(--accent-rose);
+    --stage-cure-soft: var(--accent-rose-soft);
+    --stage-none: var(--accent-slate);
+    --stage-none-soft: var(--accent-slate-soft);
+
+    /* Sombras tintadas al lienzo, nunca negro puro */
+    --shadow-sm: 0 1px 2px rgba(38, 33, 22, 0.05);
+    --shadow-md: 0 2px 8px rgba(38, 33, 22, 0.07), 0 1px 2px rgba(38, 33, 22, 0.04);
+    --shadow-lg: 0 12px 32px rgba(38, 33, 22, 0.1), 0 2px 8px rgba(38, 33, 22, 0.05);
+    --shadow-overlay: 0 24px 60px rgba(38, 33, 22, 0.2);
 
     /* Geometría */
     --radius-sm: 0.5rem;
@@ -89,62 +127,68 @@
 
     /* Movimiento */
     --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
-    --dur-fast: 150ms;
+    --dur-fast: 140ms;
     --dur-base: 240ms;
     --dur-slow: 420ms;
+
+    /* Cromo fijo: alto real de las barras, para calcular sticky y offsets */
+    --nav-top: 4rem;
+    --nav-bottom: 4.25rem;
   }
 
   .dark {
     color-scheme: dark;
 
-    --bg: #0d1512;
-    --bg-tint: rgba(79, 191, 135, 0.05);
-    --surface: #151f1b;
-    --surface-2: #1a2622;
-    --surface-3: #21302a;
+    --bg: #0e1310;
+    --bg-tint: rgba(69, 201, 138, 0.05);
+    --surface: #161c18;
+    --surface-2: #1d2521;
+    --surface-3: #27302b;
 
-    --border: rgba(233, 240, 235, 0.11);
-    --border-strong: rgba(233, 240, 235, 0.2);
+    --border: rgba(232, 237, 232, 0.1);
+    --border-strong: rgba(232, 237, 232, 0.19);
 
-    --fg: #e9f0eb;
-    --fg-muted: #9fb0a6;   /* 7.6:1 sobre --bg */
-    --fg-subtle: #83958a;  /* 5.3:1 sobre --bg */
+    --fg: #e8ede8;         /* 14.6:1 sobre --bg */
+    --fg-muted: #9ca9a1;   /* 7.1:1  sobre --bg */
+    --fg-subtle: #8d9a93;  /* 6.4:1 sobre --bg, 4.7:1 sobre --surface-3 */
 
-    --brand: #4fbf87;
-    --brand-hover: #63d09a;
-    --brand-fg: #06140e;         /* texto sobre --brand: 9.7:1 */
-    --brand-text: #6fd6a2;
-    --brand-soft: rgba(79, 191, 135, 0.14);
-    --brand-soft-strong: rgba(79, 191, 135, 0.22);
+    --brand: #45c98a;
+    --brand-hover: #5cd79b;
+    --brand-fg: #04150d;         /* texto sobre --brand: 8.9:1 */
+    --brand-text: #6bd9a3;
+    --brand-soft: rgba(69, 201, 138, 0.13);
+    --brand-soft-strong: rgba(69, 201, 138, 0.22);
 
-    --success: #4fbf87;
-    --success-soft: rgba(79, 191, 135, 0.16);
-    --info: #6fb6e8;
-    --info-soft: rgba(111, 182, 232, 0.16);
-    --warning: #e0b061;
-    --warning-soft: rgba(224, 176, 97, 0.16);
-    --danger: #f28b82;
-    --danger-soft: rgba(242, 139, 130, 0.14);
+    --accent-amber: #e3b357;
+    --accent-lime: #a3d14e;
+    --accent-green: #5bd08d;
+    --accent-teal: #4fd1c5;
+    --accent-cyan: #5cc8e0;
+    --accent-blue: #7faef5;
+    --accent-violet: #b79bfa;
+    --accent-rose: #f2879a;
+    --accent-slate: #9fb0be;
 
-    --ring: #6fd6a2;
+    --accent-amber-soft: rgba(227, 179, 87, 0.15);
+    --accent-lime-soft: rgba(163, 209, 78, 0.15);
+    --accent-green-soft: rgba(91, 208, 141, 0.15);
+    --accent-teal-soft: rgba(79, 209, 197, 0.15);
+    --accent-cyan-soft: rgba(92, 200, 224, 0.15);
+    --accent-blue-soft: rgba(127, 174, 245, 0.15);
+    --accent-violet-soft: rgba(183, 155, 250, 0.15);
+    --accent-rose-soft: rgba(242, 135, 154, 0.15);
+    --accent-slate-soft: rgba(159, 176, 190, 0.14);
+
+    --danger: #f1938e;
+    --danger-soft: rgba(241, 147, 142, 0.14);
+
+    --ring: #6bd9a3;
     --ring-offset: var(--bg);
 
-    --stage-germ: #e0b061;
-    --stage-germ-soft: rgba(224, 176, 97, 0.15);
-    --stage-seed: #6ecfe0;
-    --stage-seed-soft: rgba(110, 207, 224, 0.15);
-    --stage-root: #5cc4d8;
-    --stage-root-soft: rgba(92, 196, 216, 0.15);
-    --stage-veg: #6fd6a2;
-    --stage-veg-soft: rgba(111, 214, 162, 0.15);
-    --stage-bloom: #c4a6ff;
-    --stage-bloom-soft: rgba(196, 166, 255, 0.15);
-    --stage-dry: #eda86a;
-    --stage-dry-soft: rgba(237, 168, 106, 0.15);
-    --stage-cure: #f0938c;
-    --stage-cure-soft: rgba(240, 147, 140, 0.15);
-    --stage-none: #9fb0a6;
-    --stage-none-soft: rgba(159, 176, 166, 0.14);
+    --scrim: rgba(0, 0, 0, 0.72);
+
+    --stage-dry: #f0a06a;
+    --stage-dry-soft: rgba(240, 160, 106, 0.15);
 
     --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
     --shadow-md: 0 2px 10px rgba(0, 0, 0, 0.45);
@@ -152,7 +196,7 @@
     --shadow-overlay: 0 24px 70px rgba(0, 0, 0, 0.62);
   }
 
-  /* --- Compatibilidad con los alias heredados del tema anterior --- */
+  /* --- Alias heredados: mantienen compilando el código anterior --- */
   :root,
   .dark {
     --background: var(--bg);
@@ -179,8 +223,8 @@
     color: var(--fg);
     min-height: 100dvh;
     background-image:
-      radial-gradient(ellipse 80% 50% at 12% -10%, var(--bg-tint), transparent 60%),
-      radial-gradient(ellipse 70% 45% at 92% 4%, var(--bg-tint), transparent 55%);
+      radial-gradient(ellipse 90% 55% at 8% -12%, var(--bg-tint), transparent 62%),
+      radial-gradient(ellipse 65% 40% at 96% 2%, var(--bg-tint), transparent 58%);
     background-attachment: fixed;
     background-repeat: no-repeat;
   }
@@ -195,7 +239,7 @@
 
   h1,
   h2 {
-    letter-spacing: -0.02em;
+    letter-spacing: -0.022em;
   }
 
   /* Foco visible y consistente en toda la app. Nunca se elimina sin reemplazo. */
@@ -234,14 +278,8 @@
   --color-muted: var(--fg-muted);
   --color-brand-primary: var(--brand);
   --color-brand-primary-hover: var(--brand-hover);
-  --color-brand-bg: var(--bg);
-  --color-brand-card: var(--surface);
-  --color-brand-card-hover: var(--surface-2);
-  --color-brand-card-border: var(--border);
-  --color-brand-text: var(--fg);
-  --color-brand-muted: var(--fg-muted);
 
-  /* Tokens semánticos nuevos */
+  /* Tokens semánticos */
   --color-surface: var(--surface);
   --color-surface-2: var(--surface-2);
   --color-surface-3: var(--surface-3);
@@ -261,6 +299,7 @@
 
   --font-title: var(--font-outfit), "Segoe UI", system-ui, sans-serif;
   --font-body: var(--font-plus-jakarta), "Segoe UI", system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains), ui-monospace, "SF Mono", monospace;
 
   --radius-card: var(--radius-lg);
   --radius-panel: var(--radius-xl);
@@ -270,9 +309,10 @@
 }
 
 /* ==========================================================================
-   PRIMITIVAS DE SUPERFICIE
+   PRIMITIVAS
    ========================================================================== */
 @layer components {
+  /* ------------------------------------------------------------ Superficies */
   .surface {
     background-color: var(--surface);
     border: 1px solid var(--border);
@@ -297,7 +337,6 @@
   }
 
   .surface-interactive:hover {
-    background-color: var(--surface-2);
     border-color: var(--border-strong);
     box-shadow: var(--shadow-md);
     transform: translateY(-2px);
@@ -308,7 +347,7 @@
     box-shadow: var(--shadow-sm);
   }
 
-  /* Alias heredados: el "glass" antiguo pasa a ser una superficie sólida legible */
+  /* Alias heredados del tema anterior */
   .glass-card {
     background-color: var(--surface);
     border: 1px solid var(--border);
@@ -320,14 +359,12 @@
     border: 1px solid var(--border);
     box-shadow: var(--shadow-sm);
     transition:
-      background-color var(--dur-fast) var(--ease-out),
       border-color var(--dur-fast) var(--ease-out),
       box-shadow var(--dur-base) var(--ease-out),
       transform var(--dur-base) var(--ease-out);
   }
 
   .glass-card-interactive:hover {
-    background-color: var(--surface-2);
     border-color: var(--border-strong);
     box-shadow: var(--shadow-md);
     transform: translateY(-2px);
@@ -339,7 +376,7 @@
 
   /* Barra flotante translúcida (nav superior e inferior) */
   .chrome-bar {
-    background-color: color-mix(in srgb, var(--surface) 82%, transparent);
+    background-color: color-mix(in srgb, var(--surface) 84%, transparent);
     backdrop-filter: blur(16px) saturate(140%);
     -webkit-backdrop-filter: blur(16px) saturate(140%);
     border-color: var(--border);
@@ -369,13 +406,20 @@
       transform var(--dur-fast) var(--ease-out);
   }
 
+  /* Variante compacta: la única alternativa de tamaño permitida */
+  .btn-sm {
+    min-height: 2.25rem;
+    padding: 0.375rem 0.75rem;
+    font-size: 0.8125rem;
+  }
+
   .btn:active:not(:disabled) {
     transform: scale(0.98);
   }
 
   .btn:disabled,
   .btn[aria-disabled="true"] {
-    opacity: 0.55;
+    opacity: 0.5;
     cursor: not-allowed;
     transform: none;
   }
@@ -418,7 +462,7 @@
   }
 
   .btn-danger:hover:not(:disabled) {
-    background-color: color-mix(in srgb, var(--danger) 22%, transparent);
+    background-color: color-mix(in srgb, var(--danger) 20%, transparent);
   }
 
   /* Botón sólo icono: 44px reales de área táctil */
@@ -446,7 +490,17 @@
     transform: scale(0.94);
   }
 
-  /* --------------------------------------------------------------- Formularios */
+  .btn-icon:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .btn-icon-sm {
+    min-width: 2.25rem;
+    min-height: 2.25rem;
+  }
+
+  /* --------------------------------------------------------- Formularios */
   .field {
     display: flex;
     flex-direction: column;
@@ -456,8 +510,7 @@
   .field-label {
     font-size: 0.75rem;
     font-weight: 700;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
+    letter-spacing: 0.03em;
     color: var(--fg-muted);
   }
 
@@ -531,6 +584,14 @@
     color: var(--danger);
   }
 
+  /* Casilla y radio con el color de marca y área táctil suficiente */
+  .field-check {
+    width: 1.125rem;
+    height: 1.125rem;
+    accent-color: var(--brand);
+    cursor: pointer;
+  }
+
   /* ------------------------------------------------------------------ Chips */
   .chip {
     display: inline-flex;
@@ -543,6 +604,118 @@
     font-weight: 700;
     line-height: 1.4;
     white-space: nowrap;
+  }
+
+  /* Chip neutro por defecto: evita repetir la misma terna de clases */
+  .chip-neutral {
+    border-color: var(--border);
+    background-color: var(--surface-2);
+    color: var(--fg-muted);
+  }
+
+  .chip-brand {
+    border-color: color-mix(in srgb, var(--brand) 32%, transparent);
+    background-color: var(--brand-soft);
+    color: var(--brand-text);
+  }
+
+  /* --------------------------------------------------- Control segmentado */
+  /* Único patrón para "elegir una de N opciones" en toda la app: filtros de
+     estado, modo de vista y pestañas internas. */
+  .segmented {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.125rem;
+    padding: 0.1875rem;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border);
+    background-color: var(--surface-2);
+  }
+
+  .segmented-item {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.375rem;
+    min-height: 2.125rem;
+    padding: 0 0.75rem;
+    border-radius: calc(var(--radius-md) - 0.25rem);
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--fg-muted);
+    white-space: nowrap;
+    cursor: pointer;
+    transition:
+      background-color var(--dur-fast) var(--ease-out),
+      color var(--dur-fast) var(--ease-out);
+  }
+
+  .segmented-item:hover {
+    color: var(--fg);
+  }
+
+  .segmented-item[aria-selected="true"],
+  .segmented-item[aria-pressed="true"] {
+    background-color: var(--surface);
+    color: var(--fg);
+    box-shadow: var(--shadow-sm);
+  }
+
+  /* -------------------------------------------------------------- Métricas */
+  /* Los números del cultivo (días, °C, %, VPD) van en cifras tabulares para
+     que no bailen al actualizarse. */
+  .metric {
+    font-family: var(--font-title);
+    font-weight: 600;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
+  }
+
+  .mono {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Etiqueta de dato: pequeña, legible, sin gritar en versalitas */
+  .metric-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--fg-muted);
+  }
+
+  /* ----------------------------------------------------------- Cabeceras */
+  .section-title {
+    font-family: var(--font-title);
+    font-size: 1.0625rem;
+    font-weight: 600;
+    letter-spacing: -0.015em;
+    color: var(--fg);
+  }
+
+  /* --------------------------------------------------------- Barra fija */
+  /* Barra flotante de acciones sobre una selección múltiple. Un solo
+     componente visual para plantas, tareas y fotos. */
+  .action-bar {
+    position: fixed;
+    left: 50%;
+    z-index: 60;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    transform: translateX(-50%);
+    border-radius: 999px;
+    border: 1px solid var(--border-strong);
+    background-color: var(--surface);
+    padding: 0.375rem 0.375rem 0.375rem 1rem;
+    box-shadow: var(--shadow-lg);
+    bottom: calc(var(--nav-bottom) + 1rem + env(safe-area-inset-bottom));
+  }
+
+  @media (min-width: 1024px) {
+    .action-bar {
+      bottom: 1.75rem;
+    }
   }
 
   /* ------------------------------------------------------------ Skip link */
@@ -579,13 +752,12 @@
 
 /* ==========================================================================
    MOVIMIENTO
-   Todo lo de aquí anima sólo transform/opacity y se apaga bajo
-   prefers-reduced-motion (ver bloque final).
+   Todo anima sólo transform/opacity y se apaga bajo prefers-reduced-motion.
    ========================================================================== */
 @keyframes fadeInUp {
   from {
     opacity: 0;
-    transform: translateY(12px);
+    transform: translateY(10px);
   }
   to {
     opacity: 1;
@@ -617,6 +789,17 @@
   from {
     opacity: 0;
     transform: translateY(24px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(24px);
   }
   to {
     opacity: 1;
@@ -661,15 +844,19 @@
   animation: sheetIn var(--dur-base) var(--ease-out) both;
 }
 
-/* Reemplaza al antiguo pulse-glow de neón: un latido sobrio de opacidad */
+.animate-slide-in-right {
+  animation: slideInRight var(--dur-base) var(--ease-out) both;
+}
+
 .pulse-dot {
   animation: breathe 2.4s var(--ease-out) infinite;
 }
 
-/* Escalonado declarativo para listas y grillas */
+/* Escalonado declarativo para listas y grillas. El retardo se corta a los
+   10 primeros elementos: más allá el usuario ya sólo percibe lentitud. */
 .stagger > * {
   animation: fadeInUp var(--dur-slow) var(--ease-out) both;
-  animation-delay: calc(var(--stagger-step, 45ms) * var(--i, 0));
+  animation-delay: calc(var(--stagger-step, 40ms) * min(var(--i, 0), 10));
 }
 
 .skeleton-loader,
@@ -712,6 +899,15 @@ body {
   background: var(--fg-subtle);
 }
 
+/* Oculta la barra en carruseles horizontales sin perder el scroll */
+.scrollbar-none {
+  scrollbar-width: none;
+}
+
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
 /* ==========================================================================
    PREFERENCIAS DEL SISTEMA
    ========================================================================== */
@@ -748,7 +944,8 @@ body {
   }
 
   .btn-secondary,
-  .field-input {
+  .field-input,
+  .segmented {
     border-color: var(--fg-muted);
   }
 }

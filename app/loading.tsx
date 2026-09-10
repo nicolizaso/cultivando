@@ -1,23 +1,9 @@
+import DashboardSkeleton from "@/components/skeletons/DashboardSkeleton";
+
 export default function Loading() {
   return (
-    <div
-      className="mx-auto w-full max-w-[1400px] px-5 py-6 md:px-8 md:py-8"
-      aria-busy="true"
-      aria-label="Cargando"
-    >
-      <div className="mb-8 flex items-start justify-between gap-4">
-        <div className="space-y-2">
-          <div className="skeleton h-6 w-40" />
-          <div className="skeleton h-4 w-28" />
-        </div>
-        <div className="skeleton h-11 w-11 rounded-full" />
-      </div>
-
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {[0, 1, 2, 3, 4, 5].map((i) => (
-          <div key={i} className="skeleton h-40 rounded-[var(--radius-lg)]" />
-        ))}
-      </div>
+    <div className="mx-auto w-full max-w-[1280px] px-4 pb-12 pt-5 sm:px-6 lg:px-8 lg:pt-8">
+      <DashboardSkeleton />
     </div>
   );
 }

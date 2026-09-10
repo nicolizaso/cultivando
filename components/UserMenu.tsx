@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { signout } from "@/app/login/actions";
-import { LogOut, User, ChevronDown } from "lucide-react";
+import { LogOut, ChevronDown } from "lucide-react";
 
 export default function UserMenu({ email }: { email?: string }) {
   const [isOpen, setIsOpen] = useState(false);
@@ -76,19 +76,19 @@ export default function UserMenu({ email }: { email?: string }) {
           aria-label="Opciones de cuenta"
           className="animate-scale-in absolute right-0 top-12 z-50 w-64 overflow-hidden rounded-[var(--radius-lg)] border border-line bg-surface shadow-[var(--shadow-lg)]"
         >
-          <div className="border-b border-line bg-surface-2 p-4">
-            <div className="mb-1.5 flex items-center gap-2">
-              <span
-                className="flex h-7 w-7 items-center justify-center rounded-[var(--radius-sm)] bg-brand-soft text-[color:var(--brand-text)]"
-                aria-hidden="true"
-              >
-                <User size={15} />
-              </span>
-              <span className="text-[11px] font-bold uppercase tracking-widest text-fg-subtle">Cuenta</span>
+          <div className="flex items-center gap-3 border-b border-line bg-surface-2 p-4">
+            <span
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand text-sm font-bold text-[color:var(--brand-fg)]"
+              aria-hidden="true"
+            >
+              {initial}
+            </span>
+            <div className="min-w-0">
+              <p className="truncate text-sm font-medium text-fg" title={email}>
+                {email || "Usuario"}
+              </p>
+              <p className="text-xs text-fg-muted">Sesión iniciada</p>
             </div>
-            <p className="truncate text-sm font-medium text-fg" title={email}>
-              {email || "Usuario"}
-            </p>
           </div>
 
           <div className="p-2">

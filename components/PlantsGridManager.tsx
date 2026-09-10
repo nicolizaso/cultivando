@@ -1,14 +1,16 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { Archive, CheckSquare, Filter, FilterX, Search, Sprout, Square, Trash2, X } from "lucide-react";
+
 import PlantCard from "./plantcard";
 import { supabase } from "@/app/lib/supabase";
-import { useRouter } from "next/navigation";
-import { CheckSquare, Square, Trash2, X, FilterX, Filter, Archive, Sprout } from "lucide-react";
 import { Plant as BasePlant, Cycle, Space } from "@/app/lib/types";
-import AddPlantModal from "./AddPlantModal";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import EmptyState from "@/components/EmptyState";
+import SegmentedControl from "@/components/ui/SegmentedControl";
+import SelectionBar from "@/components/ui/SelectionBar";
 import { useToast } from "@/app/context/ToastContext";
 
 interface Plant extends BasePlant {
@@ -21,86 +23,75 @@ interface PlantsGridManagerProps {
   spaces: Pick<Space, 'id' | 'name'>[];
 }
 
+type Scope = 'active' | 'archived';
+
+/** Compara ignorando mayúsculas y tildes: "plátano" encuentra "platano". */
+const normalize = (value: string) =>
+  value.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+
 export default function PlantsGridManager({ plants, cycles, spaces }: PlantsGridManagerProps) {
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [isDeleting, setIsDeleting] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
-  // Filter States
+  const [scope, setScope] = useState<Scope>('active');
+  const [query, setQuery] = useState("");
   const [showFilters, setShowFilters] = useState(false);
   const [selectedCycleId, setSelectedCycleId] = useState<string>("all");
   const [selectedSpaceId, setSelectedSpaceId] = useState<string>("all");
-  const [showArchived, setShowArchived] = useState(false);
 
   const router = useRouter();
   const { showToast } = useToast();
 
-  // Filter Logic
+  const activeCount = useMemo(() => plants.filter(p => !p.is_archived).length, [plants]);
+  const archivedCount = plants.length - activeCount;
+
   const filteredPlants = useMemo(() => {
+    const term = normalize(query);
+
     return plants.filter(plant => {
-      // Filter by Archive State
-      if (showArchived) {
-          if (plant.is_archived !== true) return false;
-      } else {
-          if (plant.is_archived) return false;
-      }
+      // Archivadas y activas son conjuntos excluyentes, nunca una mezcla.
+      if (scope === 'archived' ? plant.is_archived !== true : Boolean(plant.is_archived)) return false;
 
-      // Filter by Cycle
-      if (selectedCycleId !== "all") {
-        if (plant.cycle_id !== Number(selectedCycleId)) return false;
-      }
+      if (selectedCycleId !== "all" && plant.cycle_id !== Number(selectedCycleId)) return false;
 
-      // Filter by Space
       if (selectedSpaceId !== "all") {
-        // If the plant has no cycle, it conceptually has no space assignment in this context
+        // Sin ciclo no hay espacio asignado, así que no puede coincidir.
         if (!plant.cycles) return false;
         if (plant.cycles.space_id !== Number(selectedSpaceId)) return false;
       }
 
+      if (term) {
+        const haystack = normalize(`${plant.name ?? ''} ${plant.strain ?? ''} ${plant.cycles?.name ?? ''}`);
+        if (!haystack.includes(term)) return false;
+      }
+
       return true;
     });
-  }, [plants, selectedCycleId, selectedSpaceId]);
+  }, [plants, scope, query, selectedCycleId, selectedSpaceId]);
 
-  // Toggle Selection Mode
-  const toggleSelectionMode = () => {
-    setIsSelectionMode(!isSelectionMode);
-    setSelectedIds(new Set()); // Clear selection when toggling
-  };
-
-  // Toggle Individual Plant Selection
   const togglePlantSelection = (id: number) => {
     const newSelected = new Set(selectedIds);
-    if (newSelected.has(id)) {
-      newSelected.delete(id);
-    } else {
-      newSelected.add(id);
-    }
+    if (newSelected.has(id)) newSelected.delete(id);
+    else newSelected.add(id);
     setSelectedIds(newSelected);
   };
 
-  // Select All / Deselect All
-  const toggleSelectAll = () => {
-    // Determine if all *filtered* plants are selected
-    const allFilteredSelected = filteredPlants.length > 0 && filteredPlants.every(p => selectedIds.has(p.id));
-
-    if (allFilteredSelected) {
-        // Deselect only the filtered plants
-        const newSelected = new Set(selectedIds);
-        filteredPlants.forEach(p => newSelected.delete(p.id));
-        setSelectedIds(newSelected);
-    } else {
-        // Select all filtered plants
-        const newSelected = new Set(selectedIds);
-        filteredPlants.forEach(p => newSelected.add(p.id));
-        setSelectedIds(newSelected);
-    }
-  }
-
-  // Helper to check if all filtered are selected
   const isAllSelected = filteredPlants.length > 0 && filteredPlants.every(p => selectedIds.has(p.id));
 
-  // Bulk Delete
+  const toggleSelectAll = () => {
+    const newSelected = new Set(selectedIds);
+    if (isAllSelected) filteredPlants.forEach(p => newSelected.delete(p.id));
+    else filteredPlants.forEach(p => newSelected.add(p.id));
+    setSelectedIds(newSelected);
+  };
+
+  const exitSelectionMode = () => {
+    setIsSelectionMode(false);
+    setSelectedIds(new Set());
+  };
+
   const handleDelete = async () => {
     if (selectedIds.size === 0) return;
 
@@ -113,10 +104,8 @@ export default function PlantsGridManager({ plants, cycles, spaces }: PlantsGrid
 
       if (error) throw error;
 
-      // Reset state and refresh
       showToast(`${selectedIds.size} plantas eliminadas`);
-      setSelectedIds(new Set());
-      setIsSelectionMode(false);
+      exitSelectionMode();
       router.refresh();
     } catch (error) {
       showToast(error instanceof Error ? error.message : "No se pudieron eliminar las plantas", "error");
@@ -125,69 +114,72 @@ export default function PlantsGridManager({ plants, cycles, spaces }: PlantsGrid
     }
   };
 
-  // Clear Filters
   const clearFilters = () => {
     setSelectedCycleId("all");
     setSelectedSpaceId("all");
   };
 
   const hasFilters = selectedCycleId !== "all" || selectedSpaceId !== "all";
+  const isNarrowed = hasFilters || query.trim().length > 0;
 
   return (
     <div>
-      {/* Barra de herramientas */}
-      <div className="mb-6 flex flex-col items-start justify-between gap-4 md:flex-row md:items-center">
-        <p className="text-sm text-fg-muted" aria-live="polite">
-          <span className="font-semibold text-fg">{filteredPlants.length}</span>{' '}
-          {filteredPlants.length === 1 ? 'planta' : 'plantas'}
-          {hasFilters && <span> (filtrado de {plants.length})</span>}
-        </p>
+      {/* Barra de herramientas: buscar, acotar, filtrar. En ese orden, y una
+          sola fila en escritorio. */}
+      <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center">
+        <div className="relative flex-1 md:max-w-xs">
+          <Search
+            className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-fg-subtle"
+            aria-hidden="true"
+          />
+          <input
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Buscar por nombre o genética"
+            aria-label="Buscar plantas"
+            className="field-input pl-9"
+          />
+        </div>
 
-        <div className="flex flex-wrap items-center gap-2 self-stretch md:self-auto">
-          <button
-            type="button"
-            onClick={() => setShowArchived(!showArchived)}
-            aria-pressed={showArchived}
-            className={showArchived ? "btn btn-primary h-10 min-h-10 px-3" : "btn btn-secondary h-10 min-h-10 px-3"}
-          >
-            <Archive size={16} aria-hidden="true" />
-            <span className="hidden sm:inline">Archivadas</span>
-          </button>
+        <div className="flex flex-wrap items-center gap-2 md:ml-auto">
+          <SegmentedControl<Scope>
+            label="Estado de las plantas"
+            value={scope}
+            onChange={(next) => { setScope(next); exitSelectionMode(); }}
+            options={[
+              { value: 'active', label: 'Activas', count: activeCount },
+              { value: 'archived', label: 'Archivadas', icon: Archive, count: archivedCount },
+            ]}
+          />
 
           <button
             type="button"
             onClick={() => setShowFilters(!showFilters)}
             aria-expanded={showFilters}
             aria-controls="plants-filters"
-            className={showFilters || hasFilters ? "btn btn-primary h-10 min-h-10 px-3" : "btn btn-secondary h-10 min-h-10 px-3"}
+            className={`btn btn-sm ${showFilters || hasFilters ? 'btn-primary' : 'btn-secondary'}`}
           >
-            <Filter size={16} aria-hidden="true" />
-            <span className="hidden sm:inline">Filtros</span>
+            <Filter size={15} aria-hidden="true" />
+            Filtros
+            {hasFilters && <span className="mono text-[11px]">{[selectedCycleId, selectedSpaceId].filter(v => v !== 'all').length}</span>}
           </button>
-
-          <AddPlantModal />
-
-          {isSelectionMode && (
-            <button type="button" onClick={toggleSelectAll} className="btn btn-secondary h-10 min-h-10 px-3">
-              {isAllSelected ? <CheckSquare size={16} aria-hidden="true" /> : <Square size={16} aria-hidden="true" />}
-              <span className="hidden md:inline">{isAllSelected ? "Deseleccionar" : "Todas"}</span>
-            </button>
-          )}
 
           <button
             type="button"
-            onClick={toggleSelectionMode}
+            onClick={() => (isSelectionMode ? exitSelectionMode() : setIsSelectionMode(true))}
             aria-pressed={isSelectionMode}
-            className="btn btn-secondary h-10 min-h-10 px-3"
+            className="btn btn-sm btn-secondary"
           >
-            {isSelectionMode ? "Cancelar" : "Seleccionar"}
+            {isSelectionMode ? <X size={15} aria-hidden="true" /> : <CheckSquare size={15} aria-hidden="true" />}
+            {isSelectionMode ? 'Cancelar' : 'Seleccionar'}
           </button>
         </div>
       </div>
 
       {showFilters && (
-        <div id="plants-filters" className="surface animate-fade-in mb-6 rounded-[var(--radius-lg)] p-4">
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <div id="plants-filters" className="surface animate-fade-in mb-4 rounded-[var(--radius-lg)] p-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="field">
               <label htmlFor="filter-space" className="field-label">Espacio</label>
               <select
@@ -221,8 +213,8 @@ export default function PlantsGridManager({ plants, cycles, spaces }: PlantsGrid
 
           {hasFilters && (
             <div className="mt-4 flex justify-end">
-              <button type="button" onClick={clearFilters} className="btn btn-ghost h-10 min-h-10 px-3 text-xs">
-                <FilterX size={16} aria-hidden="true" />
+              <button type="button" onClick={clearFilters} className="btn btn-sm btn-ghost">
+                <FilterX size={15} aria-hidden="true" />
                 Limpiar filtros
               </button>
             </div>
@@ -230,10 +222,25 @@ export default function PlantsGridManager({ plants, cycles, spaces }: PlantsGrid
         </div>
       )}
 
+      <div className="mb-4 flex flex-wrap items-center gap-3 border-b border-line pb-3">
+        <p className="text-sm text-fg-muted" aria-live="polite">
+          <span className="mono font-semibold text-fg">{filteredPlants.length}</span>{' '}
+          {filteredPlants.length === 1 ? 'planta' : 'plantas'}
+          {isNarrowed && <span className="text-fg-subtle"> de {scope === 'archived' ? archivedCount : activeCount}</span>}
+        </p>
+
+        {isSelectionMode && (
+          <button type="button" onClick={toggleSelectAll} className="btn btn-sm btn-ghost ml-auto">
+            {isAllSelected ? <Square size={15} aria-hidden="true" /> : <CheckSquare size={15} aria-hidden="true" />}
+            {isAllSelected ? 'Quitar todas' : 'Seleccionar todas'}
+          </button>
+        )}
+      </div>
+
       {filteredPlants.length > 0 ? (
-        <ul className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {filteredPlants.map((plant) => (
-            <li key={plant.id}>
+        <ul className="stagger grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          {filteredPlants.map((plant, i) => (
+            <li key={plant.id} style={{ ['--i' as string]: i }}>
               <PlantCard
                 plant={plant}
                 cycleName={plant.cycles?.name}
@@ -246,48 +253,51 @@ export default function PlantsGridManager({ plants, cycles, spaces }: PlantsGrid
         </ul>
       ) : (
         <EmptyState
-          icon={Sprout}
-          title={hasFilters ? "Sin resultados" : showArchived ? "Sin plantas archivadas" : "Sin plantas"}
+          icon={isNarrowed ? Search : scope === 'archived' ? Archive : Sprout}
+          title={
+            isNarrowed
+              ? "Sin resultados"
+              : scope === 'archived'
+                ? "Sin plantas archivadas"
+                : "Todavía no hay plantas"
+          }
           description={
-            hasFilters
-              ? "Ninguna planta coincide con los filtros aplicados. Probá quitando alguno."
-              : showArchived
-                ? "Las plantas que archives desde un ciclo van a aparecer acá."
-                : "Todavía no hay plantas registradas. Creá una desde un ciclo activo."
+            isNarrowed
+              ? "Ninguna planta coincide con lo que buscás. Probá quitando algún filtro."
+              : scope === 'archived'
+                ? "Las plantas que archives desde un ciclo van a aparecer acá, con su historial intacto."
+                : "Creá tu primera planta y elegí en qué ciclo entra. Desde ahí se registran riegos, etapas y fotos."
+          }
+          action={
+            isNarrowed ? (
+              <button
+                type="button"
+                onClick={() => { setQuery(''); clearFilters(); }}
+                className="btn btn-secondary"
+              >
+                <FilterX size={16} aria-hidden="true" />
+                Limpiar búsqueda
+              </button>
+            ) : undefined
           }
         />
       )}
 
-      {isSelectionMode && selectedIds.size > 0 && (
-        <div
-          role="toolbar"
-          aria-label="Acciones sobre las plantas seleccionadas"
-          className="animate-sheet-in surface fixed bottom-[calc(6rem+env(safe-area-inset-bottom))] left-1/2 z-50 flex -translate-x-1/2 items-center gap-3 rounded-full p-2 pl-4 shadow-[var(--shadow-lg)] md:bottom-8"
+      <SelectionBar
+        count={isSelectionMode ? selectedIds.size : 0}
+        onClear={exitSelectionMode}
+        label="Acciones sobre las plantas seleccionadas"
+      >
+        <button
+          type="button"
+          onClick={() => setShowDeleteConfirm(true)}
+          disabled={isDeleting}
+          className="btn btn-sm btn-danger rounded-full"
         >
-          <span className="whitespace-nowrap text-sm font-semibold text-fg" aria-live="polite">
-            {selectedIds.size} seleccionadas
-          </span>
-
-          <button
-            type="button"
-            onClick={() => setShowDeleteConfirm(true)}
-            disabled={isDeleting}
-            className="btn btn-danger h-10 min-h-10 rounded-full px-4 text-xs"
-          >
-            <Trash2 size={16} aria-hidden="true" />
-            {isDeleting ? "Eliminando..." : "Eliminar"}
-          </button>
-
-          <button
-            type="button"
-            onClick={() => { setSelectedIds(new Set()); setIsSelectionMode(false); }}
-            className="btn-icon h-10 min-h-10 w-10 min-w-10"
-            aria-label="Salir del modo selección"
-          >
-            <X size={18} aria-hidden="true" />
-          </button>
-        </div>
-      )}
+          <Trash2 size={15} aria-hidden="true" />
+          {isDeleting ? "Eliminando..." : "Eliminar"}
+        </button>
+      </SelectionBar>
 
       <ConfirmDialog
         isOpen={showDeleteConfirm}

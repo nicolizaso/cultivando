@@ -85,7 +85,8 @@ export default function StageSuggester({ plants }: StageSuggesterProps) {
         animate={{ opacity: 1, y: 0 }}
         exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 24 }}
         transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-        className="fixed inset-x-4 bottom-[calc(6rem+env(safe-area-inset-bottom))] z-50 mx-auto w-auto max-w-sm md:inset-x-auto md:bottom-8 md:right-8 md:mx-0 md:w-96"
+        /* Va por encima del botón flotante, no a su misma altura. */
+        className="fixed inset-x-4 bottom-[calc(var(--nav-bottom)+5.5rem+env(safe-area-inset-bottom))] z-50 mx-auto w-auto max-w-sm lg:inset-x-auto lg:bottom-7 lg:right-7 lg:mx-0 lg:w-[22rem]"
       >
         <div className="surface flex flex-col gap-3 rounded-[var(--radius-lg)] p-4 shadow-[var(--shadow-lg)]">
           <div className="flex items-start gap-3">
@@ -106,10 +107,10 @@ export default function StageSuggester({ plants }: StageSuggesterProps) {
           </div>
 
           <div className="flex justify-end gap-2">
-            <button type="button" onClick={handleDismiss} className="btn btn-ghost h-10 min-h-10 px-3 text-xs">
+            <button type="button" onClick={handleDismiss} className="btn btn-sm btn-ghost">
               Ahora no
             </button>
-            <button type="button" onClick={handleConfirm} className="btn btn-primary h-10 min-h-10 px-3 text-xs">
+            <button type="button" onClick={handleConfirm} className="btn btn-sm btn-primary">
               Sí, actualizar
             </button>
           </div>

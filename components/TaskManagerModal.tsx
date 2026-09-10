@@ -157,7 +157,7 @@ export default function TaskManagerModal() {
                 checked={allSelected}
                 onChange={handleSelectAll}
                 disabled={filteredTasks.length === 0}
-                className="h-4 w-4 accent-[color:var(--brand)]"
+                className="field-check"
               />
               Seleccionar todas
             </label>
@@ -207,7 +207,7 @@ export default function TaskManagerModal() {
                       checked={isSelected}
                       onChange={() => handleToggleSelect(task.id)}
                       aria-label={`Seleccionar ${task.title}`}
-                      className="mt-1 h-4 w-4 shrink-0 accent-[color:var(--brand)]"
+                      className="field-check mt-0.5 shrink-0"
                     />
 
                     <div className="min-w-0 flex-1">
@@ -219,9 +219,9 @@ export default function TaskManagerModal() {
                         <time dateTime={new Date(task.due_date).toISOString()}>
                           {new Date(task.due_date).toLocaleDateString('es-AR', { day: '2-digit', month: 'short', year: 'numeric' })}
                         </time>
-                        <span className="chip border-line bg-surface-3 text-fg-muted">{task.type}</span>
+                        <span className="chip chip-neutral">{task.type}</span>
                         {task.cycleName && (
-                          <span className="chip border-[color:color-mix(in_srgb,var(--brand)_35%,transparent)] bg-brand-soft text-[color:var(--brand-text)]">
+                          <span className="chip chip-brand">
                             {task.cycleName}
                           </span>
                         )}

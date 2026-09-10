@@ -279,7 +279,7 @@ export default function AddTaskModal({ isOpen, onClose, plants, spaces, cycles =
             <ul className="flex flex-wrap gap-2">
               {selectedTargets.map((target, idx) => (
                 <li key={`${target.type}-${target.id}`}>
-                  <span className="chip border-[color:color-mix(in_srgb,var(--brand)_35%,transparent)] bg-brand-soft text-[color:var(--brand-text)]">
+                  <span className="chip chip-brand">
                     {target.name}
                     <button
                       type="button"
@@ -300,7 +300,7 @@ export default function AddTaskModal({ isOpen, onClose, plants, spaces, cycles =
               {targetGroups.map((group) =>
                 group.items.length > 0 ? (
                   <fieldset key={group.key} className="mb-2 last:mb-0">
-                    <legend className="px-2 py-1 text-[11px] font-bold uppercase tracking-widest text-fg-subtle">
+                    <legend className="px-2 py-1 text-[11px] font-bold text-fg-subtle">
                       {group.label}
                     </legend>
                     {group.items.map((item) => {

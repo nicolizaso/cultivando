@@ -227,3 +227,61 @@ export function mapTaskCycles(t: any, allCycles?: { id: number; name: string }[]
       cycleNames: Array.from(cycleNamesSet).join(', ')
     };
 }
+
+/**
+ * Días desde el último riego.
+ *
+ * `last_water` es heterogéneo por herencia: la tarjeta de planta guarda la
+ * cadena "Hoy" al regar desde el menú rápido, mientras que el resto del flujo
+ * guarda una fecha ISO. Un único lector resuelve los dos casos en vez de
+ * repartir la corrección por cada pantalla.
+ *
+ * Devuelve null cuando no hay registro de riego.
+ */
+export function getDaysSinceWater(lastWater?: string | null): number | null {
+  if (!lastWater) return null;
+  if (lastWater === 'Hoy') return 0;
+
+  const watered = new Date(lastWater);
+  if (isNaN(watered.getTime())) return null;
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  watered.setHours(0, 0, 0, 0);
+
+  return Math.max(0, Math.round((today.getTime() - watered.getTime()) / (1000 * 60 * 60 * 24)));
+}
+
+/**
+ * Estado del riego traducido a lenguaje y severidad.
+ *
+ * El color nunca viaja solo: cada nivel trae también su texto, para que el
+ * atraso se entienda sin distinguir tonos.
+ */
+export function getWaterStatus(lastWater?: string | null) {
+  const days = getDaysSinceWater(lastWater);
+
+  if (days === null) return { days, label: 'Sin registro', level: 'unknown' as const };
+  if (days === 0) return { days, label: 'Regada hoy', level: 'ok' as const };
+  if (days === 1) return { days, label: 'Regada ayer', level: 'ok' as const };
+  if (days <= 2) return { days, label: `Hace ${days} días`, level: 'ok' as const };
+  if (days === 3) return { days, label: 'Hace 3 días', level: 'warn' as const };
+
+  return { days, label: `Hace ${days} días`, level: 'late' as const };
+}
+
+/**
+ * Días transcurridos desde una fecha, sin decimales ni negativos.
+ *
+ * Se calcula siempre en el servidor y se pasa ya resuelto a las tarjetas: si
+ * cada componente de cliente llamara a "ahora" durante el render, en el cambio
+ * de día el HTML del servidor y el del navegador dirían números distintos.
+ */
+export function daysSince(dateString?: string | null): number {
+  if (!dateString) return 0;
+
+  const start = new Date(dateString);
+  if (isNaN(start.getTime())) return 0;
+
+  return Math.max(0, Math.floor((new Date().getTime() - start.getTime()) / (1000 * 60 * 60 * 24)));
+}

@@ -74,7 +74,7 @@ export default function Toast({ message, type, isVisible, onClose }: ToastProps)
         <button
           type="button"
           onClick={handleClose}
-          className="btn-icon -mr-1 -mt-1 h-9 min-h-9 w-9 min-w-9 shrink-0"
+          className="btn-icon btn-icon-sm -mr-1 -mt-1 shrink-0"
           aria-label="Cerrar notificación"
         >
           <X size={16} aria-hidden="true" />

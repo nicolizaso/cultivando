@@ -6,9 +6,9 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
-import { CalendarDays, Check, MoreVertical, Trash2, Droplet, Pencil } from "lucide-react";
+import { Check, MoreVertical, Trash2, Droplet, ArrowUpRight } from "lucide-react";
 import { Plant } from "@/app/lib/types";
-import { getStageColor, getPlantMetrics } from "@/app/lib/utils";
+import { getStageColor, getPlantMetrics, getWaterStatus } from "@/app/lib/utils";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { useToast } from "@/app/context/ToastContext";
 
@@ -20,6 +20,13 @@ interface PlantCardProps {
   onToggleSelection?: () => void;
 }
 
+const WATER_TONE = {
+  ok: "text-fg-muted",
+  warn: "text-[color:var(--warning)]",
+  late: "text-[color:var(--danger)]",
+  unknown: "text-fg-subtle",
+} as const;
+
 export default function PlantCard({
   plant,
   cycleName,
@@ -27,11 +34,11 @@ export default function PlantCard({
   isSelected = false,
   onToggleSelection
 }: PlantCardProps) {
-  const { id, name, strain, stage, last_water: lastWater, image_url: imageUrl } = plant;
+  const { id, name, strain, stage, image_url: imageUrl } = plant;
   const router = useRouter();
   const { showToast } = useToast();
   const reduceMotion = useReducedMotion();
-  const [isWatered, setIsWatered] = useState(lastWater === "Hoy");
+  const [lastWater, setLastWater] = useState<string | null | undefined>(plant.last_water);
   const [loading, setLoading] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
@@ -72,14 +79,20 @@ export default function PlantCard({
     if (loading) return;
     setLoading(true);
     setShowMenu(false);
+
+    // Se guarda la fecha, no la palabra "Hoy": ese valor heredado se quedaba
+    // congelado y la ficha de la planta no podía calcular los días de atraso.
+    const today = new Date().toLocaleDateString('en-CA');
+
     try {
       const { error } = await supabase
         .from('plants')
-        .update({ last_water: 'Hoy' })
+        .update({ last_water: today })
         .eq('id', id);
       if (error) throw error;
-      setIsWatered(true);
+      setLastWater(today);
       showToast(`Riego registrado en ${name}`);
+      router.refresh();
     } catch (error) {
       showToast(error instanceof Error ? error.message : "No se pudo registrar el riego", "error");
     } finally {
@@ -110,31 +123,38 @@ export default function PlantCard({
   const rawStage = currentStage || stage;
   const displayStage = (rawStage === 'Esqueje' || rawStage === 'Plántula') ? 'Plántula' : rawStage;
   const stageInfo = getStageColor(displayStage);
+  const water = getWaterStatus(lastWater);
 
   const content = (
     <>
-      <div className="flex min-w-0 items-start justify-between gap-2">
-        <div className="min-w-0">
-          <h3 className="truncate text-[15px] font-semibold leading-tight text-fg">{name}</h3>
-          {strain && <p className="mt-0.5 truncate text-xs text-fg-muted">{strain}</p>}
-        </div>
+      <div className="min-w-0">
+        <h3 className="truncate text-[15px] font-semibold leading-tight text-fg">{name}</h3>
+        <p className="mt-0.5 truncate text-xs text-fg-muted">
+          {strain || 'Genética sin cargar'}
+          {cycleName && <span className="text-fg-subtle"> · {cycleName}</span>}
+        </p>
       </div>
 
-      <span className={`chip mt-2 w-fit ${stageInfo.bgColor} ${stageInfo.textColor} ${stageInfo.borderColor}`}>
+      <span className={`chip mt-2.5 w-fit ${stageInfo.bgColor} ${stageInfo.textColor} ${stageInfo.borderColor}`}>
         {stageInfo.icon}
         {displayStage}
       </span>
 
-      <div className="mt-auto pt-2 text-xs text-fg-muted">
-        <span className="flex items-center gap-1.5 font-medium text-fg">
-          <CalendarDays className="h-3.5 w-3.5" aria-hidden="true" />
-          {/* Las edades se calculan con la fecha del cliente: hasta montar se
-              reserva el espacio para no provocar un salto de layout. */}
-          {isMounted ? `${totalAge} días` : <span className="opacity-0">0 días</span>}
-          {cycleName && <span className="truncate border-l border-line pl-1.5 font-normal">{cycleName}</span>}
+      <div className="mt-auto flex flex-wrap items-center gap-x-2.5 gap-y-1 pt-2.5 text-[11px]">
+        {/* Las edades se calculan con la fecha del cliente: hasta montar se
+            reserva el hueco para no provocar un salto de layout. */}
+        <span className="font-medium text-fg">
+          <span className="mono" suppressHydrationWarning>{isMounted ? totalAge : 0}</span> días
         </span>
-        <span className="mt-0.5 block text-[11px] text-fg-subtle">
-          En {displayStage.toLowerCase()} hace {isMounted ? daysInCurrentStage : 0} días
+
+        <span className="text-fg-subtle">
+          <span className="mono" suppressHydrationWarning>{isMounted ? daysInCurrentStage : 0}</span> en etapa
+        </span>
+
+        <span className={`flex items-center gap-1 ${WATER_TONE[water.level]}`}>
+          <Droplet className="h-3 w-3 shrink-0" aria-hidden="true" />
+          <span className="sr-only">Riego: </span>
+          {water.label}
         </span>
       </div>
     </>
@@ -142,8 +162,8 @@ export default function PlantCard({
 
   return (
     <>
-      <motion.div
-        className={`group relative flex h-28 flex-row overflow-hidden rounded-[var(--radius-lg)] border bg-surface transition-colors ${
+      <motion.article
+        className={`group relative flex h-[132px] flex-row overflow-hidden rounded-[var(--radius-lg)] border bg-surface shadow-[var(--shadow-sm)] transition-colors ${
           selectionMode && isSelected
             ? 'border-[color:var(--brand)] ring-1 ring-[color:var(--brand)]'
             : 'border-line hover:border-line-strong'
@@ -153,7 +173,7 @@ export default function PlantCard({
         transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
         layout={!reduceMotion}
       >
-        <div className="relative w-24 shrink-0 border-r border-line bg-surface-2 md:w-28">
+        <div className="relative w-[88px] shrink-0 border-r border-line bg-surface-2 sm:w-[104px]">
           {imageUrl ? (
             <Image
               src={imageUrl}
@@ -164,13 +184,13 @@ export default function PlantCard({
             />
           ) : (
             <div className={`flex h-full w-full items-center justify-center ${stageInfo.bgColor} ${stageInfo.textColor}`}>
-              <span className="text-3xl">{stageInfo.icon}</span>
+              <span className="text-[30px]" aria-hidden="true">{stageInfo.icon}</span>
             </div>
           )}
 
           {selectionMode && (
             <span
-              className={`absolute inset-0 z-20 flex items-center justify-center bg-[color-mix(in_srgb,var(--fg)_45%,transparent)] transition-opacity ${
+              className={`absolute inset-0 z-20 flex items-center justify-center bg-[color:var(--scrim)] transition-opacity ${
                 isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
               }`}
               aria-hidden="true"
@@ -194,16 +214,20 @@ export default function PlantCard({
               type="button"
               onClick={onToggleSelection}
               aria-pressed={isSelected}
-              className="flex min-w-0 flex-1 flex-col p-3 text-left"
+              className="flex min-w-0 flex-1 flex-col p-3.5 text-left"
             >
               {content}
             </button>
           ) : (
             <Link
               href={`/plants/${id}`}
-              className="flex min-w-0 flex-1 flex-col p-3 pr-11 transition-colors hover:bg-surface-2"
+              className="flex min-w-0 flex-1 flex-col p-3.5 pr-11 transition-colors hover:bg-surface-2"
             >
               {content}
+              <ArrowUpRight
+                className="absolute bottom-3 right-3 h-4 w-4 text-fg-subtle opacity-0 transition-opacity group-hover:opacity-100"
+                aria-hidden="true"
+              />
             </Link>
           )}
 
@@ -216,7 +240,7 @@ export default function PlantCard({
                 aria-expanded={showMenu}
                 aria-haspopup="menu"
                 aria-label={`Acciones para ${name}`}
-                className="btn-icon h-9 min-h-9 w-9 min-w-9"
+                className="btn-icon btn-icon-sm"
               >
                 <MoreVertical size={16} aria-hidden="true" />
               </button>
@@ -230,30 +254,30 @@ export default function PlantCard({
                     animate={{ opacity: 1, scale: 1, y: 0 }}
                     exit={reduceMotion ? { opacity: 0 } : { opacity: 0, scale: 0.96, y: -6 }}
                     transition={{ duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
-                    className="absolute right-0 top-full z-50 mt-1 flex min-w-[150px] flex-col overflow-hidden rounded-[var(--radius-md)] border border-line bg-surface py-1 shadow-[var(--shadow-lg)]"
+                    className="absolute right-0 top-full z-50 mt-1 flex min-w-[168px] flex-col overflow-hidden rounded-[var(--radius-md)] border border-line bg-surface py-1 shadow-[var(--shadow-lg)]"
                   >
                     <button
                       type="button"
                       role="menuitem"
                       onClick={handleWater}
-                      disabled={loading}
-                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-medium text-fg transition-colors hover:bg-surface-3 disabled:opacity-50"
+                      disabled={loading || water.days === 0}
+                      className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-xs font-medium text-fg transition-colors hover:bg-surface-3 disabled:opacity-50"
                     >
                       <Droplet
                         size={14}
-                        className={isWatered ? "text-[color:var(--info)]" : ""}
+                        className={water.days === 0 ? "text-[color:var(--info)]" : ""}
                         aria-hidden="true"
                       />
-                      {isWatered ? 'Regada hoy' : 'Regar'}
+                      {water.days === 0 ? 'Ya regada hoy' : 'Registrar riego'}
                     </button>
 
                     <Link
                       href={`/plants/${id}`}
                       role="menuitem"
-                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-medium text-fg transition-colors hover:bg-surface-3"
+                      className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-xs font-medium text-fg transition-colors hover:bg-surface-3"
                     >
-                      <Pencil size={14} aria-hidden="true" />
-                      Detalles
+                      <ArrowUpRight size={14} aria-hidden="true" />
+                      Ver la ficha
                     </Link>
 
                     <span className="my-1 h-px bg-[color:var(--border)]" aria-hidden="true" />
@@ -265,7 +289,7 @@ export default function PlantCard({
                         setShowMenu(false);
                         setShowConfirm(true);
                       }}
-                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-medium text-[color:var(--danger)] transition-colors hover:bg-[color:var(--danger-soft)]"
+                      className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-xs font-medium text-[color:var(--danger)] transition-colors hover:bg-[color:var(--danger-soft)]"
                     >
                       <Trash2 size={14} aria-hidden="true" />
                       Eliminar
@@ -276,7 +300,7 @@ export default function PlantCard({
             </div>
           )}
         </div>
-      </motion.div>
+      </motion.article>
 
       <ConfirmDialog
         isOpen={showConfirm}

@@ -2,9 +2,16 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import Image from 'next/image'
+import { AlertCircle, ArrowRight, CalendarCheck, FlaskConical, Loader2, Lock, Mail, RefreshCw, User } from 'lucide-react'
 import { login, signup } from './actions'
-import { ArrowRight, Loader2, User, Mail, Lock, AlertCircle } from 'lucide-react'
+import Logo from '@/components/Logo'
+import { BRAND_NAME, BRAND_TAGLINE } from '@/components/Brand'
+
+const HIGHLIGHTS = [
+  { icon: RefreshCw, title: 'Ciclos y plantas', text: 'Cada tanda con su día de cultivo, su etapa y su historial.' },
+  { icon: CalendarCheck, title: 'Agenda de tareas', text: 'Riegos, podas y cambios de etapa en un calendario.' },
+  { icon: FlaskConical, title: 'Nutrición', text: 'Tus fertilizantes y combos, con la dosis ya calculada.' },
+]
 
 export default function LoginPage() {
   const router = useRouter()
@@ -38,135 +45,191 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="flex min-h-[100dvh] flex-col items-center justify-center p-6">
-      <div className="mb-8 flex flex-col items-center text-center">
-        <span className="surface mb-4 flex h-20 w-20 items-center justify-center rounded-[var(--radius-xl)]">
-          <Image src="/logo-login.png" alt="" width={60} height={60} className="h-12 w-12 object-contain" />
-        </span>
-        <h1 className="font-title text-xl font-semibold tracking-tight text-fg">Cultiva con el Primo</h1>
-        <p className="mt-1 text-sm text-fg-muted">Gestión inteligente de cultivos</p>
-      </div>
+    <main className="grid min-h-[100dvh] grid-cols-1 lg:grid-cols-[1.1fr_1fr]">
+      {/* Panel de marca. En móvil se reduce a una cabecera para que el
+          formulario siga entrando en pantalla sin desplazarse. */}
+      <section className="relative flex flex-col justify-between overflow-hidden bg-brand px-6 py-8 text-[color:var(--brand-fg)] sm:px-10 lg:px-14 lg:py-14">
+        <div
+          className="pointer-events-none absolute inset-0 opacity-[0.16]"
+          style={{
+            backgroundImage:
+              'radial-gradient(ellipse 60% 50% at 15% 0%, #ffffff, transparent 60%), radial-gradient(ellipse 50% 60% at 95% 100%, #ffffff, transparent 55%)',
+          }}
+          aria-hidden="true"
+        />
 
-      <div className="surface w-full max-w-sm rounded-[var(--radius-xl)] p-6">
-        {/* Conmutador ingresar/registrarse como grupo de pestañas real */}
-        <div role="tablist" aria-label="Modo de acceso" className="mb-6 flex gap-1 rounded-[var(--radius-md)] border border-line bg-surface-2 p-1">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={isLogin}
-            onClick={() => { setIsLogin(true); setMsg(null); }}
-            className={`flex-1 rounded-[var(--radius-sm)] py-2.5 text-sm font-semibold transition-colors ${
-              isLogin ? 'bg-brand text-[color:var(--brand-fg)]' : 'text-fg-muted hover:text-fg'
-            }`}
-          >
-            Ingresar
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={!isLogin}
-            onClick={() => { setIsLogin(false); setMsg(null); }}
-            className={`flex-1 rounded-[var(--radius-sm)] py-2.5 text-sm font-semibold transition-colors ${
-              !isLogin ? 'bg-brand text-[color:var(--brand-fg)]' : 'text-fg-muted hover:text-fg'
-            }`}
-          >
-            Registrarse
-          </button>
+        <div className="relative">
+          <span className="inline-flex items-center gap-3">
+            {/* Sobre el verde de marca la tesela se invierte: fondo claro y
+                brote verde, para que el logotipo no desaparezca en el fondo. */}
+            <span
+              className="flex h-11 w-11 items-center justify-center rounded-[var(--radius-md)] bg-[color:var(--brand-fg)] text-[color:var(--brand)]"
+              aria-hidden="true"
+            >
+              <Logo className="h-6 w-6" strokeWidth={2.1} />
+            </span>
+            <span className="font-title text-xl font-semibold tracking-tight">{BRAND_NAME}</span>
+          </span>
         </div>
 
-        {msg && (
-          <p
-            role="alert"
-            className="mb-5 flex items-start gap-2 rounded-[var(--radius-md)] border border-[color:color-mix(in_srgb,var(--danger)_35%,transparent)] bg-[color:var(--danger-soft)] p-3 text-sm font-medium text-[color:var(--danger)]"
-          >
-            <AlertCircle size={16} className="mt-0.5 shrink-0" aria-hidden="true" />
-            {msg.text}
+        <div className="relative my-10 max-w-md lg:my-0">
+          <h1 className="font-title text-3xl font-semibold leading-tight tracking-tight sm:text-4xl lg:text-[44px]">
+            {BRAND_TAGLINE}
+          </h1>
+          <p className="mt-3 text-sm leading-relaxed opacity-85 sm:text-base">
+            Llevá el registro de tus ciclos sin cuadernos ni fotos sueltas en el teléfono.
           </p>
-        )}
+        </div>
 
-        <form onSubmit={handleOnSubmit} className="space-y-4">
-          {!isLogin && (
-            <div className="field">
-              <label htmlFor="login-username" className="field-label">Usuario</label>
-              <div className="relative">
-                <User className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-fg-muted" aria-hidden="true" />
-                <input
-                  id="login-username"
-                  name="username"
-                  type="text"
-                  autoComplete="username"
-                  required={!isLogin}
-                  placeholder="Nombre de usuario"
-                  className="field-input pl-10"
-                />
-              </div>
-            </div>
-          )}
+        <ul className="relative hidden max-w-md space-y-4 lg:block">
+          {HIGHLIGHTS.map(item => {
+            const Icon = item.icon
+            return (
+              <li key={item.title} className="flex items-start gap-3.5">
+                <span
+                  className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-[color-mix(in_srgb,var(--brand-fg)_16%,transparent)]"
+                  aria-hidden="true"
+                >
+                  <Icon size={17} />
+                </span>
+                <span>
+                  <span className="block text-sm font-semibold">{item.title}</span>
+                  <span className="block text-sm opacity-80">{item.text}</span>
+                </span>
+              </li>
+            )
+          })}
+        </ul>
+      </section>
 
-          <div className="field">
-            <label htmlFor="login-email" className="field-label">
-              {isLogin ? 'Email o usuario' : 'Email'}
-            </label>
-            <div className="relative">
-              <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-fg-muted" aria-hidden="true" />
-              <input
-                id="login-email"
-                name="email"
-                type="text"
-                autoComplete={isLogin ? 'username' : 'email'}
-                required
-                placeholder={isLogin ? 'Email o usuario' : 'tu@email.com'}
-                className="field-input pl-10"
-              />
-            </div>
+      {/* Panel de acceso */}
+      <section className="flex items-center justify-center px-5 py-10 sm:px-8">
+        <div className="w-full max-w-sm">
+          <h2 className="font-title text-2xl font-semibold tracking-tight text-fg">
+            {isLogin ? 'Entrá a tu cultivo' : 'Creá tu cuenta'}
+          </h2>
+          <p className="mt-1 mb-6 text-sm text-fg-muted">
+            {isLogin ? 'Usá tu email o tu nombre de usuario.' : 'Con un email alcanza para empezar.'}
+          </p>
+
+          {/* Conmutador ingresar/registrarse como grupo de pestañas real */}
+          <div role="tablist" aria-label="Modo de acceso" className="segmented mb-6 grid w-full grid-cols-2">
+            <button
+              type="button"
+              role="tab"
+              id="tab-login"
+              aria-selected={isLogin}
+              onClick={() => { setIsLogin(true); setMsg(null); }}
+              className="segmented-item"
+            >
+              Ingresar
+            </button>
+            <button
+              type="button"
+              role="tab"
+              id="tab-signup"
+              aria-selected={!isLogin}
+              onClick={() => { setIsLogin(false); setMsg(null); }}
+              className="segmented-item"
+            >
+              Registrarse
+            </button>
           </div>
 
-          <div className="field">
-            <label htmlFor="login-password" className="field-label">Contraseña</label>
-            <div className="relative">
-              <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-fg-muted" aria-hidden="true" />
-              <input
-                id="login-password"
-                name="password"
-                type="password"
-                autoComplete={isLogin ? 'current-password' : 'new-password'}
-                required
-                placeholder="Tu contraseña"
-                className="field-input pl-10"
-              />
-            </div>
-          </div>
-
-          {!isLogin && (
-            <div className="field">
-              <label htmlFor="login-confirm" className="field-label">Repetir contraseña</label>
-              <div className="relative">
-                <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-fg-muted" aria-hidden="true" />
-                <input
-                  id="login-confirm"
-                  name="confirmPassword"
-                  type="password"
-                  autoComplete="new-password"
-                  required={!isLogin}
-                  placeholder="Repetí la contraseña"
-                  className="field-input pl-10"
-                />
-              </div>
-            </div>
+          {msg && (
+            <p
+              role="alert"
+              className="mb-5 flex items-start gap-2 rounded-[var(--radius-md)] border border-[color:color-mix(in_srgb,var(--danger)_35%,transparent)] bg-[color:var(--danger-soft)] p-3 text-sm font-medium text-[color:var(--danger)]"
+            >
+              <AlertCircle size={16} className="mt-0.5 shrink-0" aria-hidden="true" />
+              {msg.text}
+            </p>
           )}
 
-          <button type="submit" disabled={loading} className="btn btn-primary mt-2 w-full">
-            {loading ? (
-              <Loader2 className="animate-spin" size={18} aria-hidden="true" />
-            ) : (
-              <>
-                {isLogin ? 'Ingresar' : 'Crear cuenta'}
-                <ArrowRight size={18} aria-hidden="true" />
-              </>
+          <form onSubmit={handleOnSubmit} className="space-y-4">
+            {!isLogin && (
+              <div className="field">
+                <label htmlFor="login-username" className="field-label">Usuario</label>
+                <div className="relative">
+                  <User className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-fg-subtle" aria-hidden="true" />
+                  <input
+                    id="login-username"
+                    name="username"
+                    type="text"
+                    autoComplete="username"
+                    required={!isLogin}
+                    placeholder="Cómo querés que te llamemos"
+                    className="field-input pl-10"
+                  />
+                </div>
+              </div>
             )}
-          </button>
-        </form>
-      </div>
+
+            <div className="field">
+              <label htmlFor="login-email" className="field-label">
+                {isLogin ? 'Email o usuario' : 'Email'}
+              </label>
+              <div className="relative">
+                <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-fg-subtle" aria-hidden="true" />
+                <input
+                  id="login-email"
+                  name="email"
+                  type="text"
+                  autoComplete={isLogin ? 'username' : 'email'}
+                  required
+                  placeholder={isLogin ? 'Email o usuario' : 'tu@email.com'}
+                  className="field-input pl-10"
+                />
+              </div>
+            </div>
+
+            <div className="field">
+              <label htmlFor="login-password" className="field-label">Contraseña</label>
+              <div className="relative">
+                <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-fg-subtle" aria-hidden="true" />
+                <input
+                  id="login-password"
+                  name="password"
+                  type="password"
+                  autoComplete={isLogin ? 'current-password' : 'new-password'}
+                  required
+                  placeholder="Tu contraseña"
+                  className="field-input pl-10"
+                />
+              </div>
+            </div>
+
+            {!isLogin && (
+              <div className="field">
+                <label htmlFor="login-confirm" className="field-label">Repetir contraseña</label>
+                <div className="relative">
+                  <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-fg-subtle" aria-hidden="true" />
+                  <input
+                    id="login-confirm"
+                    name="confirmPassword"
+                    type="password"
+                    autoComplete="new-password"
+                    required={!isLogin}
+                    placeholder="Repetí la contraseña"
+                    className="field-input pl-10"
+                  />
+                </div>
+              </div>
+            )}
+
+            <button type="submit" disabled={loading} className="btn btn-primary mt-2 w-full">
+              {loading ? (
+                <Loader2 className="animate-spin" size={18} aria-hidden="true" />
+              ) : (
+                <>
+                  {isLogin ? 'Ingresar' : 'Crear cuenta'}
+                  <ArrowRight size={18} aria-hidden="true" />
+                </>
+              )}
+            </button>
+          </form>
+        </div>
+      </section>
     </main>
   )
 }

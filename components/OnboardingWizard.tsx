@@ -19,9 +19,9 @@ export default function OnboardingWizard() {
   const [cycleId, setCycleId] = useState<number | null>(null);
 
   // Forms
-  const [spaceForm, setSpaceForm] = useState({ name: "Mi Primer Espacio", type: "Indoor" });
-  const [cycleForm, setCycleForm] = useState({ name: "Ciclo Inicial", startDate: new Date().toISOString().split('T')[0] });
-  const [plantsForm, setPlantsForm] = useState({ count: 1, strain: "Genética", source: "Semilla" });
+  const [spaceForm, setSpaceForm] = useState({ name: "Mi primer espacio", type: "Indoor" });
+  const [cycleForm, setCycleForm] = useState({ name: "Primer ciclo", startDate: new Date().toISOString().split('T')[0] });
+  const [plantsForm, setPlantsForm] = useState({ count: 1, strain: "", source: "Semilla" });
 
   const [isOpen, setIsOpen] = useState(true);
 
@@ -46,7 +46,7 @@ export default function OnboardingWizard() {
         } else throw new Error(res.error || "Error creando ciclo");
       } else if (step === 3) {
         if (!cycleId) throw new Error("Falta el ciclo");
-        const res = await createPlantsBulk(plantsForm.count, plantsForm.strain, plantsForm.source as any, cycleId);
+        const res = await createPlantsBulk(plantsForm.count, plantsForm.strain.trim() || "Sin especificar", plantsForm.source as any, cycleId);
         if (res.success) {
           setIsOpen(false);
           router.refresh();
@@ -70,8 +70,8 @@ export default function OnboardingWizard() {
     <Modal
       isOpen={isOpen}
       onClose={handleSkip}
-      title="Bienvenido a Cultiva con el Primo"
-      description="Configuremos tu entorno inicial en tres pasos."
+      title="Bienvenido a Cultivando"
+      description="Tres pasos y ya tenés el cultivo listo para registrar."
       dismissOnBackdrop={false}
       footer={
         <>
@@ -121,7 +121,7 @@ export default function OnboardingWizard() {
           <div className="space-y-5">
             <h3 className="flex items-center gap-2 text-sm font-semibold text-[color:var(--brand-text)]">
               <Warehouse size={16} aria-hidden="true" />
-              Paso 1: tu espacio
+              Tu espacio
             </h3>
 
             <div className="field">
@@ -156,7 +156,7 @@ export default function OnboardingWizard() {
           <div className="space-y-5">
             <h3 className="flex items-center gap-2 text-sm font-semibold text-[color:var(--brand-text)]">
               <RefreshCw size={16} aria-hidden="true" />
-              Paso 2: tu primer ciclo
+              Tu primer ciclo
             </h3>
 
             <div className="field">
@@ -188,7 +188,7 @@ export default function OnboardingWizard() {
           <div className="space-y-5">
             <h3 className="flex items-center gap-2 text-sm font-semibold text-[color:var(--brand-text)]">
               <Leaf size={16} aria-hidden="true" />
-              Paso 3: tus plantas
+              Tus plantas
             </h3>
 
             <div className="grid grid-cols-2 gap-4">
@@ -226,6 +226,7 @@ export default function OnboardingWizard() {
               <input
                 id="onb-plants-strain"
                 type="text"
+                placeholder="Northern Lights, Critical..."
                 className="field-input"
                 value={plantsForm.strain}
                 onChange={e => setPlantsForm({...plantsForm, strain: e.target.value})}

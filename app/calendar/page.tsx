@@ -1,10 +1,11 @@
 import { createClient } from "@/app/lib/supabase-server";
 import CalendarView from "@/components/CalendarView";
-import GlobalHeader from "@/components/GlobalHeader";
+import PageShell from "@/components/layout/PageShell";
 import { Plant } from "../lib/types";
 import { mapTaskCycles } from "../lib/utils";
 
 export const dynamic = 'force-dynamic';
+export const metadata = { title: "Agenda" };
 
 interface CycleWithPlantsAndSpace {
     id: number;
@@ -17,7 +18,6 @@ interface CycleWithPlantsAndSpace {
 
 export default async function CalendarPage() {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
 
   // Parallel fetch of all needed data
   const [
@@ -44,7 +44,7 @@ export default async function CalendarPage() {
       .select('id, name')
   ]);
 
-  // Process plants for the FAB (extracted from active cycles)
+  // Process plants for the create-task action (extracted from active cycles)
   const cycles = (activeCycles || []) as unknown as CycleWithPlantsAndSpace[];
   const allPlantsMap = new Map<string, { id: string, name: string, space_id?: number }>();
   cycles.forEach(cycle => {
@@ -68,9 +68,7 @@ export default async function CalendarPage() {
   });
 
   return (
-    <main className="mx-auto w-full max-w-[1400px] px-5 py-6 md:px-8 md:py-8">
-      <GlobalHeader userEmail={user?.email} title="Agenda" subtitle="Planificación del cultivo" />
-
+    <PageShell>
       <CalendarView
         logs={logs || []}
         tasks={mappedTasks}
@@ -78,6 +76,6 @@ export default async function CalendarPage() {
         spaces={allSpaces || []}
         cycles={viewCycles}
       />
-    </main>
+    </PageShell>
   );
 }

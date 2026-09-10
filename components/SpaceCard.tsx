@@ -4,16 +4,19 @@ import { useState } from "react";
 import { supabase } from "@/app/lib/supabase";
 import { useRouter } from "next/navigation";
 import { Space } from "@/app/lib/types";
-import { Warehouse, Sun, Trash2, Tent, Maximize, Wind } from "lucide-react";
+import { Warehouse, Sun, Trash2, Tent, Maximize, Wind, SlidersHorizontal } from "lucide-react";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { useToast } from "@/app/context/ToastContext";
 
 interface SpaceCardProps {
   space: Space;
-  onClick?: () => void;
+  /** Ciclos en curso y plantas vivas alojadas en el espacio. */
+  activeCycles?: number;
+  plants?: number;
+  onConfigure?: () => void;
 }
 
-export default function SpaceCard({ space, onClick }: SpaceCardProps) {
+export default function SpaceCard({ space, activeCycles = 0, plants = 0, onConfigure }: SpaceCardProps) {
   const router = useRouter();
   const { showToast } = useToast();
   const [isDeleting, setIsDeleting] = useState(false);
@@ -33,100 +36,102 @@ export default function SpaceCard({ space, onClick }: SpaceCardProps) {
 
   if (isDeleting) return null;
 
-  const getSpaceIcon = () => {
-    switch (space.type) {
-      case 'Indoor':
-        return <Warehouse className="text-[color:var(--info)]" size={22} aria-hidden="true" />;
-      case 'Outdoor':
-        return <Sun className="text-[color:var(--warning)]" size={22} aria-hidden="true" />;
-      default:
-        return <Tent className="text-[color:var(--stage-bloom)]" size={22} aria-hidden="true" />;
-    }
-  };
+  const typeIcon = {
+    Indoor: <Warehouse className="text-[color:var(--accent-blue)]" size={20} aria-hidden="true" />,
+    Outdoor: <Sun className="text-[color:var(--accent-amber)]" size={20} aria-hidden="true" />,
+  }[space.type as string] ?? <Tent className="text-[color:var(--accent-violet)]" size={20} aria-hidden="true" />;
 
-  const hasLight = space.light_type || space.light_watts;
-  const hasDims = space.width || space.length || space.area_m2;
-  const hasVent = space.vent_extraction || space.vent_intraction;
-  const hasSpecs = hasLight || hasDims || hasVent;
+  const specs = [
+    (space.light_type || space.light_watts) && {
+      icon: Sun,
+      srLabel: 'Iluminación',
+      value: [space.light_type, space.light_watts ? `${space.light_watts}W` : ''].filter(Boolean).join(' '),
+    },
+    (space.width || space.length || space.area_m2) && {
+      icon: Maximize,
+      srLabel: 'Dimensiones',
+      value: space.width && space.length ? `${space.width} x ${space.length} m` : `${space.area_m2} m²`,
+    },
+    (space.vent_extraction || space.vent_intraction) && {
+      icon: Wind,
+      srLabel: 'Ventilación',
+      value: `${space.vent_extraction || space.vent_intraction} m³/h`,
+    },
+  ].filter(Boolean) as { icon: typeof Sun; srLabel: string; value: string }[];
 
   return (
     <>
-      <div className="surface group relative rounded-[var(--radius-lg)] p-5">
-        <div className="flex items-start gap-4">
-          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[var(--radius-md)] border border-line bg-surface-2">
-            {getSpaceIcon()}
+      <article className="surface flex h-full flex-col rounded-[var(--radius-lg)] p-5">
+        <div className="flex items-start gap-3.5">
+          <span
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[var(--radius-md)] border border-line bg-surface-2"
+            aria-hidden="true"
+          >
+            {typeIcon}
           </span>
 
           <div className="min-w-0 flex-1">
-            <h3 className="font-title text-lg font-semibold tracking-tight text-fg">
-              {/* El botón cubre la tarjeta para que el clic funcione igual que
-                  antes, pero ahora es un control real: recibe foco y responde
-                  a Enter y espacio. */}
-              {onClick ? (
-                <button
-                  type="button"
-                  onClick={onClick}
-                  className="text-left after:absolute after:inset-0 after:rounded-[var(--radius-lg)] after:content-['']"
-                >
-                  {space.name}
-                </button>
-              ) : (
-                space.name
-              )}
-            </h3>
-
-            {hasSpecs ? (
-              <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1.5 text-xs text-fg-muted">
-                {hasLight && (
-                  <li className="flex items-center gap-1.5">
-                    <Sun size={14} className="text-[color:var(--warning)]" aria-hidden="true" />
-                    <span className="sr-only">Iluminación:</span>
-                    {[space.light_type, space.light_watts ? `${space.light_watts}W` : ''].filter(Boolean).join(' ')}
-                  </li>
-                )}
-                {hasDims && (
-                  <li className="flex items-center gap-1.5">
-                    <Maximize size={14} className="text-[color:var(--brand-text)]" aria-hidden="true" />
-                    <span className="sr-only">Dimensiones:</span>
-                    {space.width && space.length ? `${space.width}x${space.length}m` : `${space.area_m2}m²`}
-                  </li>
-                )}
-                {hasVent && (
-                  <li className="flex items-center gap-1.5">
-                    <Wind size={14} className="text-[color:var(--info)]" aria-hidden="true" />
-                    <span className="sr-only">Ventilación:</span>
-                    {space.vent_extraction || space.vent_intraction}m³/h
-                  </li>
-                )}
-              </ul>
-            ) : (
-              <p className="mt-1.5 text-xs text-fg-subtle">Sin configuración técnica todavía</p>
-            )}
+            <h3 className="truncate font-title text-lg font-semibold tracking-tight text-fg">{space.name}</h3>
+            <p className="mt-0.5 text-xs text-fg-muted">
+              {/* La ocupación es el dato que faltaba: hasta ahora la tarjeta no
+                  decía si el espacio estaba en uso o vacío. */}
+              {activeCycles === 0
+                ? 'Libre'
+                : `${activeCycles} ciclo${activeCycles === 1 ? '' : 's'} · ${plants} planta${plants === 1 ? '' : 's'}`}
+            </p>
           </div>
+
+          <span className="chip chip-neutral shrink-0">{space.type}</span>
         </div>
 
-        <div className="mt-5 flex items-center justify-between border-t border-line pt-4">
-          <span className="chip border-line bg-surface-2 text-fg-muted">{space.type}</span>
+        {specs.length > 0 ? (
+          <ul className="mt-4 flex flex-wrap gap-x-4 gap-y-1.5 text-xs text-fg-muted">
+            {specs.map(spec => {
+              const Icon = spec.icon;
+              return (
+                <li key={spec.srLabel} className="flex items-center gap-1.5">
+                  <Icon size={14} className="shrink-0 text-fg-subtle" aria-hidden="true" />
+                  <span className="sr-only">{spec.srLabel}: </span>
+                  {spec.value}
+                </li>
+              );
+            })}
+          </ul>
+        ) : (
+          <p className="mt-4 text-xs text-fg-subtle">
+            Sin ficha técnica. Cargá luz, medidas y ventilación para calcular el VPD.
+          </p>
+        )}
 
-          {/* Siempre visible: revelarlo sólo al pasar el cursor lo dejaba
-              inalcanzable en táctil. z-10 lo pone sobre el área clicable. */}
+        <div className="mt-auto flex items-center justify-between gap-2 border-t border-line pt-3.5">
+          {/* Botón explícito: antes había que adivinar que la tarjeta entera
+              abría la configuración. */}
+          <button type="button" onClick={onConfigure} className="btn btn-sm btn-secondary">
+            <SlidersHorizontal size={15} aria-hidden="true" />
+            Configurar
+          </button>
+
           <button
             type="button"
             onClick={() => setShowConfirm(true)}
-            className="btn-icon relative z-10 h-9 min-h-9 w-9 min-w-9 text-[color:var(--danger)]"
+            className="btn-icon btn-icon-sm text-[color:var(--danger)]"
             aria-label={`Eliminar espacio ${space.name}`}
           >
             <Trash2 size={16} aria-hidden="true" />
           </button>
         </div>
-      </div>
+      </article>
 
       <ConfirmDialog
         isOpen={showConfirm}
         onClose={() => setShowConfirm(false)}
         onConfirm={handleDelete}
         title="Eliminar espacio"
-        description={`Se eliminará "${space.name}". Esta acción no se puede deshacer.`}
+        description={
+          activeCycles > 0
+            ? `"${space.name}" tiene ${activeCycles} ciclo${activeCycles === 1 ? '' : 's'} en curso. Al eliminarlo esos ciclos se quedan sin espacio asignado.`
+            : `Se eliminará "${space.name}". Esta acción no se puede deshacer.`
+        }
         confirmLabel="Eliminar"
       />
     </>
