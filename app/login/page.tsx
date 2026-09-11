@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Image from 'next/image'
 import { AlertCircle, ArrowRight, CalendarCheck, FlaskConical, Loader2, Lock, Mail, RefreshCw, User } from 'lucide-react'
 import { login, signup } from './actions'
 import Logo from '@/components/Logo'
@@ -49,8 +50,28 @@ export default function LoginPage() {
       {/* Panel de marca. En móvil se reduce a una cabecera para que el
           formulario siga entrando en pantalla sin desplazarse. */}
       <section className="relative flex flex-col justify-between overflow-hidden bg-brand px-6 py-8 text-[color:var(--brand-fg)] sm:px-10 lg:px-14 lg:py-14">
+        {/* Foto del cultivo como textura del panel. El desenfoque es leve
+            (las plantas se siguen leyendo) y el velo de marca en degradado
+            es más opaco del lado del texto, que es donde hay que garantizar
+            contraste; hacia la derecha se abre y la foto respira.
+            Medido sobre el peor píxel de foto que queda debajo de cada
+            bloque de texto: ≥4.78:1 en los dos temas, AA con margen. */}
+        <div className="pointer-events-none absolute inset-0" aria-hidden="true">
+          {/* El scale evita el borde translúcido que el blur deja al recortar. */}
+          <Image
+            src="/login-cultivo.jpg"
+            alt=""
+            fill
+            priority
+            sizes="(min-width: 1024px) 55vw, 100vw"
+            className="scale-[1.04] object-cover object-center blur-[2px]"
+          />
+          <div className="absolute inset-0 bg-gradient-to-r from-[color-mix(in_srgb,var(--brand)_92%,transparent)] via-[color-mix(in_srgb,var(--brand)_80%,transparent)] via-60% to-[color-mix(in_srgb,var(--brand)_76%,transparent)] lg:to-[color-mix(in_srgb,var(--brand)_58%,transparent)]" />
+        </div>
+
+        {/* La foto ya aporta relieve, así que los halos bajan de intensidad. */}
         <div
-          className="pointer-events-none absolute inset-0 opacity-[0.16]"
+          className="pointer-events-none absolute inset-0 opacity-[0.10]"
           style={{
             backgroundImage:
               'radial-gradient(ellipse 60% 50% at 15% 0%, #ffffff, transparent 60%), radial-gradient(ellipse 50% 60% at 95% 100%, #ffffff, transparent 55%)',
@@ -76,7 +97,7 @@ export default function LoginPage() {
           <h1 className="font-title text-3xl font-semibold leading-tight tracking-tight sm:text-4xl lg:text-[44px]">
             {BRAND_TAGLINE}
           </h1>
-          <p className="mt-3 text-sm leading-relaxed opacity-85 sm:text-base">
+          <p className="mt-3 text-sm leading-relaxed opacity-90 sm:text-base">
             Llevá el registro de tus ciclos sin cuadernos ni fotos sueltas en el teléfono.
           </p>
         </div>
@@ -94,7 +115,7 @@ export default function LoginPage() {
                 </span>
                 <span>
                   <span className="block text-sm font-semibold">{item.title}</span>
-                  <span className="block text-sm opacity-80">{item.text}</span>
+                  <span className="block text-sm opacity-90">{item.text}</span>
                 </span>
               </li>
             )
