@@ -77,6 +77,9 @@ que no bailen al actualizarse.
   pestañas.
 - Se respetan `prefers-reduced-motion`, `prefers-contrast` y
   `prefers-reduced-transparency`; el zoom nunca se bloquea.
+- Los campos miden **16px reales** en pantallas táctiles: por debajo de eso iOS
+  hace zoom solo al enfocarlos, y la alternativa (bloquear el zoom) rompería
+  WCAG 1.4.4. Con puntero fino se mantiene la escala densa del diseño.
 
 ---
 
