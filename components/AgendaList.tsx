@@ -5,6 +5,7 @@ import { CheckCircle2, Loader2, Trash2 } from 'lucide-react'
 import { Task } from "@/app/lib/types"
 import TaskPill from "./TaskPill"
 import EditTaskModal from "./EditTaskModal"
+import EsquejarModal from "./EsquejarModal"
 import { toggleTaskStatus, deleteTasks } from "@/app/actions/tasks"
 import { useToast } from "@/app/context/ToastContext"
 import ConfirmDialog from "@/components/ui/ConfirmDialog"
@@ -24,6 +25,7 @@ export default function AgendaList({ tasks, disableDateFilter = false, groupBySt
   const [isDeleting, setIsDeleting] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [editingTask, setEditingTask] = useState<Task | null>(null)
+  const [esquejandoTask, setEsquejandoTask] = useState<Task | null>(null)
 
   // Filter tasks for today using local time
   const todayStr = new Date().toLocaleDateString('en-CA');
@@ -36,13 +38,35 @@ export default function AgendaList({ tasks, disableDateFilter = false, groupBySt
     if (!task) return
 
     const newStatus = task.status === 'completed' ? 'pending' : 'completed'
+
+    // El esquejado no se completa de un toque: primero hay que decir de qué
+    // plantas salieron esquejes y cuántos, porque de eso nacen plantas nuevas.
+    if (task.type === 'esquejado' && newStatus === 'completed') {
+      setEsquejandoTask(task)
+      return
+    }
+
     const res = await toggleTaskStatus(String(id), newStatus)
 
     if (res?.error) {
       showToast('Error al actualizar estado', 'error')
-    } else {
-      showToast(newStatus === 'completed' ? '¡Tarea completada!' : 'Tarea marcada como pendiente', 'success')
+      return
     }
+
+    if (newStatus === 'completed') {
+      showToast('¡Tarea completada!', 'success')
+      return
+    }
+
+    // Al desmarcarla, los esquejes ya creados siguen existiendo: son plantas
+    // con su propia historia, no un efecto secundario que se pueda deshacer.
+    const registered = task.metadata?.esquejado?.total ?? 0
+    showToast(
+      registered > 0
+        ? `Tarea pendiente. Los ${registered} esquejes creados se mantienen.`
+        : 'Tarea marcada como pendiente',
+      'success'
+    )
   }
 
   // --- Selección múltiple ---
@@ -164,6 +188,14 @@ export default function AgendaList({ tasks, disableDateFilter = false, groupBySt
            isOpen={!!editingTask}
            onClose={() => setEditingTask(null)}
            task={editingTask}
+        />
+      )}
+
+      {esquejandoTask && (
+        <EsquejarModal
+           isOpen={!!esquejandoTask}
+           onClose={() => setEsquejandoTask(null)}
+           task={esquejandoTask}
         />
       )}
 

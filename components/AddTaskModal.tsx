@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react'
 import {
-  X, Sprout, FileText, Check, ChevronDown, Loader2, RefreshCw, AlertTriangle
+  X, Sprout, FileText, Check, ChevronDown, Loader2, RefreshCw, AlertTriangle, GitBranch
 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { createTask } from '@/app/actions/tasks'
@@ -382,6 +382,17 @@ export default function AddTaskModal({ isOpen, onClose, plants, spaces, cycles =
               className="field-input"
             />
           </div>
+        )}
+
+        {selectedTaskType?.id === 'esquejado' && (
+          <p className="flex items-start gap-2 rounded-[var(--radius-md)] border border-line bg-surface-2 p-3 text-xs text-fg-muted">
+            <GitBranch size={14} className="mt-0.5 shrink-0" aria-hidden="true" />
+            <span>
+              Apuntala al ciclo entero. Al marcarla completada vas a elegir de qué plantas
+              sacaste esquejes y cuántos de cada una, y con eso se crean las plantas nuevas
+              en Enraizamiento.
+            </span>
+          </p>
         )}
 
         {selectedTaskType?.id === 'fertilizante' && (

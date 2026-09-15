@@ -1,7 +1,7 @@
 import {
   Droplets, FlaskConical, ShieldAlert, Shovel, Scissors, Activity,
   ArrowRightLeft, ArrowRightCircle, CloudRain, Flower, Skull, PenTool,
-  Calendar, Camera, Sprout, LucideIcon
+  Calendar, Camera, Sprout, GitBranch, LucideIcon
 } from 'lucide-react';
 import React from 'react';
 
@@ -115,6 +115,7 @@ export const TASK_TYPES: TaskTypeDef[] = [
   defineTask('fertilizante', 'Fertilizante', FlaskConical, 'green'),
   defineTask('repelente', 'Repelente', ShieldAlert, 'amber'),
   defineTask('trasplante', 'Trasplante', Shovel, 'lime'),
+  defineTask('esquejado', 'Esquejado', GitBranch, 'lime'),
   defineTask('poda', 'Poda', Scissors, 'slate'),
   defineTask('entrenamiento', 'Entrenamiento', Activity, 'teal'),
   defineTask('ambiente', 'Cambiar ambiente', ArrowRightLeft, 'blue'),

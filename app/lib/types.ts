@@ -80,6 +80,7 @@ export interface Task {
   target_stage?: string;
   target_space_id?: number | null;
   description?: string;
+  metadata?: TaskMetadata | null;
   recurrence_id?: string;
   task_plants?: {
     plant_id?: number;
@@ -94,6 +95,24 @@ export interface Task {
     cycles?: { id: number; name: string; };
   }[];
   plants?: any;
+}
+
+/**
+ * Resultado de una tarea de esquejado: se escribe al completarla y es lo que
+ * hace que volver a completarla no duplique plantas.
+ */
+export interface EsquejadoMetadata {
+  date: string;
+  /** Null cuando la tarea se completó sin registrar ningún esqueje. */
+  target_cycle_id: number | null;
+  total: number;
+  registered_at: string;
+  entries: { mother_id: number; mother_name?: string; count: number; plant_ids: number[] }[];
+}
+
+export interface TaskMetadata {
+  esquejado?: EsquejadoMetadata;
+  [key: string]: unknown;
 }
 
 export interface Log {
