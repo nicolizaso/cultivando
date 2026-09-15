@@ -5,13 +5,14 @@ import type { CycleWithSpace } from "@/components/CycleCard";
 import PageShell from "@/components/layout/PageShell";
 import PageHeader from "@/components/layout/PageHeader";
 import { daysSince } from "@/app/lib/utils";
+import { Space } from "@/app/lib/types";
 
 export const metadata = { title: "Ciclos" };
 
 export default async function CyclesPage() {
   const supabase = await createClient();
 
-  const [{ data: cycles }, { data: plants }] = await Promise.all([
+  const [{ data: cycles }, { data: plants }, { data: spaces }] = await Promise.all([
     supabase
       .from('cycles')
       .select('*, spaces(name), cycle_images(public_url)')
@@ -23,6 +24,11 @@ export default async function CyclesPage() {
     supabase
       .from('plants')
       .select('cycle_id, is_archived'),
+    // Destinos posibles para mudar un ciclo de espacio desde su tarjeta.
+    supabase
+      .from('spaces')
+      .select('id, name, type')
+      .order('name', { ascending: true }),
   ]);
 
   const plantCounts: Record<number, number> = {};
@@ -44,7 +50,12 @@ export default async function CyclesPage() {
         actions={<AddCycleModal />}
       />
 
-      <CyclesGrid cycles={(cycles ?? []) as CycleWithSpace[]} plantCounts={plantCounts} days={days} />
+      <CyclesGrid
+        cycles={(cycles ?? []) as CycleWithSpace[]}
+        plantCounts={plantCounts}
+        days={days}
+        spaces={(spaces ?? []) as Pick<Space, 'id' | 'name' | 'type'>[]}
+      />
     </PageShell>
   );
 }

@@ -7,13 +7,16 @@ import { supabase } from "@/app/lib/supabase";
 import { useRouter } from "next/navigation";
 import { PlayCircle, StopCircle, Trash2, MapPin, Sprout, Loader2 } from "lucide-react";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
+import MoveCycleSpaceModal from "@/components/MoveCycleSpaceModal";
 import { useToast } from "@/app/context/ToastContext";
+import { Space } from "@/app/lib/types";
 
 export interface CycleWithSpace {
   id: number;
   name: string;
   start_date: string;
   is_active: boolean;
+  space_id: number | null;
   spaces: { name: string } | null;
   cycle_images?: { public_url: string }[];
 }
@@ -23,9 +26,11 @@ interface CycleCardProps {
   /** Día de cultivo, resuelto en el servidor. */
   days: number;
   plantCount?: number;
+  /** Destinos para mudar el ciclo, sin salir de la lista. */
+  spaces?: Pick<Space, 'id' | 'name' | 'type'>[];
 }
 
-export default function CycleCard({ cycle, days, plantCount }: CycleCardProps) {
+export default function CycleCard({ cycle, days, plantCount, spaces = [] }: CycleCardProps) {
   const router = useRouter();
   const { showToast } = useToast();
   const [loading, setLoading] = useState(false);
@@ -150,14 +155,26 @@ export default function CycleCard({ cycle, days, plantCount }: CycleCardProps) {
               {cycle.is_active ? "Finalizar" : "Reactivar"}
             </button>
 
-            <button
-              type="button"
-              onClick={() => setShowConfirm(true)}
-              className="btn-icon btn-icon-sm relative z-10 text-[color:var(--danger)]"
-              aria-label={`Eliminar ciclo ${cycle.name}`}
-            >
-              <Trash2 size={16} aria-hidden="true" />
-            </button>
+            <div className="flex items-center gap-1">
+              <MoveCycleSpaceModal
+                cycleId={cycle.id}
+                cycleName={cycle.name}
+                currentSpaceId={cycle.space_id ?? null}
+                spaces={spaces}
+                plantCount={plantCount ?? 0}
+                trigger="icon"
+                className="relative z-10"
+              />
+
+              <button
+                type="button"
+                onClick={() => setShowConfirm(true)}
+                className="btn-icon btn-icon-sm relative z-10 text-[color:var(--danger)]"
+                aria-label={`Eliminar ciclo ${cycle.name}`}
+              >
+                <Trash2 size={16} aria-hidden="true" />
+              </button>
+            </div>
           </div>
         </div>
       </article>

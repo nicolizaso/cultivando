@@ -13,11 +13,17 @@ import Modal from "@/components/ui/Modal";
 
 interface MoveCycleSpaceModalProps {
   cycleId: number;
+  /** Nombre del ciclo, para etiquetar el disparador cuando va sin texto. */
+  cycleName?: string;
   /** Espacio actual del ciclo: se excluye de la lista de destinos. */
   currentSpaceId: number | null;
   spaces: Pick<Space, 'id' | 'name' | 'type'>[];
   /** Plantas que se mudan junto al ciclo, para avisarlo antes de confirmar. */
   plantCount?: number;
+  /** En las tarjetas el botón va sin texto: la fila de acciones es angosta. */
+  trigger?: 'button' | 'icon';
+  /** Clases extra del disparador (p. ej. el z-10 sobre el enlace estirado). */
+  className?: string;
 }
 
 /**
@@ -27,9 +33,12 @@ interface MoveCycleSpaceModalProps {
  */
 export default function MoveCycleSpaceModal({
   cycleId,
+  cycleName,
   currentSpaceId,
   spaces,
   plantCount = 0,
+  trigger = 'button',
+  className = '',
 }: MoveCycleSpaceModalProps) {
   const router = useRouter();
   const { showToast } = useToast();
@@ -87,15 +96,31 @@ export default function MoveCycleSpaceModal({
 
   return (
     <>
-      <button type="button" onClick={() => setIsOpen(true)} className="btn btn-sm btn-ghost">
-        <ArrowRightLeft size={14} aria-hidden="true" />
-        Cambiar espacio
-      </button>
+      {trigger === 'icon' ? (
+        <button
+          type="button"
+          onClick={() => setIsOpen(true)}
+          className={`btn-icon btn-icon-sm ${className}`}
+          aria-label={cycleName ? `Cambiar el espacio del ciclo ${cycleName}` : 'Cambiar de espacio'}
+          title="Cambiar espacio"
+        >
+          <ArrowRightLeft size={16} aria-hidden="true" />
+        </button>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setIsOpen(true)}
+          className={`btn btn-sm btn-ghost ${className}`}
+        >
+          <ArrowRightLeft size={14} aria-hidden="true" />
+          Cambiar espacio
+        </button>
+      )}
 
       <Modal
         isOpen={isOpen}
         onClose={close}
-        title="Cambiar el ciclo de espacio"
+        title={cycleName ? `Mudar "${cycleName}" de espacio` : 'Cambiar el ciclo de espacio'}
         description="El ciclo y sus plantas pasan a la nueva carpa o lugar de cultivo."
         size="sm"
         dismissOnBackdrop={!loading}
