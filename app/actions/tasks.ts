@@ -4,6 +4,14 @@ import { createClient } from "@/app/lib/supabase-server"
 import { revalidatePath } from "next/cache"
 import { randomUUID } from 'crypto'
 import { mapTaskCycles } from "../lib/utils"
+import {
+  buildClonePlants,
+  sanitizeCloneEntries,
+  totalClones,
+  validateCloneEntries,
+} from "../lib/clones"
+import type { CloneEntry, CloneMother } from "../lib/clones"
+import type { TaskMetadata } from "../lib/types"
 
 export async function createTask(formData: any) {
   const supabase = await createClient()
@@ -30,14 +38,19 @@ export async function createTask(formData: any) {
     } else if (target.type === 'space') {
       // Buscamos ciclos activos asociados al espacio para vincular la tarea
       const { data: cycles } = await supabase.from('cycles').select('id').eq('space_id', target.id).eq('is_active', true);
-      cycles?.forEach((c: any) => encounteredCycleIds.add(c.id));
+      const spaceCycleIds = cycles?.map((c: any) => c.id) ?? [];
+      spaceCycleIds.forEach((id: number) => encounteredCycleIds.add(id));
 
-      // Obtenemos todas las plantas que pertenecen físicamente al espacio para afectarlas a todas.
-      const { data: plants } = await supabase.from('plants').select('id, cycle_id').eq('space_id', target.id);
-      plants?.forEach((p: any) => {
-        allPlantIds.add(p.id);
-        if (p.cycle_id) encounteredCycleIds.add(p.cycle_id); // Recolectamos ciclos asociados
-      });
+      // Las plantas no guardan el espacio: viven en el ciclo y el ciclo en el
+      // espacio. Antes se buscaban por una columna `space_id` que la tabla no
+      // tiene, así que una tarea por espacio terminaba sin ninguna planta.
+      if (spaceCycleIds.length > 0) {
+        const { data: plants } = await supabase.from('plants').select('id, cycle_id').in('cycle_id', spaceCycleIds);
+        plants?.forEach((p: any) => {
+          allPlantIds.add(String(p.id));
+          if (p.cycle_id) encounteredCycleIds.add(p.cycle_id);
+        });
+      }
     } else if (target.type === 'cycle') {
       encounteredCycleIds.add(target.id);
       // Obtenemos todas las plantas que pertenecen a este ciclo
@@ -264,6 +277,9 @@ export async function toggleTaskStatus(taskId: string | number, newStatus: 'pend
 
   if (error) return { error: error.message }
 
+  // El esquejado no pasa por acá para completarse: lo hace `completeEsquejado`,
+  // que necesita saber de qué plantas salieron los esquejes y cuántos. Al
+  // desmarcarla, las plantas creadas se quedan donde están.
   if (newStatus === 'completed') {
     const { data: task } = await supabase
       .from('tasks')
@@ -444,4 +460,297 @@ export async function getAllPendingTasks() {
   })
 
   return { tasks, cycles: cyclesResult.data }
+}
+
+// --- ESQUEJADO ---
+
+/**
+ * Todo lo que el modal de esquejado necesita para preguntar: las plantas que
+ * la tarea alcanza (las enlazadas y las de sus ciclos, por si el ciclo sumó
+ * plantas después de agendarla), los ciclos activos a donde mandar los
+ * esquejes y los espacios, por si hay que abrir un ciclo nuevo.
+ */
+interface CandidatePlantRow {
+  id: number
+  name: string
+  strain?: string | null
+  breeder?: string | null
+  stage?: string | null
+  cycle_id?: number | null
+  is_archived?: boolean | null
+}
+
+interface CycleRow {
+  id: number
+  name: string
+  space_id?: number
+}
+
+export async function getEsquejadoCandidates(taskId: string | number) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Debes iniciar sesión.' }
+
+  const { data: task, error: taskError } = await supabase
+    .from('tasks')
+    .select('id, user_id, type, status, due_date, metadata, task_plants(plant_id), task_cycles(cycle_id)')
+    .eq('id', taskId)
+    .single()
+
+  if (taskError || !task) return { error: 'No se encontró la tarea.' }
+  if (task.user_id && task.user_id !== user.id) return { error: 'No autorizado.' }
+
+  const cycleIds: number[] = (task.task_cycles ?? []).map((tc: { cycle_id: number }) => tc.cycle_id).filter(Boolean)
+  const plantIds: number[] = (task.task_plants ?? []).map((tp: { plant_id: number }) => tp.plant_id).filter(Boolean)
+
+  const columns = 'id, name, strain, breeder, stage, cycle_id, is_archived'
+  const [byPlant, byCycle, cyclesResult, spacesResult] = await Promise.all([
+    plantIds.length > 0
+      ? supabase.from('plants').select(columns).in('id', plantIds)
+      : Promise.resolve({ data: [] as CandidatePlantRow[] }),
+    cycleIds.length > 0
+      ? supabase.from('plants').select(columns).in('cycle_id', cycleIds)
+      : Promise.resolve({ data: [] as CandidatePlantRow[] }),
+    supabase.from('cycles').select('id, name, space_id').eq('is_active', true).order('name'),
+    supabase.from('spaces').select('id, name').order('name'),
+  ])
+
+  // Una planta puede venir por los dos lados (enlazada y por su ciclo).
+  const candidatesById = new Map<number, CandidatePlantRow>()
+  for (const plant of [...(byPlant.data ?? []), ...(byCycle.data ?? [])] as CandidatePlantRow[]) {
+    if (plant?.is_archived) continue
+    candidatesById.set(Number(plant.id), plant)
+  }
+
+  const candidates = Array.from(candidatesById.values()).sort((a, b) =>
+    String(a.name ?? '').localeCompare(String(b.name ?? ''), 'es')
+  )
+
+  const activeCycles: CycleRow[] = cyclesResult.data ?? []
+  const defaultCycleId =
+    cycleIds.find((id) => activeCycles.some((c) => c.id === id)) ??
+    candidates.find((p) => p.cycle_id)?.cycle_id ??
+    activeCycles[0]?.id ??
+    null
+
+  return {
+    candidates,
+    cycles: activeCycles,
+    spaces: spacesResult.data ?? [],
+    defaultCycleId,
+    dueDate: task.due_date ?? null,
+    alreadyRegistered: (task.metadata as TaskMetadata | null)?.esquejado ?? null,
+  }
+}
+
+/**
+ * Completa una tarea de esquejado creando las plantas que salieron de ella.
+ *
+ * Cada esqueje nace el día del corte: día 0 en Enraizamiento, con la genética y
+ * la madre heredadas. El reparto (qué madre, cuántos) llega del cliente, así
+ * que se depura contra las plantas que la tarea realmente alcanza.
+ *
+ * Es idempotente: si la tarea ya tiene esquejes registrados (porque se desmarcó
+ * y se volvió a completar), vuelve a marcarla completada sin duplicar plantas.
+ */
+export async function completeEsquejado(
+  taskId: string | number,
+  payload: {
+    date: string
+    entries: CloneEntry[]
+    targetCycleId?: number | null
+    newCycle?: { name: string; spaceId: number } | null
+  }
+) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Debes iniciar sesión.' }
+
+  const { data: task, error: taskError } = await supabase
+    .from('tasks')
+    .select('id, user_id, type, metadata, task_plants(plant_id), task_cycles(cycle_id)')
+    .eq('id', taskId)
+    .single()
+
+  if (taskError || !task) return { error: 'No se encontró la tarea.' }
+  if (task.user_id && task.user_id !== user.id) return { error: 'No autorizado.' }
+  if (task.type !== 'esquejado') return { error: 'La tarea no es de esquejado.' }
+
+  const previous = (task.metadata as TaskMetadata | null)?.esquejado
+  if (previous) {
+    // Ya se registró antes: sólo hay que volver a cerrarla.
+    const { error } = await supabase
+      .from('tasks')
+      .update({ status: 'completed', completed_at: new Date().toISOString() })
+      .eq('id', taskId)
+
+    if (error) return { error: error.message }
+
+    revalidateEsquejado()
+    return { success: true, created: 0, alreadyRegistered: previous }
+  }
+
+  // 1. Candidatas reales de la tarea: las enlazadas más las de sus ciclos.
+  const cycleIds: number[] = (task.task_cycles ?? []).map((tc: { cycle_id: number }) => tc.cycle_id).filter(Boolean)
+  const linkedPlantIds: number[] = (task.task_plants ?? []).map((tp: { plant_id: number }) => tp.plant_id).filter(Boolean)
+
+  const [byPlant, byCycle] = await Promise.all([
+    linkedPlantIds.length > 0
+      ? supabase.from('plants').select('id, name, strain, breeder').in('id', linkedPlantIds)
+      : Promise.resolve({ data: [] as CandidatePlantRow[] }),
+    cycleIds.length > 0
+      ? supabase.from('plants').select('id, name, strain, breeder').in('cycle_id', cycleIds)
+      : Promise.resolve({ data: [] as CandidatePlantRow[] }),
+  ])
+
+  const mothersById = new Map<number, CandidatePlantRow>()
+  for (const plant of [...(byPlant.data ?? []), ...(byCycle.data ?? [])] as CandidatePlantRow[]) {
+    mothersById.set(Number(plant.id), plant)
+  }
+
+  const entries = sanitizeCloneEntries(payload.entries, mothersById.keys())
+  const invalid = validateCloneEntries(entries)
+  if (invalid) return { error: invalid }
+
+  const total = totalClones(entries)
+  const date = payload.date || new Date().toLocaleDateString('en-CA')
+
+  // 2. Sin esquejes no hay plantas que crear, pero la tarea igual se hizo.
+  if (total === 0) {
+    const { error } = await supabase
+      .from('tasks')
+      .update({
+        status: 'completed',
+        completed_at: new Date().toISOString(),
+        metadata: {
+          ...((task.metadata as object) ?? {}),
+          esquejado: {
+            date,
+            target_cycle_id: null,
+            total: 0,
+            entries: [],
+            registered_at: new Date().toISOString(),
+          },
+        },
+      })
+      .eq('id', taskId)
+
+    if (error) return { error: error.message }
+
+    revalidateEsquejado()
+    return { success: true, created: 0 }
+  }
+
+  // 3. Ciclo destino: uno existente o uno nuevo creado en el momento.
+  let targetCycleId = payload.targetCycleId ? Number(payload.targetCycleId) : null
+  let targetCycleName: string | null = null
+
+  if (payload.newCycle?.name?.trim()) {
+    const { data: created, error: cycleError } = await supabase
+      .from('cycles')
+      .insert({
+        name: payload.newCycle.name.trim(),
+        start_date: date,
+        space_id: payload.newCycle.spaceId,
+        is_active: true,
+        user_id: user.id,
+      })
+      .select('id, name')
+      .single()
+
+    if (cycleError || !created) return { error: 'No se pudo crear el ciclo de destino.' }
+
+    targetCycleId = created.id
+    targetCycleName = created.name
+  } else if (targetCycleId) {
+    const { data: cycle } = await supabase
+      .from('cycles')
+      .select('id, name')
+      .eq('id', targetCycleId)
+      .single()
+
+    if (!cycle) return { error: 'No se encontró el ciclo de destino.' }
+    targetCycleName = cycle.name
+  }
+
+  if (!targetCycleId) return { error: 'Elegí a qué ciclo van los esquejes.' }
+
+  // 4. La numeración sigue a la de los esquejes que cada madre ya tenga.
+  const motherIds = entries.map((entry) => entry.motherId)
+  const { data: existingClones } = await supabase
+    .from('plants')
+    .select('mother_id')
+    .in('mother_id', motherIds)
+
+  const existingByMother = new Map<number, number>()
+  for (const row of (existingClones ?? []) as { mother_id: number }[]) {
+    const id = Number(row.mother_id)
+    existingByMother.set(id, (existingByMother.get(id) ?? 0) + 1)
+  }
+
+  const mothers: CloneMother[] = motherIds.map((id) => {
+    const plant = mothersById.get(id)
+    return {
+      id,
+      name: plant?.name ?? 'Planta',
+      strain: plant?.strain ?? null,
+      breeder: plant?.breeder ?? null,
+      existingClones: existingByMother.get(id) ?? 0,
+    }
+  })
+
+  const seeds = buildClonePlants(entries, mothers, { cycleId: targetCycleId, date })
+
+  const { data: insertedPlants, error: insertError } = await supabase
+    .from('plants')
+    .insert(seeds.map((seed) => ({ ...seed, user_id: user.id })))
+    .select('id, mother_id')
+
+  if (insertError) {
+    console.error('Error creando esquejes:', insertError)
+    return { error: 'No se pudieron crear los esquejes.' }
+  }
+
+  // 5. El resultado queda en la tarea: es lo que la vuelve idempotente.
+  const plantIdsByMother = new Map<number, number[]>()
+  for (const plant of (insertedPlants ?? []) as { id: number; mother_id: number }[]) {
+    const id = Number(plant.mother_id)
+    plantIdsByMother.set(id, [...(plantIdsByMother.get(id) ?? []), Number(plant.id)])
+  }
+
+  const { error: updateError } = await supabase
+    .from('tasks')
+    .update({
+      status: 'completed',
+      completed_at: new Date().toISOString(),
+      metadata: {
+        ...((task.metadata as object) ?? {}),
+        esquejado: {
+          date,
+          target_cycle_id: targetCycleId,
+          total,
+          registered_at: new Date().toISOString(),
+          entries: entries.map((entry) => ({
+            mother_id: entry.motherId,
+            mother_name: mothersById.get(entry.motherId)?.name ?? null,
+            count: entry.count,
+            plant_ids: plantIdsByMother.get(entry.motherId) ?? [],
+          })),
+        },
+      },
+    })
+    .eq('id', taskId)
+
+  if (updateError) return { error: updateError.message }
+
+  revalidateEsquejado()
+  return { success: true, created: total, cycleId: targetCycleId, cycleName: targetCycleName }
+}
+
+function revalidateEsquejado() {
+  revalidatePath('/')
+  revalidatePath('/calendar')
+  revalidatePath('/plants')
+  revalidatePath('/cycles')
+  revalidatePath('/cycles/[id]', 'page')
 }
