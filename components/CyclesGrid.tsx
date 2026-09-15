@@ -5,6 +5,7 @@ import { Sprout } from "lucide-react";
 import CycleCard, { type CycleWithSpace } from "@/components/CycleCard";
 import EmptyState from "@/components/EmptyState";
 import SegmentedControl from "@/components/ui/SegmentedControl";
+import { Space } from "@/app/lib/types";
 
 type Scope = 'active' | 'finished' | 'all';
 
@@ -14,6 +15,8 @@ interface CyclesGridProps {
   plantCounts: Record<number, number>;
   /** Día de cultivo por ciclo, calculado en el servidor. */
   days: Record<number, number>;
+  /** Espacios del usuario: destinos para mudar un ciclo desde su tarjeta. */
+  spaces: Pick<Space, 'id' | 'name' | 'type'>[];
 }
 
 /**
@@ -21,7 +24,7 @@ interface CyclesGridProps {
  * finalizados sólo se distinguían por una opacidad, que en la práctica no
  * ayudaba cuando había más de dos o tres tandas.
  */
-export default function CyclesGrid({ cycles, plantCounts, days }: CyclesGridProps) {
+export default function CyclesGrid({ cycles, plantCounts, days, spaces }: CyclesGridProps) {
   const [scope, setScope] = useState<Scope>('active');
 
   const activeCount = useMemo(() => cycles.filter(c => c.is_active).length, [cycles]);
@@ -61,7 +64,12 @@ export default function CyclesGrid({ cycles, plantCounts, days }: CyclesGridProp
         <ul className="stagger grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {visible.map((cycle, i) => (
             <li key={cycle.id} style={{ ['--i' as string]: i }}>
-              <CycleCard cycle={cycle} days={days[cycle.id] ?? 0} plantCount={plantCounts[cycle.id] ?? 0} />
+              <CycleCard
+                cycle={cycle}
+                days={days[cycle.id] ?? 0}
+                plantCount={plantCounts[cycle.id] ?? 0}
+                spaces={spaces}
+              />
             </li>
           ))}
         </ul>
