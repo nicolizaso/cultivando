@@ -340,3 +340,93 @@ export async function createCycleWithSpace(name: string, startDate: string, spac
     return { success: false, error: "Error inesperado" };
   }
 }
+
+/**
+ * Muda un ciclo de un espacio a otro. Las plantas viven en el mismo espacio que
+ * su ciclo (es lo que asume la tarea "Cambiar ambiente" al completarse), así que
+ * se mudan con él; si no, quedarían apuntando a la carpa vieja y las tareas por
+ * espacio se aplicarían al lugar equivocado.
+ */
+export async function moveCycleToSpace(cycleId: number, spaceId: number) {
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { success: false, error: "No autorizado" };
+  }
+
+  try {
+    const { data: cycle, error: cycleError } = await supabase
+      .from('cycles')
+      .select('id, name, space_id, spaces ( name )')
+      .eq('id', cycleId)
+      .single();
+
+    if (cycleError || !cycle) {
+      return { success: false, error: "No se encontró el ciclo" };
+    }
+
+    if (cycle.space_id === spaceId) {
+      return { success: false, error: "El ciclo ya está en ese espacio" };
+    }
+
+    const { data: space, error: spaceError } = await supabase
+      .from('spaces')
+      .select('id, name')
+      .eq('id', spaceId)
+      .single();
+
+    if (spaceError || !space) {
+      return { success: false, error: "No se encontró el espacio de destino" };
+    }
+
+    const { error: updateError } = await supabase
+      .from('cycles')
+      .update({ space_id: spaceId })
+      .eq('id', cycleId);
+
+    if (updateError) throw updateError;
+
+    const { error: plantsError } = await supabase
+      .from('plants')
+      .update({ space_id: spaceId })
+      .eq('cycle_id', cycleId);
+
+    if (plantsError) throw plantsError;
+
+    // La mudanza queda en la bitácora: es un cambio de condiciones que explica
+    // saltos de temperatura o humedad más adelante.
+    const previousSpace = (cycle.spaces as { name: string } | { name: string }[] | null);
+    const fromName = (Array.isArray(previousSpace) ? previousSpace[0]?.name : previousSpace?.name) || 'Sin espacio';
+
+    const { error: logError } = await supabase
+      .from('logs')
+      .insert({
+        cycle_id: cycleId,
+        plant_id: null,
+        type: 'Cambio de Ambiente',
+        title: `Mudanza de espacio: ${fromName} → ${space.name}`,
+        notes: `El ciclo pasó de "${fromName}" a "${space.name}".`,
+        created_at: new Date().toISOString(),
+      });
+
+    // El registro es historial, no parte de la mudanza: si falla, el ciclo ya
+    // se mudó y avisar de un error sería mentirle al usuario.
+    if (logError) console.error('Error al registrar la mudanza en la bitácora:', logError);
+
+    revalidatePath('/cycles/[id]', 'page');
+    revalidatePath('/cycles');
+    revalidatePath('/spaces');
+    revalidatePath('/plants');
+    revalidatePath('/plants/[id]', 'page');
+    revalidatePath('/');
+
+    return { success: true, spaceName: space.name };
+  } catch (error) {
+    console.error('Error al mudar el ciclo de espacio:', error);
+    return { success: false, error: "No se pudo mover el ciclo de espacio" };
+  }
+}

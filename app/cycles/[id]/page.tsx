@@ -3,9 +3,11 @@ import { notFound } from "next/navigation";
 import { CalendarDays, MapPin, PlayCircle, Sprout, StopCircle } from "lucide-react";
 
 import CycleDetailView from "@/components/CycleDetailView";
+import MoveCycleSpaceModal from "@/components/MoveCycleSpaceModal";
 import PageShell from "@/components/layout/PageShell";
 import PageHeader from "@/components/layout/PageHeader";
 import { daysSince } from "@/app/lib/utils";
+import { Space } from "@/app/lib/types";
 
 export default async function CycleDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const supabase = await createClient();
@@ -20,6 +22,9 @@ export default async function CycleDetailPage({ params }: { params: Promise<{ id
   if (error || !cycle) return notFound();
 
   const { data: plants } = await supabase.from('plants').select('*, current_age_days, days_in_stage').eq('cycle_id', id).order('id', { ascending: true });
+
+  // Destinos posibles para mudar el ciclo de espacio.
+  const { data: spaces } = await supabase.from('spaces').select('id, name, type').order('name', { ascending: true });
 
   // Consultas de datos ambientales (igual que antes)...
   const { data: lastMeasurement } = await supabase.from('measurements').select('*').eq('cycle_id', id).order('date', { ascending: false }).limit(1).single();
@@ -61,6 +66,13 @@ export default async function CycleDetailPage({ params }: { params: Promise<{ id
             {cycle.spaces?.name || 'Sin espacio'}
             {cycle.spaces?.type ? ` · ${cycle.spaces.type}` : ''}
           </span>
+
+          <MoveCycleSpaceModal
+            cycleId={cycle.id}
+            currentSpaceId={cycle.space_id ?? null}
+            spaces={(spaces ?? []) as Pick<Space, 'id' | 'name' | 'type'>[]}
+            plantCount={activePlants.length}
+          />
         </div>
 
         <dl className="flex flex-wrap items-end gap-x-8 gap-y-4 sm:ml-auto">
