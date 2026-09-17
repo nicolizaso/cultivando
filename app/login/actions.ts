@@ -14,17 +14,15 @@ export async function login(formData: FormData) {
 
   // 1. Detectar si es un Usuario (si no tiene @)
   if (!loginInput.includes('@')) {
-    // Buscamos el email en la tabla 'profiles'
-    // Usamos .ilike() para ignorar mayúsculas (ej: 'Nico' es igual a 'nico')
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('email')
-      .ilike('username', loginInput)
-      .single()
+    // Resolvemos usuario -> email con una función de la base en vez de leer
+    // 'profiles': esa tabla ya no es legible sin sesión, y acá todavía no la hay.
+    // La función compara sin distinguir mayúsculas y devuelve un solo email.
+    const { data: resolvedEmail } = await supabase
+      .rpc('email_for_username', { p_username: loginInput })
 
     // Si no existe el perfil, usamos un email ficticio para continuar el flujo
     // y evitar ataques de tiempo o enumeración simple.
-    email = profile?.email || 'non-existent-user@example.com'
+    email = resolvedEmail || 'non-existent-user@example.com'
   }
 
   // 2. Login con el email (el ingresado o el que encontramos por usuario)
