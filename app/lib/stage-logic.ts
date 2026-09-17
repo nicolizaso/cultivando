@@ -49,3 +49,43 @@ export function getFirstSuggestion(plants: Plant[], now: Date = new Date()): { p
   }
   return null;
 }
+
+/**
+ * Las siete etapas que la app deja elegir, en el orden en que ocurren, y la
+ * columna donde cada una anota su fecha.
+ *
+ * El mismo mapa estaba copiado en el modal de cambio de etapa y en el
+ * completado de tareas, cada uno con su propio orden. Vive acá, al lado del
+ * resto del conocimiento sobre etapas, y el servidor lo usa para no escribir
+ * una columna que venga elegida desde el cliente.
+ *
+ * "Enraizamiento" es la puerta de entrada de los esquejes, igual que
+ * "Germinación" lo es de las semillas; por eso van las dos al principio.
+ */
+export const STAGE_DATE_COLUMNS = {
+  'Germinación': 'date_germinacion',
+  'Plántula': 'date_plantula',
+  'Enraizamiento': 'date_enraizamiento',
+  'Vegetativo': 'date_vegetativo',
+  'Floración': 'date_floracion',
+  'Secado': 'date_secado',
+  'Curado': 'date_curado',
+} as const;
+
+export type StageName = keyof typeof STAGE_DATE_COLUMNS;
+
+/** Las etapas en orden, para pintar un desplegable sin repetir la lista. */
+export const STAGE_NAMES = Object.keys(STAGE_DATE_COLUMNS) as StageName[];
+
+export function isStageName(value: unknown): value is StageName {
+  return typeof value === 'string' && Object.prototype.hasOwnProperty.call(STAGE_DATE_COLUMNS, value);
+}
+
+/**
+ * Columna de fecha de una etapa, o null si el nombre no es una de las siete.
+ * Devolver null es lo que impide que un `stage` cualquiera termine escribiendo
+ * una columna arbitraria de `plants`.
+ */
+export function getStageDateColumn(stage: unknown): string | null {
+  return isStageName(stage) ? STAGE_DATE_COLUMNS[stage] : null;
+}

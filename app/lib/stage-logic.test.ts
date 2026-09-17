@@ -1,6 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert';
-import { getStageSuggestion, getFirstSuggestion } from './stage-logic.ts';
+import {
+  getFirstSuggestion,
+  getStageDateColumn,
+  getStageSuggestion,
+  STAGE_NAMES,
+} from './stage-logic.ts';
 import type { Plant } from './types.ts';
 
 // Mock Plant factory
@@ -73,4 +78,40 @@ test('getFirstSuggestion - returns null if no matches', () => {
   ];
   const result = getFirstSuggestion(plants);
   assert.strictEqual(result, null);
+});
+
+test('getStageDateColumn - devuelve la columna de cada etapa', () => {
+  assert.strictEqual(getStageDateColumn('Germinación'), 'date_germinacion');
+  assert.strictEqual(getStageDateColumn('Enraizamiento'), 'date_enraizamiento');
+  assert.strictEqual(getStageDateColumn('Curado'), 'date_curado');
+});
+
+test('getStageDateColumn - rechaza lo que no es una etapa', () => {
+  // El nombre de la etapa llega del cliente: si colara cualquier cosa, el
+  // cambio en lote escribiría una columna arbitraria de la tabla.
+  assert.strictEqual(getStageDateColumn('Cosechada'), null);
+  assert.strictEqual(getStageDateColumn('is_archived'), null);
+  assert.strictEqual(getStageDateColumn('constructor'), null);
+  assert.strictEqual(getStageDateColumn('toString'), null);
+  assert.strictEqual(getStageDateColumn(''), null);
+  assert.strictEqual(getStageDateColumn(undefined), null);
+  assert.strictEqual(getStageDateColumn(42), null);
+});
+
+test('STAGE_NAMES - las siete etapas en orden de cultivo', () => {
+  assert.deepStrictEqual(STAGE_NAMES, [
+    'Germinación',
+    'Plántula',
+    'Enraizamiento',
+    'Vegetativo',
+    'Floración',
+    'Secado',
+    'Curado',
+  ]);
+});
+
+test('STAGE_NAMES - todas tienen columna de fecha', () => {
+  for (const stage of STAGE_NAMES) {
+    assert.ok(getStageDateColumn(stage), `${stage} sin columna de fecha`);
+  }
 });

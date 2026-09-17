@@ -1,5 +1,10 @@
 import { Plant } from './types';
+import { getDaysSinceWater } from './dates';
 import { Dna, Droplets, Flower2, Leaf, Package, Sprout, Wind, HelpCircle } from 'lucide-react';
+
+// Las cuentas de fechas viven en `dates.ts`, que sí se puede testear; se
+// reexportan para no cambiar los sitios que ya las importaban de acá.
+export { getDaysSinceWater, todayForInput } from './dates';
 
 export function formatDateShort(dateString: string): string {
   if (!dateString) return '';
@@ -229,30 +234,6 @@ export function mapTaskCycles(t: any, allCycles?: { id: number; name: string }[]
 }
 
 /**
- * Días desde el último riego.
- *
- * `last_water` es heterogéneo por herencia: la tarjeta de planta guarda la
- * cadena "Hoy" al regar desde el menú rápido, mientras que el resto del flujo
- * guarda una fecha ISO. Un único lector resuelve los dos casos en vez de
- * repartir la corrección por cada pantalla.
- *
- * Devuelve null cuando no hay registro de riego.
- */
-export function getDaysSinceWater(lastWater?: string | null): number | null {
-  if (!lastWater) return null;
-  if (lastWater === 'Hoy') return 0;
-
-  const watered = new Date(lastWater);
-  if (isNaN(watered.getTime())) return null;
-
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  watered.setHours(0, 0, 0, 0);
-
-  return Math.max(0, Math.round((today.getTime() - watered.getTime()) / (1000 * 60 * 60 * 24)));
-}
-
-/**
  * Estado del riego traducido a lenguaje y severidad.
  *
  * El color nunca viaja solo: cada nivel trae también su texto, para que el
@@ -284,4 +265,12 @@ export function daysSince(dateString?: string | null): number {
   if (isNaN(start.getTime())) return 0;
 
   return Math.max(0, Math.floor((new Date().getTime() - start.getTime()) / (1000 * 60 * 60 * 24)));
+}
+
+/**
+ * "1 planta" / "5 plantas". Lo dicen los cuatro modales en lote y la barra de
+ * selección, siempre igual.
+ */
+export function plantCountLabel(count: number): string {
+  return `${count} ${count === 1 ? 'planta' : 'plantas'}`;
 }

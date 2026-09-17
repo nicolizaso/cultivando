@@ -1,8 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { bulkWaterPlants } from "@/app/cycles/actions";
 import { Droplets, Loader2 } from "lucide-react";
+
+import { bulkWaterPlants } from "@/app/actions/plants";
+import { plantCountLabel, todayForInput } from "@/app/lib/utils";
 import Modal from "@/components/ui/Modal";
 import { useToast } from "@/app/context/ToastContext";
 
@@ -10,14 +12,14 @@ interface BulkWaterModalProps {
   isOpen: boolean;
   onClose: () => void;
   selectedIds: number[];
-  onSuccess: () => void; // Para limpiar la selección después
-  cycleId: number;
+  /** Para limpiar la selección después. */
+  onSuccess: () => void;
 }
 
-export default function BulkWaterModal({ isOpen, onClose, selectedIds, onSuccess, cycleId }: BulkWaterModalProps) {
+export default function BulkWaterModal({ isOpen, onClose, selectedIds, onSuccess }: BulkWaterModalProps) {
   const { showToast } = useToast();
   const [loading, setLoading] = useState(false);
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [date, setDate] = useState(todayForInput);
   const [amount, setAmount] = useState("");
   const [nutrients, setNutrients] = useState("");
 
@@ -25,32 +27,27 @@ export default function BulkWaterModal({ isOpen, onClose, selectedIds, onSuccess
     e.preventDefault();
     setLoading(true);
 
-    // Construimos una nota automática con los detalles
-    const noteDetails = `Riego registrado para ${selectedIds.length} plantas.\nCantidad: ${amount || 'No especificada'}\nNutrientes: ${nutrients || 'Solo agua'}`;
-
-    const res = await bulkWaterPlants(selectedIds, new Date(date).toISOString(), noteDetails, cycleId);
+    const res = await bulkWaterPlants(selectedIds, date, { amount, nutrients });
 
     setLoading(false);
 
-    if (res?.success) {
-      onSuccess();
-      onClose();
+    if (res.success) {
+      showToast(`Riego registrado en ${plantCountLabel(res.count ?? selectedIds.length)}`);
       setAmount("");
       setNutrients("");
-      showToast(`Riego registrado en ${selectedIds.length} plantas`);
+      onSuccess();
+      onClose();
     } else {
-      showToast("No se pudo registrar el riego", "error");
+      showToast(res.error || "No se pudo registrar el riego", "error");
     }
   };
-
-  const plantsLabel = `${selectedIds.length} ${selectedIds.length === 1 ? "planta" : "plantas"}`;
 
   return (
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title="Riego masivo"
-      description={`Se aplicará a ${plantsLabel} seleccionadas.`}
+      title="Registrar riego"
+      description={`Se aplicará a ${plantCountLabel(selectedIds.length)}.`}
       size="sm"
       footer={
         <>
@@ -80,6 +77,7 @@ export default function BulkWaterModal({ isOpen, onClose, selectedIds, onSuccess
             value={date}
             onChange={(e) => setDate(e.target.value)}
           />
+          <p className="field-hint">Es la que se muestra como último riego de cada planta.</p>
         </div>
 
         <div className="field">
@@ -87,12 +85,12 @@ export default function BulkWaterModal({ isOpen, onClose, selectedIds, onSuccess
           <input
             id="bulk-water-amount"
             type="text"
-            placeholder="Ej: 50 litros totales"
+            placeholder="Ej: 2 litros por planta"
             className="field-input"
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
           />
-          <p className="field-hint">Opcional. Podés anotar litros o mililitros.</p>
+          <p className="field-hint">Opcional. Queda anotado en la bitácora.</p>
         </div>
 
         <div className="field">

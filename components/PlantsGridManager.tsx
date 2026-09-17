@@ -2,10 +2,17 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Archive, CheckSquare, Filter, FilterX, Search, Sprout, Square, Trash2, X } from "lucide-react";
+import {
+  Archive, ArchiveRestore, ArrowRightCircle, ArrowRightLeft, CheckSquare, Droplets,
+  Filter, FilterX, Search, Sprout, Square, Trash2, X
+} from "lucide-react";
 
 import PlantCard from "./plantcard";
-import { supabase } from "@/app/lib/supabase";
+import BulkArchiveModal from "./BulkArchiveModal";
+import BulkMoveCycleModal from "./BulkMoveCycleModal";
+import BulkStageModal from "./BulkStageModal";
+import BulkWaterModal from "./BulkWaterModal";
+import { bulkDeletePlants } from "@/app/actions/plants";
 import { Plant as BasePlant, Cycle, Space } from "@/app/lib/types";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import EmptyState from "@/components/EmptyState";
@@ -25,6 +32,9 @@ interface PlantsGridManagerProps {
 
 type Scope = 'active' | 'archived';
 
+/** Los modales que puede abrir la barra de selección; uno por vez. */
+type BulkModal = 'stage' | 'water' | 'cycle' | 'archive' | 'restore';
+
 /** Compara ignorando mayúsculas y tildes: "plátano" encuentra "platano". */
 const normalize = (value: string) =>
   value.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
@@ -34,6 +44,7 @@ export default function PlantsGridManager({ plants, cycles, spaces }: PlantsGrid
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [isDeleting, setIsDeleting] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [openModal, setOpenModal] = useState<BulkModal | null>(null);
 
   const [scope, setScope] = useState<Scope>('active');
   const [query, setQuery] = useState("");
@@ -71,6 +82,18 @@ export default function PlantsGridManager({ plants, cycles, spaces }: PlantsGrid
     });
   }, [plants, scope, query, selectedCycleId, selectedSpaceId]);
 
+  /**
+   * Las acciones operan sobre lo seleccionado *y* visible.
+   *
+   * La selección sobrevive a un cambio de filtro, así que sin esta
+   * intersección se podía archivar o borrar plantas que ya no estaban en
+   * pantalla, y el contador de la barra no coincidía con lo que se veía.
+   */
+  const targetIds = useMemo(
+    () => filteredPlants.filter(plant => selectedIds.has(plant.id)).map(plant => plant.id),
+    [filteredPlants, selectedIds]
+  );
+
   const togglePlantSelection = (id: number) => {
     const newSelected = new Set(selectedIds);
     if (newSelected.has(id)) newSelected.delete(id);
@@ -92,25 +115,24 @@ export default function PlantsGridManager({ plants, cycles, spaces }: PlantsGrid
     setSelectedIds(new Set());
   };
 
+  /** Lo que hacen todas las acciones en lote al terminar bien. */
+  const handleBulkSuccess = () => {
+    exitSelectionMode();
+    router.refresh();
+  };
+
   const handleDelete = async () => {
-    if (selectedIds.size === 0) return;
+    if (targetIds.length === 0) return;
 
     setIsDeleting(true);
-    try {
-      const { error } = await supabase
-        .from('plants')
-        .delete()
-        .in('id', Array.from(selectedIds));
+    const res = await bulkDeletePlants(targetIds);
+    setIsDeleting(false);
 
-      if (error) throw error;
-
-      showToast(`${selectedIds.size} plantas eliminadas`);
-      exitSelectionMode();
-      router.refresh();
-    } catch (error) {
-      showToast(error instanceof Error ? error.message : "No se pudieron eliminar las plantas", "error");
-    } finally {
-      setIsDeleting(false);
+    if (res.success) {
+      showToast(`${res.count ?? targetIds.length} plantas eliminadas`);
+      handleBulkSuccess();
+    } else {
+      showToast(res.error || "No se pudieron eliminar las plantas", "error");
     }
   };
 
@@ -121,6 +143,7 @@ export default function PlantsGridManager({ plants, cycles, spaces }: PlantsGrid
 
   const hasFilters = selectedCycleId !== "all" || selectedSpaceId !== "all";
   const isNarrowed = hasFilters || query.trim().length > 0;
+  const isArchivedScope = scope === 'archived';
 
   return (
     <div>
@@ -265,7 +288,7 @@ export default function PlantsGridManager({ plants, cycles, spaces }: PlantsGrid
             isNarrowed
               ? "Ninguna planta coincide con lo que buscás. Probá quitando algún filtro."
               : scope === 'archived'
-                ? "Las plantas que archives desde un ciclo van a aparecer acá, con su historial intacto."
+                ? "Las plantas que archives van a aparecer acá, con su historial intacto."
                 : "Creá tu primera planta y elegí en qué ciclo entra. Desde ahí se registran riegos, etapas y fotos."
           }
           action={
@@ -283,11 +306,56 @@ export default function PlantsGridManager({ plants, cycles, spaces }: PlantsGrid
         />
       )}
 
+      {/* Todo lo que se puede hacer sobre una selección. Antes sólo se podía
+          borrar: cambiar la etapa o registrar un riego de media docena de
+          plantas obligaba a entrar a cada una. Las archivadas sólo admiten
+          volver al listado, cambiar de ciclo o borrarse. */}
       <SelectionBar
-        count={isSelectionMode ? selectedIds.size : 0}
+        count={isSelectionMode ? targetIds.length : 0}
         onClear={exitSelectionMode}
         label="Acciones sobre las plantas seleccionadas"
       >
+        {!isArchivedScope && (
+          <>
+            <button
+              type="button"
+              onClick={() => setOpenModal('stage')}
+              className="btn btn-sm btn-secondary rounded-full"
+            >
+              <ArrowRightCircle size={15} aria-hidden="true" />
+              Cambiar etapa
+            </button>
+            <button
+              type="button"
+              onClick={() => setOpenModal('water')}
+              className="btn btn-sm btn-secondary rounded-full"
+            >
+              <Droplets size={15} aria-hidden="true" />
+              Regar
+            </button>
+          </>
+        )}
+
+        <button
+          type="button"
+          onClick={() => setOpenModal('cycle')}
+          className="btn btn-sm btn-secondary rounded-full"
+        >
+          <ArrowRightLeft size={15} aria-hidden="true" />
+          Mover de ciclo
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setOpenModal(isArchivedScope ? 'restore' : 'archive')}
+          className="btn btn-sm btn-secondary rounded-full"
+        >
+          {isArchivedScope
+            ? <ArchiveRestore size={15} aria-hidden="true" />
+            : <Archive size={15} aria-hidden="true" />}
+          {isArchivedScope ? 'Restaurar' : 'Archivar'}
+        </button>
+
         <button
           type="button"
           onClick={() => setShowDeleteConfirm(true)}
@@ -299,12 +367,42 @@ export default function PlantsGridManager({ plants, cycles, spaces }: PlantsGrid
         </button>
       </SelectionBar>
 
+      <BulkStageModal
+        isOpen={openModal === 'stage'}
+        onClose={() => setOpenModal(null)}
+        selectedIds={targetIds}
+        onSuccess={handleBulkSuccess}
+      />
+
+      <BulkWaterModal
+        isOpen={openModal === 'water'}
+        onClose={() => setOpenModal(null)}
+        selectedIds={targetIds}
+        onSuccess={handleBulkSuccess}
+      />
+
+      <BulkMoveCycleModal
+        isOpen={openModal === 'cycle'}
+        onClose={() => setOpenModal(null)}
+        selectedIds={targetIds}
+        onSuccess={handleBulkSuccess}
+        cycles={cycles}
+      />
+
+      <BulkArchiveModal
+        isOpen={openModal === 'archive' || openModal === 'restore'}
+        onClose={() => setOpenModal(null)}
+        selectedIds={targetIds}
+        onSuccess={handleBulkSuccess}
+        mode={openModal === 'restore' ? 'restore' : 'archive'}
+      />
+
       <ConfirmDialog
         isOpen={showDeleteConfirm}
         onClose={() => setShowDeleteConfirm(false)}
         onConfirm={handleDelete}
         title="Eliminar plantas"
-        description={`Se eliminarán ${selectedIds.size} plantas y su historial. Esta acción no se puede deshacer.`}
+        description={`Se eliminarán ${targetIds.length} plantas y su historial. Esta acción no se puede deshacer.`}
         confirmLabel="Eliminar"
       />
     </div>
