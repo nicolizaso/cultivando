@@ -1,58 +1,65 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { bulkArchivePlants } from "@/app/cycles/actions";
-import { useToast } from "@/app/context/ToastContext";
-import { Archive, Loader2 } from "lucide-react";
+import { Archive, ArchiveRestore, Loader2 } from "lucide-react";
+
+import { bulkSetArchived } from "@/app/actions/plants";
+import { plantCountLabel, todayForInput } from "@/app/lib/utils";
 import Modal from "@/components/ui/Modal";
+import { useToast } from "@/app/context/ToastContext";
 
 interface BulkArchiveModalProps {
   isOpen: boolean;
   onClose: () => void;
   selectedIds: number[];
   onSuccess: () => void;
-  cycleId?: number;
+  /** "restore" devuelve al listado activo lo que estaba archivado. */
+  mode?: 'archive' | 'restore';
 }
 
-export default function BulkArchiveModal({ isOpen, onClose, selectedIds, onSuccess, cycleId }: BulkArchiveModalProps) {
-  const router = useRouter();
+export default function BulkArchiveModal({
+  isOpen,
+  onClose,
+  selectedIds,
+  onSuccess,
+  mode = 'archive',
+}: BulkArchiveModalProps) {
   const { showToast } = useToast();
   const [loading, setLoading] = useState(false);
   const [notes, setNotes] = useState("");
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [date, setDate] = useState(todayForInput);
+
+  const isArchiving = mode === 'archive';
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
-    const res = await bulkArchivePlants(
-      selectedIds,
-      notes,
-      new Date(date).toISOString(),
-      cycleId
-    );
+    const res = await bulkSetArchived(selectedIds, isArchiving, date, notes);
 
     setLoading(false);
 
-    if (res?.success) {
-      showToast(`${selectedIds.length} plantas archivadas`, 'success');
-      router.refresh();
+    if (res.success) {
+      const count = plantCountLabel(res.count ?? selectedIds.length);
+      showToast(isArchiving ? `${count} archivadas` : `${count} devueltas al listado`);
+      setNotes("");
       onSuccess();
       onClose();
     } else {
-      showToast(res?.error || "No se pudieron archivar las plantas", "error");
+      showToast(res.error || "No se pudo completar la acción", "error");
     }
   };
-
-  const plantsLabel = `${selectedIds.length} ${selectedIds.length === 1 ? "planta" : "plantas"}`;
 
   return (
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title="Archivar plantas"
-      description={`Se archivará ${plantsLabel}. Podés consultarlas después en el historial.`}
+      title={isArchiving ? "Archivar plantas" : "Restaurar plantas"}
+      description={
+        isArchiving
+          ? `Se archivará ${plantCountLabel(selectedIds.length)}. Podés consultarlas después en el historial.`
+          : `${plantCountLabel(selectedIds.length)} vuelven al listado de activas, con su historial intacto.`
+      }
       size="sm"
       footer={
         <>
@@ -62,10 +69,12 @@ export default function BulkArchiveModal({ isOpen, onClose, selectedIds, onSucce
           <button type="submit" form="bulk-archive-form" className="btn btn-primary" disabled={loading}>
             {loading ? (
               <Loader2 size={16} className="animate-spin" aria-hidden="true" />
-            ) : (
+            ) : isArchiving ? (
               <Archive size={16} aria-hidden="true" />
+            ) : (
+              <ArchiveRestore size={16} aria-hidden="true" />
             )}
-            {loading ? "Procesando..." : "Archivar"}
+            {loading ? "Procesando..." : isArchiving ? "Archivar" : "Restaurar"}
           </button>
         </>
       }
@@ -80,8 +89,9 @@ export default function BulkArchiveModal({ isOpen, onClose, selectedIds, onSucce
             className="field-input resize-none"
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
-            placeholder="Ej: plantas macho, cosecha terminada"
+            placeholder={isArchiving ? "Ej: plantas macho, cosecha terminada" : "Ej: se archivaron por error"}
           />
+          <p className="field-hint">Opcional. Queda en la bitácora de cada planta.</p>
         </div>
 
         <div className="field">

@@ -18,7 +18,7 @@ teléfono y una galería de fotos sin fecha. Acá todo cuelga del ciclo:
 | --- | --- |
 | **Panel** | Estado del día: tareas pendientes, ciclos en curso y las plantas de cada uno. |
 | **Ciclos** | Tandas activas y cerradas, con día de cultivo, plantas vivas y galería de seguimiento. |
-| **Plantas** | Inventario con búsqueda, filtros por ciclo y espacio, archivado y acciones en lote. |
+| **Plantas** | Inventario con búsqueda y filtros por ciclo y espacio. Sobre lo seleccionado: cambio de etapa, riego, cambio de ciclo, archivado y borrado. |
 | **Agenda** | Calendario mensual de tareas y fotos, con el detalle del día seleccionado. |
 | **Espacios** | Carpa, armario o exterior, con ficha técnica (luz, medidas, ventilación) y ocupación. |
 | **Nutrición** | Fertilizantes con su dosis y combos para aplicar varios en el mismo riego. |

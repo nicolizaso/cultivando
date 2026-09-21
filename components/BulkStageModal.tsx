@@ -1,72 +1,52 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { bulkChangeStage } from "@/app/cycles/actions";
-import { Loader2 } from "lucide-react";
+import { ArrowRightCircle, Loader2 } from "lucide-react";
+
+import { bulkChangeStage } from "@/app/actions/plants";
+import { STAGE_NAMES } from "@/app/lib/stage-logic";
+import { plantCountLabel, todayForInput } from "@/app/lib/utils";
 import Modal from "@/components/ui/Modal";
 import { useToast } from "@/app/context/ToastContext";
-
-const stageColumnMap: Record<string, string> = {
-  'Germinación': 'date_germinacion',
-  'Plántula': 'date_plantula',
-  'Enraizamiento': 'date_enraizamiento',
-  'Vegetativo': 'date_vegetativo',
-  'Floración': 'date_floracion',
-  'Secado': 'date_secado',
-  'Curado': 'date_curado'
-};
 
 interface BulkStageModalProps {
   isOpen: boolean;
   onClose: () => void;
   selectedIds: number[];
   onSuccess: () => void;
-  cycleId: number;
 }
 
-export default function BulkStageModal({ isOpen, onClose, selectedIds, onSuccess, cycleId }: BulkStageModalProps) {
-  const router = useRouter();
+export default function BulkStageModal({ isOpen, onClose, selectedIds, onSuccess }: BulkStageModalProps) {
   const { showToast } = useToast();
   const [loading, setLoading] = useState(false);
-  const [stage, setStage] = useState("Floración");
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [stage, setStage] = useState<string>("Floración");
+  const [date, setDate] = useState(todayForInput);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
-    const dateCol = stageColumnMap[stage];
-
-    const res = await bulkChangeStage(
-      selectedIds,
-      stage,
-      new Date(date).toISOString(),
-      cycleId,
-      undefined,
-      dateCol
-    );
+    // La fecha va cruda: el servidor la ancla al mediodía para que no se corra
+    // de día al convertirla.
+    const res = await bulkChangeStage(selectedIds, stage, date);
 
     setLoading(false);
 
-    if (res?.success) {
-      router.refresh();
+    if (res.success) {
+      showToast(`Etapa actualizada a ${stage} en ${plantCountLabel(res.count ?? selectedIds.length)}`);
       onSuccess();
       onClose();
-      showToast(`Etapa actualizada a ${stage}`);
     } else {
-      showToast(res?.error || "No se pudo cambiar la etapa", "error");
+      showToast(res.error || "No se pudo cambiar la etapa", "error");
     }
   };
-
-  const plantsLabel = `${selectedIds.length} ${selectedIds.length === 1 ? "planta" : "plantas"}`;
 
   return (
     <Modal
       isOpen={isOpen}
       onClose={onClose}
       title="Cambio de etapa"
-      description={`Se moverá ${plantsLabel}.`}
+      description={`Se moverá ${plantCountLabel(selectedIds.length)}.`}
       size="sm"
       footer={
         <>
@@ -74,7 +54,11 @@ export default function BulkStageModal({ isOpen, onClose, selectedIds, onSuccess
             Cancelar
           </button>
           <button type="submit" form="bulk-stage-form" className="btn btn-primary" disabled={loading}>
-            {loading && <Loader2 size={16} className="animate-spin" aria-hidden="true" />}
+            {loading ? (
+              <Loader2 size={16} className="animate-spin" aria-hidden="true" />
+            ) : (
+              <ArrowRightCircle size={16} aria-hidden="true" />
+            )}
             {loading ? "Procesando..." : "Cambiar etapa"}
           </button>
         </>
@@ -90,7 +74,7 @@ export default function BulkStageModal({ isOpen, onClose, selectedIds, onSuccess
             value={stage}
             onChange={(e) => setStage(e.target.value)}
           >
-            {Object.keys(stageColumnMap).map((label) => (
+            {STAGE_NAMES.map((label) => (
               <option key={label} value={label}>{label}</option>
             ))}
           </select>

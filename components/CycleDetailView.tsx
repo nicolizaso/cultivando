@@ -2,10 +2,11 @@
 
 import { useState, useEffect, useRef } from "react";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import imageCompression from 'browser-image-compression';
 import {
-  ArrowRight, ArrowUpRight, Camera, CloudRain, LayoutGrid, Leaf,
+  ArrowRight, ArrowUpRight, Camera, CloudRain, Droplets, LayoutGrid, Leaf,
   List as ListIcon, Loader2, Archive, Thermometer, Trash2, Gauge
 } from "lucide-react";
 
@@ -13,6 +14,7 @@ import { Plant, CycleImage } from "@/app/lib/types";
 import { getPlantMetrics, getStageColor } from "@/app/lib/utils";
 import BulkStageModal from "./BulkStageModal";
 import BulkArchiveModal from "./BulkArchiveModal";
+import BulkWaterModal from "./BulkWaterModal";
 import MeasurementModal from "./MeasurementModal";
 import { useToast } from "@/app/context/ToastContext";
 import Modal from "@/components/ui/Modal";
@@ -32,6 +34,7 @@ interface CycleDetailViewProps {
 type ViewMode = 'table' | 'grid';
 
 export default function CycleDetailView({ cycle, plants, lastMeasurement, cycleImages = [] }: CycleDetailViewProps) {
+  const router = useRouter();
   const { showToast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedImage, setSelectedImage] = useState<CycleImage | null>(null);
@@ -47,6 +50,7 @@ export default function CycleDetailView({ cycle, plants, lastMeasurement, cycleI
   const [selectedPlants, setSelectedPlants] = useState<number[]>([]);
   const [isArchiveModalOpen, setIsArchiveModalOpen] = useState(false);
   const [isStageModalOpen, setIsStageModalOpen] = useState(false);
+  const [isWaterModalOpen, setIsWaterModalOpen] = useState(false);
   const [isMeasureModalOpen, setIsMeasureModalOpen] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
   const [showDeleteImagesConfirm, setShowDeleteImagesConfirm] = useState(false);
@@ -114,6 +118,12 @@ export default function CycleDetailView({ cycle, plants, lastMeasurement, cycleI
     } else {
         showToast("Error al actualizar", "error");
     }
+  };
+
+  /** Lo que hacen las acciones en lote al terminar bien. */
+  const handleBulkSuccess = () => {
+    setSelectedPlants([]);
+    router.refresh();
   };
 
   const handleDeleteImages = async () => {
@@ -576,6 +586,14 @@ export default function CycleDetailView({ cycle, plants, lastMeasurement, cycleI
         </button>
         <button
           type="button"
+          onClick={() => setIsWaterModalOpen(true)}
+          className="btn btn-sm btn-secondary rounded-full"
+        >
+          <Droplets size={15} aria-hidden="true" />
+          Regar
+        </button>
+        <button
+          type="button"
           onClick={() => setIsArchiveModalOpen(true)}
           className="btn btn-sm btn-secondary rounded-full"
         >
@@ -608,8 +626,9 @@ export default function CycleDetailView({ cycle, plants, lastMeasurement, cycleI
         confirmLabel="Eliminar"
       />
 
-      <BulkArchiveModal isOpen={isArchiveModalOpen} onClose={() => setIsArchiveModalOpen(false)} selectedIds={selectedPlants} onSuccess={() => setSelectedPlants([])} cycleId={cycle.id} />
-      <BulkStageModal isOpen={isStageModalOpen} onClose={() => setIsStageModalOpen(false)} selectedIds={selectedPlants} onSuccess={() => setSelectedPlants([])} cycleId={cycle.id} />
+      <BulkArchiveModal isOpen={isArchiveModalOpen} onClose={() => setIsArchiveModalOpen(false)} selectedIds={selectedPlants} onSuccess={handleBulkSuccess} />
+      <BulkStageModal isOpen={isStageModalOpen} onClose={() => setIsStageModalOpen(false)} selectedIds={selectedPlants} onSuccess={handleBulkSuccess} />
+      <BulkWaterModal isOpen={isWaterModalOpen} onClose={() => setIsWaterModalOpen(false)} selectedIds={selectedPlants} onSuccess={handleBulkSuccess} />
       <MeasurementModal isOpen={isMeasureModalOpen} onClose={() => setIsMeasureModalOpen(false)} cycleId={cycle.id} />
     </div>
   );
