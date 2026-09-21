@@ -4,8 +4,10 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/app/lib/supabase";
 import { Plant, Cycle } from "@/app/lib/types";
-import { getStageColor } from "@/app/lib/utils";
-import { Sprout, Leaf, Flower, Wind, Thermometer, Calendar, Save, ArrowLeft, Trash2, Dna, Loader2 } from "lucide-react";
+import { getStageColor, todayForInput } from "@/app/lib/utils";
+import { STAGE_DATE_COLUMNS, STAGE_NAMES, StageName } from "@/app/lib/stage-logic";
+import { parseCultivationDate } from "@/app/lib/dates";
+import { Sprout, Leaf, Flower, Wind, Thermometer, Calendar, Save, ArrowLeft, Trash2, Dna, Loader2, LucideIcon } from "lucide-react";
 import Link from "next/link";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { useToast } from "@/app/context/ToastContext";
@@ -15,15 +17,33 @@ interface EditPlantFormProps {
   cycles: Cycle[];
 }
 
-const STAGE_CONFIG = [
-  { key: 'date_germinacion', label: 'Germinación', icon: Sprout, value: 'Germinación' },
-  { key: 'date_plantula', label: 'Plántula', icon: Sprout, value: 'Plántula' },
-  { key: 'date_enraizamiento', label: 'Enraizamiento', icon: Dna, value: 'Enraizamiento' },
-  { key: 'date_vegetativo', label: 'Vegetativo', icon: Leaf, value: 'Vegetativo' },
-  { key: 'date_floracion', label: 'Floración', icon: Flower, value: 'Floración' },
-  { key: 'date_secado', label: 'Secado', icon: Wind, value: 'Secado' },
-  { key: 'date_curado', label: 'Curado', icon: Thermometer, value: 'Curado' },
-];
+/** El icono con el que se dibuja cada etapa en la línea de tiempo. */
+const STAGE_ICONS: Record<StageName, LucideIcon> = {
+  'Germinación': Sprout,
+  'Plántula': Sprout,
+  'Enraizamiento': Dna,
+  'Vegetativo': Leaf,
+  'Floración': Flower,
+  'Secado': Wind,
+  'Curado': Thermometer,
+};
+
+/**
+ * La línea de tiempo se arma desde la lista canónica de etapas en vez de
+ * repetirla.
+ *
+ * Cuando era una copia a mano, el objeto que se guardaba enumeraba las
+ * columnas de fecha una por una y se había quedado sin `date_enraizamiento`:
+ * tocar esa fecha y guardar no hacía nada, sin ningún aviso. Como Supabase
+ * sólo escribe las claves presentes, el dato viejo seguía en la base. Le
+ * pegaba justo a los esquejes, que entran al cultivo por esa etapa.
+ */
+const STAGE_CONFIG = STAGE_NAMES.map((name) => ({
+  key: STAGE_DATE_COLUMNS[name],
+  label: name,
+  value: name,
+  icon: STAGE_ICONS[name],
+}));
 
 export default function EditPlantForm({ plant, cycles }: EditPlantFormProps) {
   const router = useRouter();
@@ -41,15 +61,9 @@ export default function EditPlantForm({ plant, cycles }: EditPlantFormProps) {
   });
 
   // Dates State
-  const [dates, setDates] = useState({
-    date_germinacion: plant.date_germinacion || '',
-    date_plantula: plant.date_plantula || '',
-    date_enraizamiento: plant.date_enraizamiento || '',
-    date_vegetativo: plant.date_vegetativo || '',
-    date_floracion: plant.date_floracion || '',
-    date_secado: plant.date_secado || '',
-    date_curado: plant.date_curado || '',
-  });
+  const [dates, setDates] = useState<Record<string, string>>(() =>
+    Object.fromEntries(STAGE_CONFIG.map((stage) => [stage.key, plant[stage.key] || '']))
+  );
 
   const handleBasicChange = (field: string, value: any) => {
     setBasicInfo(prev => ({ ...prev, [field]: value }));
@@ -60,12 +74,11 @@ export default function EditPlantForm({ plant, cycles }: EditPlantFormProps) {
   };
 
   const activateStage = (key: string) => {
-    if (dates[key as keyof typeof dates]) {
+    if (dates[key]) {
       // Deactivate/Toggle off
       handleDateChange(key, '');
     } else {
-      const today = new Date().toISOString().split('T')[0];
-      handleDateChange(key, today);
+      handleDateChange(key, todayForInput());
     }
   };
 
@@ -74,23 +87,31 @@ export default function EditPlantForm({ plant, cycles }: EditPlantFormProps) {
     setLoading(true);
 
     try {
-      // Determine current stage based on the latest date set
+      // La etapa la manda la línea de tiempo: es la última con fecha, y
+      // STAGE_CONFIG viene en orden de cultivo.
       let currentStage = plant.stage;
-      const latestDate = '';
-
-      // Simple logic: the last stage with a date is the current stage
-      // However, user might just be editing dates.
-      // Ideally, we respect the user's manual stage selection, but here we are timeline-driven.
-      // For now, let's keep the stage logic simple or just update dates.
-      // If we want to auto-update stage:
       for (const config of STAGE_CONFIG) {
-          if (dates[config.key as keyof typeof dates]) {
-              currentStage = config.value; // value matches DB constraints usually
+          if (dates[config.key]) {
+              currentStage = config.value;
           }
       }
 
       // Also update planted_at if germinacion is set
       const plantedAt = dates.date_germinacion || plant.planted_at;
+
+      // Las siete columnas de fecha salen de la misma lista que dibuja la
+      // línea de tiempo, así que no puede volver a faltar ninguna.
+      //
+      // Se anclan al mediodía igual que el cambio de etapa en lote: el input
+      // devuelve un "YYYY-MM-DD" pelado, que la base guarda como medianoche
+      // UTC, y al oeste de Greenwich la etapa arrancaba el día anterior. Una
+      // fecha que el usuario no tocó llega con su hora original y no se mueve.
+      const stageDates = Object.fromEntries(
+        STAGE_CONFIG.map((stage) => {
+          const value = dates[stage.key];
+          return [stage.key, value ? parseCultivationDate(value)?.toISOString() ?? null : null];
+        })
+      );
 
       const updates = {
         name: basicInfo.name,
@@ -98,13 +119,7 @@ export default function EditPlantForm({ plant, cycles }: EditPlantFormProps) {
         breeder: basicInfo.breeder,
         source_type: basicInfo.source_type,
         cycle_id: basicInfo.cycle_id,
-        // Dates
-        date_germinacion: dates.date_germinacion || null,
-        date_plantula: dates.date_plantula || null,
-        date_vegetativo: dates.date_vegetativo || null,
-        date_floracion: dates.date_floracion || null,
-        date_secado: dates.date_secado || null,
-        date_curado: dates.date_curado || null,
+        ...stageDates,
         // Computed/Logic
         planted_at: plantedAt,
         stage: currentStage
@@ -240,13 +255,18 @@ export default function EditPlantForm({ plant, cycles }: EditPlantFormProps) {
 
           <div className="space-y-3">
             {STAGE_CONFIG.filter(stage => {
+              // Una etapa con fecha se muestra siempre, aunque no sea la que
+              // le toca al origen: si no, queda un dato que el usuario no
+              // puede ver ni corregir, pero que igual decide su etapa actual.
+              if (dates[stage.key]) return true;
+
               if (basicInfo.source_type === 'Esqueje') {
                 return !['Germinación', 'Plántula'].includes(stage.label);
               } else {
                 return stage.label !== 'Enraizamiento';
               }
             }).map((stage) => {
-              const dateKey = stage.key as keyof typeof dates;
+              const dateKey = stage.key;
               const dateValue = dates[dateKey];
               const isActive = !!dateValue;
               const Icon = stage.icon;
