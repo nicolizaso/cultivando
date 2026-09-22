@@ -9,6 +9,7 @@ import { es } from "date-fns/locale";
 import { CalendarOff, ChevronLeft, ChevronRight } from "lucide-react";
 import AgendaList from "@/components/AgendaList";
 import { getTaskType } from "@/app/lib/constants";
+import { isPhotoLog } from "@/app/lib/logs";
 import { Task as AppTask } from "@/app/lib/types";
 
 interface Log {
@@ -123,7 +124,7 @@ export default function CalendarWidget({ logs, tasks, selectedDate, onDateSelect
   const calendarDays = eachDayOfInterval({ start: startDate, end: endDate });
 
   // Unificar eventos (con agrupación de logs, filtrando solo los de tipo foto)
-  const groupedLogs = groupLogs(logs.filter(log => log.type === 'foto'));
+  const groupedLogs = groupLogs(logs.filter(isPhotoLog));
 
   const allEvents = [
     ...groupedLogs.map(log => ({

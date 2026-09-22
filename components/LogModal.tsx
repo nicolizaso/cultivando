@@ -7,6 +7,7 @@ import { useToast } from "@/app/context/ToastContext";
 import imageCompression from 'browser-image-compression';
 import { Camera, Check, ImagePlus, Loader2 } from "lucide-react";
 import Modal from "@/components/ui/Modal";
+import { LOG_TYPE } from "@/app/lib/logs";
 
 interface Props {
   plantId: number;
@@ -77,7 +78,7 @@ export default function LogModal({ plantId, plantName }: Props) {
             plant_id: plantId,
             title: file ? "Nueva foto" : "Nota de bitácora",
             notes: note,
-            type: file ? 'Foto' : 'Nota',
+            type: file ? LOG_TYPE.photo : LOG_TYPE.note,
             media_url: publicUrl ? [publicUrl] : [],
           }
         ]);

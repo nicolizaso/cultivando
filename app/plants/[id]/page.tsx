@@ -10,6 +10,7 @@ import LogModal from "@/components/LogModal";
 import PlantMetricsDisplay from "@/components/PlantMetricsDisplay";
 import TimelineSection, { TimelineItem } from "@/components/TimelineSection";
 import { getPlantMetrics, getStageColor, getWaterStatus } from "@/app/lib/utils";
+import { isPhotoLog } from "@/app/lib/logs";
 
 export default async function PlantDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const supabase = await createClient();
@@ -89,7 +90,7 @@ export default async function PlantDetailPage({ params }: { params: Promise<{ id
   })).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
   const historyTimelineItems: TimelineItem[] = [
-    ...logs.filter((log: any) => log.type === 'foto').map((log: any) => ({
+    ...logs.filter(isPhotoLog).map((log: any) => ({
       id: `log-${log.id}`,
       originalId: log.id,
       date: log.created_at,
