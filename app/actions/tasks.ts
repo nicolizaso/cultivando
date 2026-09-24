@@ -12,11 +12,14 @@ import {
 } from "../lib/clones"
 import type { CloneEntry, CloneMother } from "../lib/clones"
 import type { TaskMetadata } from "../lib/types"
+import { moveCycleToSpace } from "../cycles/actions"
+import { bulkMoveToCycle } from "./plants"
 import { getStageDateColumn } from "../lib/stage-logic"
 import {
   getTaskCompletionEffect,
   getTaskEffectDate,
   inferLegacyTargets,
+  planAmbienteMove,
   readTaskTargets,
   resolveTaskPlants,
   shouldApplyStage,
@@ -303,6 +306,7 @@ export async function toggleTaskStatus(taskId: string | number, newStatus: 'pend
   if (error) return { error: error.message }
 
   let effects: TaskCompletionEffects | null = null
+  let ambiente: AmbienteMoveResult | null = null
 
   // El esquejado no pasa por acá para completarse: lo hace `completeEsquejado`,
   // que necesita saber de qué plantas salieron los esquejes y cuántos. Al
@@ -334,51 +338,21 @@ export async function toggleTaskStatus(taskId: string | number, newStatus: 'pend
         }
       }
 
-      // Nueva lógica para cambiar ambiente
       if (task.type === 'ambiente' && task.target_space_id) {
-        const environmentPlantIds = task.task_plants?.map((tp: any) => tp.plant_id) || [];
-        const cycleIds = task.task_cycles?.map((tc: any) => tc.cycle_id) || [];
-
-        // 1. Mudar Plantas Individuales
-        if (environmentPlantIds.length > 0) {
-          const { error: movePlantsError } = await supabase
-            .from('plants')
-            .update({ space_id: task.target_space_id })
-            .in('id', environmentPlantIds)
-
-          if (movePlantsError) console.error('Error moving plants to new space:', movePlantsError)
-        }
-
-        // 2. Mudar Ciclos Enteros
-        if (cycleIds.length > 0) {
-          const { error: moveCyclesError } = await supabase
-            .from('cycles')
-            .update({ space_id: task.target_space_id })
-            .in('id', cycleIds)
-
-          if (moveCyclesError) console.error('Error moving cycles to new space:', moveCyclesError)
-
-          // Mover también todas las plantas de ese ciclo
-          const { error: movePlantsCycleError } = await supabase
-            .from('plants')
-            .update({ space_id: task.target_space_id })
-            .in('cycle_id', cycleIds)
-
-          if (movePlantsCycleError) console.error('Error moving plants from cycle to new space:', movePlantsCycleError)
-        }
+        ambiente = await applyAmbienteMove(supabase, task, Number(task.target_space_id))
       }
     }
   }
 
   revalidatePath('/')
   revalidatePath('/calendar')
-  if (effects) {
+  if (effects || ambiente) {
     revalidatePath('/plants')
     revalidatePath('/plants/[id]', 'page')
     revalidatePath('/cycles')
     revalidatePath('/cycles/[id]', 'page')
   }
-  return { success: true, effects }
+  return { success: true, effects, ambiente }
 }
 
 /** Lo que cambió en las plantas al completar una tarea, para contárselo al usuario. */
@@ -390,6 +364,107 @@ export interface TaskCompletionEffects {
   stage?: string
 }
 
+type TaskWithTargets = {
+  metadata?: unknown
+  task_plants?: { plant_id: number; plants?: TargetPlant | null }[] | null
+  task_cycles?: { cycle_id: number }[] | null
+}
+
+/** Lo que eligió la tarea: `metadata.targets`, o lo deducido si es vieja. */
+function getTaskTargets(task: TaskWithTargets): TaskTargets {
+  const linked = (task.task_plants ?? [])
+    .map((tp) => tp.plants)
+    .filter((plant): plant is TargetPlant => Boolean(plant))
+  const taskCycleIds = (task.task_cycles ?? []).map((tc) => Number(tc.cycle_id)).filter(Boolean)
+
+  return readTaskTargets(task.metadata) ?? inferLegacyTargets(linked, taskCycleIds)
+}
+
+/** Lo que mudó una tarea de "Cambiar ambiente", para contárselo al usuario. */
+export interface AmbienteMoveResult {
+  spaceName: string
+  /** Ciclos mudados al espacio. */
+  cycles: number
+  /** Plantas sueltas pasadas al ciclo del espacio. */
+  plants: number
+  /** Plantas sueltas que no se movieron porque el espacio no tiene un único ciclo activo. */
+  unplaced: number
+}
+
+/**
+ * Muda al espacio destino los ciclos elegidos enteros y pasa las plantas
+ * elegidas sueltas al ciclo activo de ese espacio (ver `planAmbienteMove`).
+ * Un ciclo enlazado sólo porque una de sus plantas era el objetivo no se muda.
+ */
+async function applyAmbienteMove(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  task: TaskWithTargets,
+  targetSpaceId: number
+): Promise<AmbienteMoveResult | null> {
+  const targets = getTaskTargets(task)
+
+  const [spaceResult, plantsResult, activeResult] = await Promise.all([
+    supabase.from('spaces').select('id, name').eq('id', targetSpaceId).single(),
+    targets.plant_ids.length > 0
+      ? supabase.from('plants').select('id, cycle_id, is_archived').in('id', targets.plant_ids)
+      : Promise.resolve({ data: [] as TargetPlant[], error: null }),
+    supabase.from('cycles').select('id').eq('space_id', targetSpaceId).eq('is_active', true),
+  ])
+
+  if (spaceResult.error || !spaceResult.data) {
+    console.error('No se encontró el espacio destino de la tarea:', spaceResult.error)
+    return null
+  }
+
+  const plants = (plantsResult.data ?? []) as TargetPlant[]
+  const involvedCycleIds = Array.from(new Set([
+    ...targets.cycle_ids,
+    ...plants.map((plant) => Number(plant.cycle_id)).filter(Boolean),
+  ]))
+
+  const { data: involvedCycles } = involvedCycleIds.length > 0
+    ? await supabase.from('cycles').select('id, space_id').in('id', involvedCycleIds)
+    : { data: [] as { id: number; space_id: number | null }[] }
+
+  const cycleSpaces = new Map<number, number | null>(
+    (involvedCycles ?? []).map((cycle: { id: number; space_id: number | null }) => [
+      Number(cycle.id),
+      cycle.space_id == null ? null : Number(cycle.space_id),
+    ])
+  )
+
+  const plan = planAmbienteMove(
+    // Un ciclo que ya no existe no se puede mudar.
+    { ...targets, cycle_ids: targets.cycle_ids.filter((id) => cycleSpaces.has(id)) },
+    targetSpaceId,
+    plants,
+    cycleSpaces,
+    (activeResult.data ?? []).map((cycle: { id: number }) => Number(cycle.id))
+  )
+
+  // Se reusan las mudanzas de siempre, que además dejan la bitácora.
+  let movedCycles = 0
+  for (const cycleId of plan.cycleIds) {
+    const result = await moveCycleToSpace(cycleId, targetSpaceId)
+    if (result.success) movedCycles++
+    else console.error(`No se pudo mudar el ciclo ${cycleId}:`, result.error)
+  }
+
+  let movedPlants = 0
+  if (plan.targetCycleId != null && plan.plantIds.length > 0) {
+    const result = await bulkMoveToCycle(plan.plantIds, plan.targetCycleId)
+    if (result.success) movedPlants = plan.plantIds.length
+    else console.error('No se pudieron pasar las plantas al ciclo del espacio:', result.error)
+  }
+
+  return {
+    spaceName: spaceResult.data.name,
+    cycles: movedCycles,
+    plants: movedPlants,
+    unplaced: plan.unplacedPlantIds.length,
+  }
+}
+
 /**
  * Las plantas a las que alcanza la tarea hoy: las elegidas una por una y las
  * que están ahora en sus ciclos. Una planta que entró al ciclo después de
@@ -397,19 +472,9 @@ export interface TaskCompletionEffects {
  */
 async function loadTaskPlants(
   supabase: Awaited<ReturnType<typeof createClient>>,
-  task: {
-    metadata?: unknown
-    task_plants?: { plant_id: number; plants?: TargetPlant | null }[] | null
-    task_cycles?: { cycle_id: number }[] | null
-  }
+  task: TaskWithTargets
 ): Promise<TargetPlant[]> {
-  const linked = (task.task_plants ?? [])
-    .map((tp) => tp.plants)
-    .filter((plant): plant is TargetPlant => Boolean(plant))
-  const taskCycleIds = (task.task_cycles ?? []).map((tc) => Number(tc.cycle_id)).filter(Boolean)
-
-  const targets =
-    readTaskTargets(task.metadata) ?? inferLegacyTargets(linked, taskCycleIds)
+  const targets = getTaskTargets(task)
 
   const columns = 'id, cycle_id, stage, is_archived'
   const [byPlant, byCycle] = await Promise.all([
