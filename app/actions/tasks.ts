@@ -12,6 +12,9 @@ import {
 } from "../lib/clones"
 import type { CloneEntry, CloneMother } from "../lib/clones"
 import type { TaskMetadata } from "../lib/types"
+import { getStageDateColumn } from "../lib/stage-logic"
+import { getTaskCompletionEffect, shouldApplyStage } from "../lib/task-effects"
+import type { TaskEffect } from "../lib/task-effects"
 
 export async function createTask(formData: any) {
   const supabase = await createClient()
@@ -263,9 +266,10 @@ export async function toggleTaskStatus(taskId: string | number, newStatus: 'pend
   if (fetchError) return { error: fetchError.message }
   if (currentTask.status === newStatus) return { success: true }
 
+  const completedAt = new Date().toISOString()
   const updateData: any = { status: newStatus }
   if (newStatus === 'completed') {
-    updateData.completed_at = new Date().toISOString()
+    updateData.completed_at = completedAt
   } else {
     updateData.completed_at = null
   }
@@ -277,6 +281,8 @@ export async function toggleTaskStatus(taskId: string | number, newStatus: 'pend
 
   if (error) return { error: error.message }
 
+  let effects: TaskCompletionEffects | null = null
+
   // El esquejado no pasa por acá para completarse: lo hace `completeEsquejado`,
   // que necesita saber de qué plantas salieron los esquejes y cuántos. Al
   // desmarcarla, las plantas creadas se quedan donde están.
@@ -287,7 +293,7 @@ export async function toggleTaskStatus(taskId: string | number, newStatus: 'pend
         *,
         task_plants (
           plant_id,
-          plants ( id, cycle_id )
+          plants ( id, cycle_id, stage )
         ),
         task_cycles (
           cycle_id
@@ -299,39 +305,9 @@ export async function toggleTaskStatus(taskId: string | number, newStatus: 'pend
     if (task) {
       const plantIds = task.task_plants ? task.task_plants.map((tp: any) => tp.plant_id) : []
 
-      if (plantIds.length > 0 && (task.type === 'riego' || (task.type === 'fertilizante' && task.application_type === 'Riego'))) {
-        const { error: waterError } = await supabase
-          .from('plants')
-          .update({ last_water: new Date().toISOString() })
-          .in('id', plantIds)
-
-        if (waterError) console.error('Error updating last_water:', waterError)
-      } else if (task.type === 'cambio_etapa' && task.target_stage) {
-        // Logica para cambiar etapa
-        const stageToColumnMap: { [key: string]: string } = {
-          'Germinación': 'date_germinacion',
-          'Plántula': 'date_plantula',
-          'Vegetativo': 'date_vegetativo',
-          'Enraizamiento': 'date_enraizamiento',
-          'Floración': 'date_floracion',
-          'Secado': 'date_secado',
-          'Curado': 'date_curado',
-        }
-
-        const dateCol = stageToColumnMap[task.target_stage]
-        if (dateCol) {
-          const updateObj: any = {
-            stage: task.target_stage,
-          }
-          updateObj[dateCol] = new Date().toISOString()
-
-          const { error: stageError } = await supabase
-            .from('plants')
-            .update(updateObj)
-            .in('id', plantIds)
-
-          if (stageError) console.error('Error updating stage based on target_stage:', stageError)
-        }
+      const effect = getTaskCompletionEffect(task)
+      if (effect && plantIds.length > 0) {
+        effects = await applyTaskCompletionEffect(supabase, effect, task.task_plants, completedAt)
       }
 
       // Nueva lógica para cambiar ambiente
@@ -372,7 +348,88 @@ export async function toggleTaskStatus(taskId: string | number, newStatus: 'pend
 
   revalidatePath('/')
   revalidatePath('/calendar')
-  return { success: true }
+  if (effects) {
+    revalidatePath('/plants')
+    revalidatePath('/plants/[id]', 'page')
+    revalidatePath('/cycles')
+    revalidatePath('/cycles/[id]', 'page')
+  }
+  return { success: true, effects }
+}
+
+/** Lo que cambió en las plantas al completar una tarea, para contárselo al usuario. */
+export interface TaskCompletionEffects {
+  kind: TaskEffect['kind']
+  /** Plantas que efectivamente cambiaron. */
+  count: number
+  /** La etapa nueva, cuando el efecto es un cambio de etapa. */
+  stage?: string
+}
+
+type TaskPlantRow = { plant_id: number; plants?: { id: number; stage?: string | null } | null }
+
+/**
+ * Aplica sobre las plantas de la tarea el efecto de haberla completado.
+ *
+ * Si algo falla no se revierte el completado: la tarea sí se hizo, y queda
+ * en el log del servidor. Desmarcar la tarea tampoco deshace el efecto, igual
+ * que con los esquejes: la etapa o el archivado se corrigen desde la planta.
+ */
+async function applyTaskCompletionEffect(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  effect: TaskEffect,
+  taskPlants: TaskPlantRow[] | null | undefined,
+  completedAt: string
+): Promise<TaskCompletionEffects | null> {
+  const rows = taskPlants ?? []
+
+  if (effect.kind === 'water') {
+    const ids = rows.map((tp) => tp.plant_id)
+    const { error } = await supabase.from('plants').update({ last_water: completedAt }).in('id', ids)
+    if (error) {
+      console.error('Error updating last_water:', error)
+      return null
+    }
+    return { kind: 'water', count: ids.length }
+  }
+
+  if (effect.kind === 'archive') {
+    const ids = rows.map((tp) => tp.plant_id)
+    const { error } = await supabase.from('plants').update({ is_archived: true }).in('id', ids)
+    if (error) {
+      console.error('Error archivando plantas al completar la tarea:', error)
+      return null
+    }
+    return { kind: 'archive', count: ids.length }
+  }
+
+  // Cambio de etapa: sólo las plantas que no están ya ahí (o más adelante,
+  // si el efecto sólo avanza).
+  const dateColumn = getStageDateColumn(effect.stage)
+  if (!dateColumn) return null
+
+  const ids = rows
+    .filter((tp) => tp.plants && shouldApplyStage(tp.plants.stage, effect))
+    .map((tp) => tp.plant_id)
+
+  if (ids.length > 0) {
+    const { error } = await supabase
+      .from('plants')
+      .update({
+        stage: effect.stage,
+        stage_updated_at: completedAt,
+        // La columna sale del mapa de etapas, nunca del cliente.
+        [dateColumn]: completedAt,
+      })
+      .in('id', ids)
+
+    if (error) {
+      console.error('Error cambiando la etapa al completar la tarea:', error)
+      return null
+    }
+  }
+
+  return { kind: 'stage', count: ids.length, stage: effect.stage }
 }
 
 export async function completeTask(taskId: string | number) {
