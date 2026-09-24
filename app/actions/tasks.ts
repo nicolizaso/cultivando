@@ -13,8 +13,15 @@ import {
 import type { CloneEntry, CloneMother } from "../lib/clones"
 import type { TaskMetadata } from "../lib/types"
 import { getStageDateColumn } from "../lib/stage-logic"
-import { getTaskCompletionEffect, shouldApplyStage } from "../lib/task-effects"
-import type { TaskEffect } from "../lib/task-effects"
+import {
+  getTaskCompletionEffect,
+  getTaskEffectDate,
+  inferLegacyTargets,
+  readTaskTargets,
+  resolveTaskPlants,
+  shouldApplyStage,
+} from "../lib/task-effects"
+import type { TargetPlant, TaskEffect, TaskTargets } from "../lib/task-effects"
 
 export async function createTask(formData: any) {
   const supabase = await createClient()
@@ -32,17 +39,25 @@ export async function createTask(formData: any) {
   // 1. Resolve Target Metadata (cycle_id and linked plants)
   const allPlantIds = new Set<string>();
   const encounteredCycleIds = new Set<number>();
+  // Lo que se eligió de verdad, para que al completarla la tarea alcance a las
+  // plantas que el ciclo tenga ese día y no a las que tenía al agendarla.
+  const targetCycleIds = new Set<number>();
+  const targetPlantIds = new Set<number>();
 
   await Promise.all(targets.map(async (target: any) => {
     if (target.type === 'plant') {
       const { data: plant } = await supabase.from('plants').select('cycle_id').eq('id', target.id).single();
       if (plant?.cycle_id) encounteredCycleIds.add(plant.cycle_id);
       allPlantIds.add(String(target.id));
+      targetPlantIds.add(Number(target.id));
     } else if (target.type === 'space') {
       // Buscamos ciclos activos asociados al espacio para vincular la tarea
       const { data: cycles } = await supabase.from('cycles').select('id').eq('space_id', target.id).eq('is_active', true);
       const spaceCycleIds = cycles?.map((c: any) => c.id) ?? [];
-      spaceCycleIds.forEach((id: number) => encounteredCycleIds.add(id));
+      spaceCycleIds.forEach((id: number) => {
+        encounteredCycleIds.add(id);
+        targetCycleIds.add(Number(id));
+      });
 
       // Las plantas no guardan el espacio: viven en el ciclo y el ciclo en el
       // espacio. Antes se buscaban por una columna `space_id` que la tabla no
@@ -56,6 +71,7 @@ export async function createTask(formData: any) {
       }
     } else if (target.type === 'cycle') {
       encounteredCycleIds.add(target.id);
+      targetCycleIds.add(Number(target.id));
       // Obtenemos todas las plantas que pertenecen a este ciclo
       const { data: plants } = await supabase.from('plants').select('id').eq('cycle_id', target.id);
       plants?.forEach((p: any) => {
@@ -66,6 +82,10 @@ export async function createTask(formData: any) {
 
   const uniqueCycleIds = Array.from(encounteredCycleIds);
   const linkedPlantIds = Array.from(allPlantIds);
+  const taskTargets: TaskTargets = {
+    cycle_ids: Array.from(targetCycleIds),
+    plant_ids: Array.from(targetPlantIds),
+  };
 
   // 2. Generate Dates
   const datesToInsert: string[] = [];
@@ -112,7 +132,8 @@ export async function createTask(formData: any) {
       target_space_id: taskType.id === 'ambiente' && targetSpaceId ? targetSpaceId : null,
       status: 'pending',
       recurrence_id: recurrenceId,
-      cycle_id: null
+      cycle_id: null,
+      metadata: { targets: taskTargets }
   }));
 
   const { data: insertedTasks, error } = await supabase.from('tasks').insert(tasksData).select('id');
@@ -293,7 +314,7 @@ export async function toggleTaskStatus(taskId: string | number, newStatus: 'pend
         *,
         task_plants (
           plant_id,
-          plants ( id, cycle_id, stage )
+          plants ( id, cycle_id, stage, is_archived )
         ),
         task_cycles (
           cycle_id
@@ -303,11 +324,14 @@ export async function toggleTaskStatus(taskId: string | number, newStatus: 'pend
       .single()
 
     if (task) {
-      const plantIds = task.task_plants ? task.task_plants.map((tp: any) => tp.plant_id) : []
-
       const effect = getTaskCompletionEffect(task)
-      if (effect && plantIds.length > 0) {
-        effects = await applyTaskCompletionEffect(supabase, effect, task.task_plants, completedAt)
+      if (effect) {
+        const plants = await loadTaskPlants(supabase, task)
+        if (plants.length > 0) {
+          // El efecto lleva la fecha en que la tarea estaba agendada.
+          const effectDate = getTaskEffectDate(task.due_date)
+          effects = await applyTaskCompletionEffect(supabase, effect, plants, effectDate)
+        }
       }
 
       // Nueva lógica para cambiar ambiente
@@ -366,7 +390,46 @@ export interface TaskCompletionEffects {
   stage?: string
 }
 
-type TaskPlantRow = { plant_id: number; plants?: { id: number; stage?: string | null } | null }
+/**
+ * Las plantas a las que alcanza la tarea hoy: las elegidas una por una y las
+ * que están ahora en sus ciclos. Una planta que entró al ciclo después de
+ * agendar la tarea también cuenta, y una que se fue a otro ciclo ya no.
+ */
+async function loadTaskPlants(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  task: {
+    metadata?: unknown
+    task_plants?: { plant_id: number; plants?: TargetPlant | null }[] | null
+    task_cycles?: { cycle_id: number }[] | null
+  }
+): Promise<TargetPlant[]> {
+  const linked = (task.task_plants ?? [])
+    .map((tp) => tp.plants)
+    .filter((plant): plant is TargetPlant => Boolean(plant))
+  const taskCycleIds = (task.task_cycles ?? []).map((tc) => Number(tc.cycle_id)).filter(Boolean)
+
+  const targets =
+    readTaskTargets(task.metadata) ?? inferLegacyTargets(linked, taskCycleIds)
+
+  const columns = 'id, cycle_id, stage, is_archived'
+  const [byPlant, byCycle] = await Promise.all([
+    targets.plant_ids.length > 0
+      ? supabase.from('plants').select(columns).in('id', targets.plant_ids)
+      : Promise.resolve({ data: [] as TargetPlant[], error: null }),
+    targets.cycle_ids.length > 0
+      ? supabase.from('plants').select(columns).in('cycle_id', targets.cycle_ids)
+      : Promise.resolve({ data: [] as TargetPlant[], error: null }),
+  ])
+
+  if (byPlant.error) console.error('Error leyendo las plantas de la tarea:', byPlant.error)
+  if (byCycle.error) console.error('Error leyendo las plantas de los ciclos de la tarea:', byCycle.error)
+
+  return resolveTaskPlants(
+    targets,
+    (byPlant.data ?? []) as TargetPlant[],
+    (byCycle.data ?? []) as TargetPlant[]
+  )
+}
 
 /**
  * Aplica sobre las plantas de la tarea el efecto de haberla completado.
@@ -378,14 +441,12 @@ type TaskPlantRow = { plant_id: number; plants?: { id: number; stage?: string | 
 async function applyTaskCompletionEffect(
   supabase: Awaited<ReturnType<typeof createClient>>,
   effect: TaskEffect,
-  taskPlants: TaskPlantRow[] | null | undefined,
-  completedAt: string
+  plants: TargetPlant[],
+  effectDate: string
 ): Promise<TaskCompletionEffects | null> {
-  const rows = taskPlants ?? []
-
   if (effect.kind === 'water') {
-    const ids = rows.map((tp) => tp.plant_id)
-    const { error } = await supabase.from('plants').update({ last_water: completedAt }).in('id', ids)
+    const ids = plants.map((plant) => plant.id)
+    const { error } = await supabase.from('plants').update({ last_water: effectDate }).in('id', ids)
     if (error) {
       console.error('Error updating last_water:', error)
       return null
@@ -394,7 +455,7 @@ async function applyTaskCompletionEffect(
   }
 
   if (effect.kind === 'archive') {
-    const ids = rows.map((tp) => tp.plant_id)
+    const ids = plants.map((plant) => plant.id)
     const { error } = await supabase.from('plants').update({ is_archived: true }).in('id', ids)
     if (error) {
       console.error('Error archivando plantas al completar la tarea:', error)
@@ -408,18 +469,18 @@ async function applyTaskCompletionEffect(
   const dateColumn = getStageDateColumn(effect.stage)
   if (!dateColumn) return null
 
-  const ids = rows
-    .filter((tp) => tp.plants && shouldApplyStage(tp.plants.stage, effect))
-    .map((tp) => tp.plant_id)
+  const ids = plants
+    .filter((plant) => shouldApplyStage(plant.stage, effect))
+    .map((plant) => plant.id)
 
   if (ids.length > 0) {
     const { error } = await supabase
       .from('plants')
       .update({
         stage: effect.stage,
-        stage_updated_at: completedAt,
+        stage_updated_at: effectDate,
         // La columna sale del mapa de etapas, nunca del cliente.
-        [dateColumn]: completedAt,
+        [dateColumn]: effectDate,
       })
       .in('id', ids)
 
