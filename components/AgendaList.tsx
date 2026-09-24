@@ -7,7 +7,7 @@ import TaskPill from "./TaskPill"
 import EditTaskModal from "./EditTaskModal"
 import EsquejarModal from "./EsquejarModal"
 import { toggleTaskStatus, deleteTasks } from "@/app/actions/tasks"
-import type { TaskCompletionEffects } from "@/app/actions/tasks"
+import type { AmbienteMoveResult, TaskCompletionEffects } from "@/app/actions/tasks"
 import { useToast } from "@/app/context/ToastContext"
 import ConfirmDialog from "@/components/ui/ConfirmDialog"
 import SelectionBar from "@/components/ui/SelectionBar"
@@ -25,6 +25,28 @@ function completionMessage(effects?: TaskCompletionEffects | null): string {
     default:
       return '¡Tarea completada!'
   }
+}
+
+/** El aviso al completar un cambio de ambiente: qué se mudó y qué quedó. */
+function ambienteMessage(ambiente: AmbienteMoveResult): string {
+  const parts: string[] = []
+  if (ambiente.cycles > 0) {
+    parts.push(ambiente.cycles === 1 ? '1 ciclo' : `${ambiente.cycles} ciclos`)
+  }
+  if (ambiente.plants > 0) {
+    parts.push(ambiente.plants === 1 ? '1 planta' : `${ambiente.plants} plantas`)
+  }
+
+  let message = '¡Tarea completada!'
+  if (parts.length > 0) {
+    const moved = ambiente.cycles + ambiente.plants
+    message += ` ${parts.join(' y ')} ${moved === 1 ? 'pasó' : 'pasaron'} a ${ambiente.spaceName}.`
+  }
+  if (ambiente.unplaced > 0) {
+    const plants = ambiente.unplaced === 1 ? '1 planta no se movió' : `${ambiente.unplaced} plantas no se movieron`
+    message += ` ${plants}: ${ambiente.spaceName} no tiene un único ciclo activo. Movela${ambiente.unplaced === 1 ? '' : 's'} de ciclo a mano.`
+  }
+  return message
 }
 
 interface AgendaListProps {
@@ -70,7 +92,7 @@ export default function AgendaList({ tasks, disableDateFilter = false, groupBySt
     }
 
     if (newStatus === 'completed') {
-      showToast(completionMessage(res?.effects), 'success')
+      showToast(res?.ambiente ? ambienteMessage(res.ambiente) : completionMessage(res?.effects), 'success')
       return
     }
 

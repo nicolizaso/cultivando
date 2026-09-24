@@ -5,6 +5,7 @@ import {
   getTaskEffectDate,
   HARVEST_STAGE,
   inferLegacyTargets,
+  planAmbienteMove,
   readTaskTargets,
   resolveTaskPlants,
   shouldApplyStage,
@@ -134,4 +135,47 @@ test('resolveTaskPlants junta plantas sueltas y ciclos sin repetir', () => {
     cycle9
   );
   assert.deepStrictEqual(plants.map((p) => p.id).sort((a, b) => a - b), [29, 39, 41, 50, 70]);
+});
+
+// Espacio 1: ciclos 9 y 13. Espacio 2 (destino): ciclo 20, el único activo.
+const spaces = new Map<number, number | null>([[9, 1], [13, 1], [20, 2]]);
+
+test('ambiente: un ciclo elegido entero se muda', () => {
+  const plan = planAmbienteMove({ cycle_ids: [9], plant_ids: [] }, 2, [], spaces, [20]);
+  assert.deepStrictEqual(plan, { cycleIds: [9], plantIds: [], targetCycleId: 20, unplacedPlantIds: [] });
+});
+
+test('ambiente: una planta sola no muda su ciclo, pasa al ciclo activo del destino', () => {
+  // Tarea vieja de una planta: el ciclo se enlazó sólo por ser el de la planta.
+  const targets = inferLegacyTargets([{ id: 29, cycle_id: 9 }], [9]);
+  const plan = planAmbienteMove(targets, 2, [{ id: 29, cycle_id: 9 }], spaces, [20]);
+  assert.deepStrictEqual(plan, { cycleIds: [], plantIds: [29], targetCycleId: 20, unplacedPlantIds: [] });
+});
+
+test('ambiente: sin un único ciclo activo en el destino, la planta queda pendiente', () => {
+  const targets = { cycle_ids: [], plant_ids: [29] };
+  const plants = [{ id: 29, cycle_id: 9 }];
+  assert.deepStrictEqual(planAmbienteMove(targets, 2, plants, spaces, []).unplacedPlantIds, [29]);
+  assert.deepStrictEqual(planAmbienteMove(targets, 2, plants, spaces, [20, 21]).unplacedPlantIds, [29]);
+  assert.deepStrictEqual(planAmbienteMove(targets, 2, plants, spaces, [20, 21]).plantIds, []);
+});
+
+test('ambiente: no se mueve lo que ya está en el destino ni lo que viaja con su ciclo', () => {
+  const plan = planAmbienteMove(
+    { cycle_ids: [9, 20], plant_ids: [29, 70, 80] },
+    2,
+    [
+      { id: 29, cycle_id: 9 }, // viaja con el ciclo 9
+      { id: 70, cycle_id: 20 }, // ya está en el espacio 2
+      { id: 80, cycle_id: 13, is_archived: true }, // archivada
+    ],
+    spaces,
+    [20]
+  );
+  assert.deepStrictEqual(plan, { cycleIds: [9], plantIds: [], targetCycleId: 20, unplacedPlantIds: [] });
+});
+
+test('ambiente: una planta sin ciclo también pasa al ciclo del destino', () => {
+  const plan = planAmbienteMove({ cycle_ids: [], plant_ids: [7] }, 2, [{ id: 7, cycle_id: null }], spaces, [20]);
+  assert.deepStrictEqual(plan.plantIds, [7]);
 });

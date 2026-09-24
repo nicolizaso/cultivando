@@ -185,10 +185,8 @@ export async function createCycleWithSpace(name: string, startDate: string, spac
 }
 
 /**
- * Muda un ciclo de un espacio a otro. Las plantas viven en el mismo espacio que
- * su ciclo (es lo que asume la tarea "Cambiar ambiente" al completarse), así que
- * se mudan con él; si no, quedarían apuntando a la carpa vieja y las tareas por
- * espacio se aplicarían al lugar equivocado.
+ * Muda un ciclo de un espacio a otro. Las plantas no guardan espacio: viven en
+ * su ciclo, así que se mudan con él sin tocarlas.
  */
 export async function moveCycleToSpace(cycleId: number, spaceId: number) {
   const supabase = await createClient();
@@ -232,13 +230,6 @@ export async function moveCycleToSpace(cycleId: number, spaceId: number) {
       .eq('id', cycleId);
 
     if (updateError) throw updateError;
-
-    const { error: plantsError } = await supabase
-      .from('plants')
-      .update({ space_id: spaceId })
-      .eq('cycle_id', cycleId);
-
-    if (plantsError) throw plantsError;
 
     // La mudanza queda en la bitácora: es un cambio de condiciones que explica
     // saltos de temperatura o humedad más adelante.

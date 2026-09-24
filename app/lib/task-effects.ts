@@ -195,3 +195,57 @@ export function resolveTaskPlants(
 
   return Array.from(result.values()).filter((plant) => !plant.is_archived);
 }
+
+/**
+ * Qué mueve una tarea de "Cambiar ambiente" al completarse.
+ *
+ * Las plantas no tienen espacio propio: viven en un ciclo y el ciclo en un
+ * espacio. Mudar un ciclo elegido entero es mudar el ciclo. Mudar una planta
+ * elegida sola es pasarla a un ciclo del espacio destino, y eso sólo se hace
+ * cuando no hay que adivinar cuál: si el espacio tiene exactamente un ciclo
+ * activo. Si no tiene ninguno o tiene varios, la planta se queda donde está y
+ * se cuenta como pendiente, para moverla a mano.
+ */
+export interface AmbienteMovePlan {
+  /** Ciclos a mudar al espacio destino. */
+  cycleIds: number[];
+  /** Plantas sueltas a pasar a `targetCycleId`. */
+  plantIds: number[];
+  /** El único ciclo activo del espacio destino, si lo hay. */
+  targetCycleId: number | null;
+  /** Plantas sueltas que no se pudieron ubicar. */
+  unplacedPlantIds: number[];
+}
+
+export function planAmbienteMove(
+  targets: TaskTargets,
+  targetSpaceId: number,
+  /** Las plantas elegidas sueltas, con su ciclo actual. */
+  plants: TargetPlant[],
+  /** Espacio actual de cada ciclo involucrado (los elegidos y los de las plantas). */
+  cycleSpaces: Map<number, number | null>,
+  /** Ciclos activos del espacio destino. */
+  activeCyclesInTarget: number[]
+): AmbienteMovePlan {
+  const cycleIds = targets.cycle_ids.filter((id) => cycleSpaces.get(id) !== targetSpaceId);
+  const movingCycles = new Set(targets.cycle_ids);
+  const targetCycleId = activeCyclesInTarget.length === 1 ? activeCyclesInTarget[0] : null;
+
+  const chosen = new Set(targets.plant_ids);
+  const plantIds: number[] = [];
+  const unplacedPlantIds: number[] = [];
+
+  for (const plant of plants) {
+    const id = Number(plant.id);
+    if (!chosen.has(id) || plant.is_archived) continue;
+
+    const cycleId = plant.cycle_id == null ? null : Number(plant.cycle_id);
+    // Ya viaja con su ciclo, o ya está en el espacio destino.
+    if (cycleId != null && (movingCycles.has(cycleId) || cycleSpaces.get(cycleId) === targetSpaceId)) continue;
+
+    if (targetCycleId != null) plantIds.push(id);
+    else unplacedPlantIds.push(id);
+  }
+
+  return { cycleIds, plantIds, targetCycleId, unplacedPlantIds };
+}
