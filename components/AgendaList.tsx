@@ -7,9 +7,25 @@ import TaskPill from "./TaskPill"
 import EditTaskModal from "./EditTaskModal"
 import EsquejarModal from "./EsquejarModal"
 import { toggleTaskStatus, deleteTasks } from "@/app/actions/tasks"
+import type { TaskCompletionEffects } from "@/app/actions/tasks"
 import { useToast } from "@/app/context/ToastContext"
 import ConfirmDialog from "@/components/ui/ConfirmDialog"
 import SelectionBar from "@/components/ui/SelectionBar"
+
+/** El aviso al completar una tarea, contando lo que cambió en las plantas. */
+function completionMessage(effects?: TaskCompletionEffects | null): string {
+  if (!effects || effects.count === 0) return '¡Tarea completada!'
+
+  const plants = effects.count === 1 ? '1 planta' : `${effects.count} plantas`
+  switch (effects.kind) {
+    case 'stage':
+      return `¡Tarea completada! ${plants} ${effects.count === 1 ? 'pasó' : 'pasaron'} a ${effects.stage}.`
+    case 'archive':
+      return `¡Tarea completada! ${plants} ${effects.count === 1 ? 'se archivó' : 'se archivaron'}.`
+    default:
+      return '¡Tarea completada!'
+  }
+}
 
 interface AgendaListProps {
   tasks: Task[]
@@ -54,7 +70,7 @@ export default function AgendaList({ tasks, disableDateFilter = false, groupBySt
     }
 
     if (newStatus === 'completed') {
-      showToast('¡Tarea completada!', 'success')
+      showToast(completionMessage(res?.effects), 'success')
       return
     }
 
