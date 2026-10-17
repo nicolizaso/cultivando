@@ -4,13 +4,14 @@ import { useState } from 'react'
 import { Plus } from 'lucide-react'
 import AddTaskModal from './AddTaskModal'
 
-interface Plant { id: string; name: string; space_id?: number }
+import type { CycleOption, PlantOption } from '@/app/lib/task-targets'
+
 interface Space { id: number; name: string }
 
 interface CreateTaskActionProps {
-  plants: Plant[]
+  plants: PlantOption[]
   spaces: Space[]
-  cycles?: { id: number; name: string; space_id?: number }[]
+  cycles?: CycleOption[]
   initialDate?: Date
 }
 

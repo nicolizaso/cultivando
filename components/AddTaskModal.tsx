@@ -14,8 +14,21 @@ import Modal from '@/components/ui/Modal'
 // Interfaces
 import { Fertilizer, FertilizerCombo } from '@/app/lib/types'
 import { getFertilizers, getFertilizerCombos } from '@/app/actions/fertilizers'
+import { averageDays, buildRecipe, recipeItems, weekInStage, withRecipe } from '@/app/lib/nutrition'
 
-interface Plant { id: string; name: string; days_in_stage?: number; space_id?: number; }
+interface Plant { id: string; name: string; days_in_stage?: number | null; space_id?: number; cycle_id?: number | null; }
+interface CycleOption { id: number; name: string; space_id?: number | null; days_in_stage?: number | null }
+
+/** Días en la etapa de un objetivo: los de la planta, o el promedio del ciclo o del espacio. */
+function targetDaysInStage(
+  target: { id: string | number; type: 'plant' | 'space' | 'cycle' },
+  plants: Plant[],
+  cycles: CycleOption[]
+): number | null {
+  if (target.type === 'plant') return plants.find(p => String(p.id) === String(target.id))?.days_in_stage ?? null
+  if (target.type === 'cycle') return cycles.find(c => c.id === Number(target.id))?.days_in_stage ?? null
+  return averageDays(cycles.filter(c => c.space_id === Number(target.id)).map(c => c.days_in_stage))
+}
 interface Space { id: number; name: string; }
 
 interface AddTaskModalProps {
@@ -23,7 +36,7 @@ interface AddTaskModalProps {
   onClose: () => void
   plants: Plant[]
   spaces: Space[]
-  cycles?: { id: number; name: string; space_id?: number }[]
+  cycles?: CycleOption[]
   initialDate?: Date
 }
 
@@ -100,84 +113,39 @@ export default function AddTaskModal({ isOpen, onClose, plants, spaces, cycles =
     }
   }, [selectedTaskType])
 
-  // Al elegir nutrición se calcula la receta y se escribe en la descripción
-  useEffect(() => {
-    if (!selectedNutrition || selectedTargets.length === 0) return
-
-    const target = selectedTargets[0]
-    let weekInStage = 1
-
-    if (target.type === 'plant') {
-      const plantData = plants.find(p => p.id === target.id)
-      if (plantData && plantData.days_in_stage) {
-        weekInStage = Math.floor(plantData.days_in_stage / 7) + 1
-      }
-    }
-
-    const generateRecipe = () => {
-      const recipeStr = 'Preparar: '
-      const items: string[] = []
-
-      if (selectedNutrition.type === 'product') {
-        const product = fertilizers.find(f => f.id === selectedNutrition.id)
-        if (product) {
-          if (product.dose_type === 'fija') {
-            items.push(`${product.name}: ${product.dose_fixed}ml/L`)
-          } else if (product.dose_weekly) {
-            const weekDose = product.dose_weekly.find(w => w.week === weekInStage)
-              || [...product.dose_weekly].sort((a,b)=>b.week-a.week)[0]
-            items.push(`${product.name}: ${weekDose?.dose || 0}ml/L (Semana ${weekInStage})`)
-          }
-        }
-      } else if (selectedNutrition.type === 'combo') {
-        const combo = combos.find(c => c.id === selectedNutrition.id)
-        if (combo && combo.products) {
-          combo.products.forEach(p => {
-            const product = fertilizers.find(f => f.id === p.fertilizer_id)
-            if (product) {
-              if (product.dose_type === 'fija') {
-                items.push(`${product.name}: ${product.dose_fixed}ml/L`)
-              } else if (product.dose_weekly) {
-                const weekDose = product.dose_weekly.find(w => w.week === weekInStage)
-                  || [...product.dose_weekly].sort((a,b)=>b.week-a.week)[0]
-                items.push(`${product.name}: ${weekDose?.dose || 0}ml/L (Semana ${weekInStage})`)
-              }
-            } else {
-              items.push(`${p.name}: ?ml/L`)
-            }
-          })
-        }
-      }
-
-      return recipeStr + items.join(' + ')
-    }
-
-    const recipe = generateRecipe()
-    setDescription(prev => {
-      const lines = prev.split('\n');
-      const recipeIndex = lines.findIndex(l => l.startsWith('Preparar:'));
-
-      if (recipeIndex !== -1) {
-        lines[recipeIndex] = recipe;
-        return lines.join('\n');
-      } else {
-        if (!prev) return recipe;
-        return `${recipe}\n\n${prev}`;
-      }
-    })
-  }, [selectedNutrition, selectedTargets, fertilizers, combos, plants])
+  /**
+   * Escribe la receta en los detalles con la semana de la etapa del primer
+   * objetivo: una planta tiene sus días en la etapa y un ciclo o un espacio,
+   * el promedio de sus plantas. Antes la semana era siempre la 1, porque la
+   * lista de plantas no traía los días en etapa y los ciclos no se miraban.
+   *
+   * Se llama al elegir producto u objetivo, no desde un efecto: así la receta
+   * se recalcula sólo cuando cambia algo que la afecta. En una serie, el
+   * servidor recalcula la semana de cada fecha.
+   */
+  const applyRecipe = (
+    nutrition: { type: 'product' | 'combo'; id: number } | null,
+    targets: { id: string | number; type: 'plant' | 'space' | 'cycle' }[]
+  ) => {
+    if (!nutrition || targets.length === 0) return
+    const week = weekInStage(targetDaysInStage(targets[0], plants, cycles))
+    const recipe = buildRecipe(recipeItems(nutrition, fertilizers, combos, week), week)
+    setDescription(prev => withRecipe(prev, recipe))
+  }
 
   const toggleTarget = (item: { id: string | number, name: string, type: 'plant' | 'space' | 'cycle' }) => {
     const exists = selectedTargets.find(t => t.id === item.id && t.type === item.type)
-    if (exists) {
-      setSelectedTargets(prev => prev.filter(t => !(t.id === item.id && t.type === item.type)))
-    } else {
-      setSelectedTargets(prev => [...prev, item])
-    }
+    const next = exists
+      ? selectedTargets.filter(t => !(t.id === item.id && t.type === item.type))
+      : [...selectedTargets, item]
+    setSelectedTargets(next)
+    applyRecipe(selectedNutrition, next)
   }
 
   const removeTarget = (index: number) => {
-    setSelectedTargets(prev => prev.filter((_, i) => i !== index))
+    const next = selectedTargets.filter((_, i) => i !== index)
+    setSelectedTargets(next)
+    applyRecipe(selectedNutrition, next)
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -197,6 +165,9 @@ export default function AddTaskModal({ isOpen, onClose, plants, spaces, cycles =
 
     const result = await createTask({
       targets: selectedTargets,
+      // El servidor recalcula la receta para cada fecha de la serie: la
+      // semana de la etapa avanza entre una repetición y la siguiente.
+      nutrition: selectedTaskType.id === 'fertilizante' ? selectedNutrition : null,
       taskType: cleanTaskType,
       applicationType,
       targetStage,
@@ -213,7 +184,13 @@ export default function AddTaskModal({ isOpen, onClose, plants, spaces, cycles =
     if (result?.error) {
       showToast(result.error, 'error')
     } else {
-      showToast('Tarea agendada', 'success')
+      const created = result && 'created' in result ? result.created ?? 1 : 1
+      showToast(
+        result && 'truncated' in result && result.truncated
+          ? `Se agendaron ${created} repeticiones: es el máximo para una serie.`
+          : created > 1 ? `${created} tareas agendadas` : 'Tarea agendada',
+        'success'
+      )
       router.refresh()
 
       setSelectedTargets([])
@@ -409,7 +386,9 @@ export default function AddTaskModal({ isOpen, onClose, plants, spaces, cycles =
                       setSelectedNutrition(null);
                     } else {
                       const [type, id] = val.split('-');
-                      setSelectedNutrition({ type: type as 'product' | 'combo', id: parseInt(id) });
+                      const next = { type: type as 'product' | 'combo', id: parseInt(id) };
+                      setSelectedNutrition(next);
+                      applyRecipe(next, selectedTargets);
                     }
                   }}
                   className="field-input"

@@ -1,10 +1,10 @@
-import { Plant } from './types';
-import { getDaysSinceWater } from './dates';
+import { daysSinceDate, getDaysSinceWater } from './dates';
 import { Dna, Droplets, Flower2, Leaf, Package, Sprout, Wind, HelpCircle } from 'lucide-react';
 
-// Las cuentas de fechas viven en `dates.ts`, que sí se puede testear; se
-// reexportan para no cambiar los sitios que ya las importaban de acá.
+// Las cuentas de fechas y de métricas viven en archivos sin JSX, que sí se
+// pueden testear; se reexportan para no cambiar los sitios que las importan.
 export { getDaysSinceWater, todayForInput } from './dates';
+export { getPlantMetrics } from './plant-metrics';
 
 export function formatDateShort(dateString: string): string {
   if (!dateString) return '';
@@ -119,81 +119,6 @@ export function getStageColor(stage?: string) {
   return { ...STAGE_STYLES.none, icon: <HelpCircle {...stageIconProps} /> };
 }
 
-export function getPlantMetrics(plant: Plant) {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
-  // Order matters: prioritize later stages
-  const stages = [
-    { key: 'date_curado', label: 'Curado' },
-    { key: 'date_secado', label: 'Secado' },
-    { key: 'date_floracion', label: 'Floración' },
-    { key: 'date_vegetativo', label: 'Vegetativo' },
-    { key: 'date_enraizamiento', label: 'Enraizamiento' },
-    { key: 'date_plantula', label: 'Plántula' },
-    { key: 'date_germinacion', label: 'Germinación' }
-  ];
-
-  let currentStage = plant.stage; // Default to existing stage if no dates found
-  let stageDate: Date | null = null;
-
-  // 1. Determine Current Stage based on highest date set
-  for (const stage of stages) {
-    // @ts-ignore
-    const dateStr = plant[stage.key];
-    if (dateStr) {
-      currentStage = stage.label;
-      stageDate = new Date(dateStr);
-      break;
-    }
-  }
-
-  // If no stage date found but planted_at exists, maybe fallback logic?
-  // For now, if no date found, we stick with plant.stage but have no start date.
-
-  // 2. Calculate Days in Current Stage
-  let daysInCurrentStage = 0;
-  if (stageDate) {
-      // normalize
-      const d = new Date(stageDate);
-      d.setHours(0,0,0,0);
-      const diffTime = today.getTime() - d.getTime();
-      daysInCurrentStage = Math.max(0, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
-  }
-
-  // 3. Calculate Total Age (from earliest date available)
-  let earliestDate: Date | null = null;
-  const allDates = [
-      plant.date_germinacion,
-      plant.date_plantula,
-      plant.date_enraizamiento,
-      plant.date_vegetativo,
-      plant.date_floracion,
-      plant.date_secado,
-      plant.date_curado,
-      plant.planted_at
-  ].filter(d => d).map(d => new Date(d as string));
-
-  if (allDates.length > 0) {
-      allDates.sort((a, b) => a.getTime() - b.getTime());
-      earliestDate = allDates[0];
-  }
-
-  let totalAge = 0;
-  if (earliestDate) {
-      const e = new Date(earliestDate);
-      e.setHours(0,0,0,0);
-      const diffTime = today.getTime() - e.getTime();
-      totalAge = Math.max(0, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
-  }
-
-  return {
-      currentStage,
-      daysInCurrentStage,
-      totalAge
-  };
-}
-
 export function mapTaskCycles(t: any, allCycles?: { id: number; name: string }[]): { cycleIds: number[], cycleNames: string } {
     const cycleIdsSet = new Set<number>();
     const cycleNamesSet = new Set<string>();
@@ -259,12 +184,7 @@ export function getWaterStatus(lastWater?: string | null) {
  * de día el HTML del servidor y el del navegador dirían números distintos.
  */
 export function daysSince(dateString?: string | null): number {
-  if (!dateString) return 0;
-
-  const start = new Date(dateString);
-  if (isNaN(start.getTime())) return 0;
-
-  return Math.max(0, Math.floor((new Date().getTime() - start.getTime()) / (1000 * 60 * 60 * 24)));
+  return daysSinceDate(dateString) ?? 0;
 }
 
 /**

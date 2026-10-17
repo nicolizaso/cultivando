@@ -2,8 +2,16 @@
 
 import { createClient } from "@/app/lib/supabase-server"
 import { requireUser } from "@/app/lib/auth"
+import type { ServerSupabase } from "@/app/lib/auth"
+import { TASK_TYPES, getTaskType } from "@/app/lib/constants"
+import { daysBetweenKeys, todayKey } from "@/app/lib/dates"
+import { averageDays, buildRecipe, recipeItems, weekInStage, withRecipe } from "@/app/lib/nutrition"
+import type { ComboInfo, FertilizerDoseInfo, NutritionSelection } from "@/app/lib/nutrition"
+import { getPlantMetrics } from "@/app/lib/plant-metrics"
+import type { PlantDates } from "@/app/lib/plant-metrics"
+import { buildOccurrenceDates, isFrequency } from "@/app/lib/recurrence"
 import { friendlyDbError } from "@/app/lib/errors"
-import { parseIds } from "@/app/lib/sanitize"
+import { parseId, parseIds } from "@/app/lib/sanitize"
 import { revalidatePath } from "next/cache"
 import { randomUUID } from 'crypto'
 import { mapTaskCycles } from "../lib/utils"
@@ -17,7 +25,7 @@ import type { CloneEntry, CloneMother } from "../lib/clones"
 import type { TaskMetadata } from "../lib/types"
 import { moveCycleToSpace } from "../cycles/actions"
 import { bulkMoveToCycle } from "./plants"
-import { getStageDateColumn } from "../lib/stage-logic"
+import { STAGE_DATE_COLUMNS, getStageDateColumn, isStageName } from "../lib/stage-logic"
 import {
   getTaskCompletionEffect,
   getTaskEffectDate,
@@ -29,162 +37,228 @@ import {
 } from "../lib/task-effects"
 import type { TargetPlant, TaskEffect, TaskTargets } from "../lib/task-effects"
 
-export async function createTask(formData: any) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { error: 'Debes iniciar sesión.' }
+/** Las siete columnas de fecha de etapa, para pedirlas en un select. */
+const STAGE_DATE_SELECT = Object.values(STAGE_DATE_COLUMNS).join(', ')
 
-  const { targets, taskType, applicationType, targetStage, targetSpaceId, date, description, otherText, isRecurring, frequency, endDate } = formData
-  if (!targets || targets.length === 0) return { error: 'Selecciona un objetivo.' }
+type TargetKind = 'plant' | 'cycle' | 'space'
 
+const APPLICATION_TYPES = ['Riego', 'Foliar', 'Directo al Sustrato'] as const
+const TASK_TYPE_IDS = new Set(TASK_TYPES.map((type) => type.id))
+const DATE_INPUT = /^\d{4}-\d{2}-\d{2}/
+
+/** El día ("YYYY-MM-DD") de lo que manda el formulario, con o sin hora. */
+function readDay(value: unknown): string | null {
+  if (typeof value !== 'string' || !DATE_INPUT.test(value)) return null
+  return value.slice(0, 10)
+}
+
+function readTargets(value: unknown): { kind: TargetKind; id: number }[] {
+  if (!Array.isArray(value)) return []
+  const seen = new Set<string>()
+  const targets: { kind: TargetKind; id: number }[] = []
+  for (const item of value) {
+    const kind = (item as { type?: unknown })?.type
+    const id = parseId((item as { id?: unknown })?.id)
+    if ((kind !== 'plant' && kind !== 'cycle' && kind !== 'space') || !id) continue
+    const key = `${kind}-${id}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    targets.push({ kind, id })
+  }
+  return targets
+}
+
+function readNutrition(value: unknown): NutritionSelection | null {
+  const type = (value as { type?: unknown } | null)?.type
+  const id = parseId((value as { id?: unknown } | null)?.id)
+  return (type === 'product' || type === 'combo') && id ? { type, id } : null
+}
+
+/**
+ * Prepara la receta de cada fecha de una serie de fertilizante: la semana de
+ * la etapa avanza entre una repetición y otra, así que la dosis también.
+ * Los días en etapa de hoy salen de las plantas del primer objetivo.
+ */
+async function planNutrition(
+  supabase: ServerSupabase,
+  userId: string,
+  nutrition: NutritionSelection,
+  plantIds: number[]
+): Promise<((day: string) => { recipe: string; week: number }) | null> {
+  const [fertilizersResult, combosResult, plantsResult] = await Promise.all([
+    supabase.from('fertilizers').select('id, name, dosage_type, fixed_dosage, weekly_dosages').eq('user_id', userId),
+    supabase.from('fertilizer_combos').select('id, combo_items ( fertilizer_id, fertilizers ( name ) )').eq('user_id', userId),
+    plantIds.length > 0
+      ? supabase.from('plants').select(`stage, planted_at, stage_updated_at, ${STAGE_DATE_SELECT}`).in('id', plantIds).eq('is_archived', false)
+      : Promise.resolve({ data: [] as PlantDates[], error: null }),
+  ])
+
+  if (fertilizersResult.error || combosResult.error) {
+    console.error('No se pudo leer la nutrición para la receta:', fertilizersResult.error ?? combosResult.error)
+    return null
+  }
+
+  const combos: ComboInfo[] = (combosResult.data ?? []).map((combo) => ({
+    id: Number(combo.id),
+    products: ((combo.combo_items ?? []) as { fertilizer_id: number; fertilizers: { name: string } | { name: string }[] | null }[]).map((item) => {
+      const fertilizer = Array.isArray(item.fertilizers) ? item.fertilizers[0] : item.fertilizers
+      return { fertilizer_id: Number(item.fertilizer_id), name: fertilizer?.name ?? 'Producto' }
+    }),
+  }))
+
+  const today = todayKey()
+  const baseDays = averageDays(((plantsResult.data ?? []) as PlantDates[]).map((plant) => getPlantMetrics(plant).daysInCurrentStage)) ?? 0
+  const fertilizers = (fertilizersResult.data ?? []) as FertilizerDoseInfo[]
+
+  return (day) => {
+    const week = weekInStage(baseDays + Math.max(0, daysBetweenKeys(today, day)))
+    return { recipe: buildRecipe(recipeItems(nutrition, fertilizers, combos, week), week), week }
+  }
+}
+
+/**
+ * Agenda una tarea o una serie.
+ *
+ * Todo lo que llega del formulario se valida acá: el tipo tiene que existir,
+ * el título de las tareas comunes sale de la taxonomía (no del cliente) y los
+ * objetivos se resuelven contra la base. Las tareas y sus relaciones se
+ * guardan juntas en `create_tasks`: o se crea todo, o nada.
+ */
+export async function createTask(input: unknown) {
+  const session = await requireUser()
+  if ('error' in session) return { error: session.error }
+  const { supabase, user } = session
+
+  const form = (input ?? {}) as Record<string, unknown>
+  const targets = readTargets(form.targets)
+  if (targets.length === 0) return { error: 'Elegí al menos una planta, ciclo o espacio.' }
+
+  const typeId = (form.taskType as { id?: unknown } | undefined)?.id
+  if (typeof typeId !== 'string' || !TASK_TYPE_IDS.has(typeId)) return { error: 'Elegí un tipo de tarea.' }
+  const taskType = getTaskType(typeId)
+
+  const otherText = typeof form.otherText === 'string' ? form.otherText.trim().slice(0, 120) : ''
   const title = taskType.id === 'otro' ? otherText : taskType.label
   if (!title) return { error: 'Falta el título.' }
 
-  const recurrenceId = isRecurring ? randomUUID() : null
+  const startDay = readDay(form.date)
+  if (!startDay) return { error: 'La fecha no es válida.' }
 
-  // 1. Resolve Target Metadata (cycle_id and linked plants)
-  const allPlantIds = new Set<string>();
-  const encounteredCycleIds = new Set<number>();
-  // Lo que se eligió de verdad, para que al completarla la tarea alcance a las
-  // plantas que el ciclo tenga ese día y no a las que tenía al agendarla.
-  const targetCycleIds = new Set<number>();
-  const targetPlantIds = new Set<number>();
+  const isRecurring = form.isRecurring === true
+  const frequency = isFrequency(form.frequency) ? form.frequency : 'daily'
+  const endDay = isRecurring ? readDay(form.endDate) : null
+  if (isRecurring && !endDay) return { error: 'Elegí una fecha de fin para la repetición.' }
 
-  await Promise.all(targets.map(async (target: any) => {
-    if (target.type === 'plant') {
-      const { data: plant } = await supabase.from('plants').select('cycle_id').eq('id', target.id).single();
-      if (plant?.cycle_id) encounteredCycleIds.add(plant.cycle_id);
-      allPlantIds.add(String(target.id));
-      targetPlantIds.add(Number(target.id));
-    } else if (target.type === 'space') {
-      // Buscamos ciclos activos asociados al espacio para vincular la tarea
-      const { data: cycles } = await supabase.from('cycles').select('id').eq('space_id', target.id).eq('is_active', true);
-      const spaceCycleIds = cycles?.map((c: any) => c.id) ?? [];
-      spaceCycleIds.forEach((id: number) => {
-        encounteredCycleIds.add(id);
-        targetCycleIds.add(Number(id));
-      });
+  const description = typeof form.description === 'string' ? form.description.trim().slice(0, 2000) : ''
+  const applicationType = APPLICATION_TYPES.find((value) => value === form.applicationType) ?? 'Riego'
+  const targetStage = isStageName(form.targetStage) ? form.targetStage : null
+  const targetSpaceId = parseId(form.targetSpaceId)
 
-      // Las plantas no guardan el espacio: viven en el ciclo y el ciclo en el
-      // espacio. Antes se buscaban por una columna `space_id` que la tabla no
-      // tiene, así que una tarea por espacio terminaba sin ninguna planta.
-      if (spaceCycleIds.length > 0) {
-        const { data: plants } = await supabase.from('plants').select('id, cycle_id').in('cycle_id', spaceCycleIds);
-        plants?.forEach((p: any) => {
-          allPlantIds.add(String(p.id));
-          if (p.cycle_id) encounteredCycleIds.add(p.cycle_id);
-        });
-      }
-    } else if (target.type === 'cycle') {
-      encounteredCycleIds.add(target.id);
-      targetCycleIds.add(Number(target.id));
-      // Obtenemos todas las plantas que pertenecen a este ciclo
-      const { data: plants } = await supabase.from('plants').select('id').eq('cycle_id', target.id);
-      plants?.forEach((p: any) => {
-        allPlantIds.add(String(p.id));
-      });
-    }
-  }));
+  if (taskType.id === 'cambio_etapa' && !targetStage) return { error: 'Elegí la etapa de destino.' }
+  if (taskType.id === 'ambiente' && !targetSpaceId) return { error: 'Elegí el espacio de destino.' }
 
-  const uniqueCycleIds = Array.from(encounteredCycleIds);
-  const linkedPlantIds = Array.from(allPlantIds);
-  const taskTargets: TaskTargets = {
-    cycle_ids: Array.from(targetCycleIds),
-    plant_ids: Array.from(targetPlantIds),
-  };
+  // 1. Objetivos → ciclos y plantas. Tres consultas en total, no una por objetivo.
+  const plantTargetIds = targets.filter((t) => t.kind === 'plant').map((t) => t.id)
+  const cycleTargetIds = targets.filter((t) => t.kind === 'cycle').map((t) => t.id)
+  const spaceTargetIds = targets.filter((t) => t.kind === 'space').map((t) => t.id)
 
-  // 2. Generate Dates
-  const datesToInsert: string[] = [];
+  const [plantRows, spaceCycles] = await Promise.all([
+    plantTargetIds.length > 0
+      ? supabase.from('plants').select('id, cycle_id').in('id', plantTargetIds)
+      : Promise.resolve({ data: [] as { id: number; cycle_id: number | null }[], error: null }),
+    spaceTargetIds.length > 0
+      ? supabase.from('cycles').select('id, space_id').in('space_id', spaceTargetIds).eq('is_active', true)
+      : Promise.resolve({ data: [] as { id: number; space_id: number | null }[], error: null }),
+  ])
 
-  if (isRecurring && endDate) {
-      const startDateObj = new Date(date);
-      const endDateObj = new Date(endDate);
-      const current = new Date(startDateObj);
-      let count = 0;
-      const maxIterations = 50;
-
-      while (current <= endDateObj && count < maxIterations) {
-          const year = current.getFullYear();
-          const month = String(current.getMonth() + 1).padStart(2, '0');
-          const day = String(current.getDate()).padStart(2, '0');
-          datesToInsert.push(`${year}-${month}-${day}T12:00:00`);
-
-          switch (frequency) {
-              case 'daily': current.setDate(current.getDate() + 1); break;
-              case 'every2days': current.setDate(current.getDate() + 2); break;
-              case 'weekly': current.setDate(current.getDate() + 7); break;
-              case 'biweekly': current.setDate(current.getDate() + 14); break;
-              case 'monthly': current.setMonth(current.getMonth() + 1); break;
-              default: current.setDate(current.getDate() + 1);
-          }
-          count++;
-      }
-  } else {
-      // Ensure consistent T12:00:00 format for single dates too
-      const d = date.includes('T') ? date : `${date}T12:00:00`;
-      datesToInsert.push(d);
+  if (plantRows.error || spaceCycles.error) {
+    return { error: friendlyDbError(plantRows.error ?? spaceCycles.error, 'No se pudieron leer los objetivos.', {}, 'Error resolviendo objetivos de la tarea:') }
   }
 
-  // 3. Create Tasks (One per date)
-  const tasksData = datesToInsert.map(d => ({
-      user_id: user.id,
-      title: title,
-      description: description || null,
-      due_date: d,
-      date: d, // Keep for compatibility
+  // Lo que se eligió de verdad, para que al completarla la tarea alcance a las
+  // plantas que el ciclo tenga ese día y no a las que tenía al agendarla.
+  const wholeCycleIds = Array.from(new Set([...cycleTargetIds, ...(spaceCycles.data ?? []).map((cycle) => Number(cycle.id))]))
+
+  const { data: cyclePlants, error: cyclePlantsError } = wholeCycleIds.length > 0
+    ? await supabase.from('plants').select('id, cycle_id').in('cycle_id', wholeCycleIds)
+    : { data: [] as { id: number; cycle_id: number | null }[], error: null }
+
+  if (cyclePlantsError) {
+    return { error: friendlyDbError(cyclePlantsError, 'No se pudieron leer las plantas de los ciclos.', {}, 'Error leyendo plantas de los ciclos:') }
+  }
+
+  const foundPlants = (plantRows.data ?? []) as { id: number; cycle_id: number | null }[]
+  const linkedCycleIds = Array.from(new Set([
+    ...wholeCycleIds,
+    // Una planta suelta también enlaza su ciclo, para mostrarlo en la agenda.
+    ...foundPlants.map((plant) => plant.cycle_id).filter((id): id is number => id != null).map(Number),
+  ]))
+  const linkedPlantIds = Array.from(new Set([
+    ...foundPlants.map((plant) => Number(plant.id)),
+    ...((cyclePlants ?? []) as { id: number }[]).map((plant) => Number(plant.id)),
+  ]))
+
+  const taskTargets: TaskTargets = {
+    cycle_ids: wholeCycleIds,
+    plant_ids: foundPlants.map((plant) => Number(plant.id)),
+  }
+
+  // 2. Fechas de la serie.
+  const { dates, truncated } = isRecurring
+    ? buildOccurrenceDates(startDay, endDay, frequency)
+    : { dates: [startDay], truncated: false }
+  if (dates.length === 0) return { error: 'La fecha no es válida.' }
+
+  // 3. Receta por fecha, si es un fertilizante con producto elegido.
+  const nutrition = taskType.id === 'fertilizante' ? readNutrition(form.nutrition) : null
+  let recipeFor: Awaited<ReturnType<typeof planNutrition>> = null
+  if (nutrition) {
+    const first = targets[0]
+    const weekPlantIds = first.kind === 'plant'
+      ? [first.id]
+      : ((cyclePlants ?? []) as { id: number; cycle_id: number | null }[])
+          .filter((plant) =>
+            first.kind === 'cycle'
+              ? Number(plant.cycle_id) === first.id
+              : (spaceCycles.data ?? []).some((cycle) => Number(cycle.id) === Number(plant.cycle_id) && Number(cycle.space_id) === first.id)
+          )
+          .map((plant) => Number(plant.id))
+    recipeFor = await planNutrition(supabase, user.id, nutrition, weekPlantIds)
+  }
+
+  const recurrenceId = isRecurring && dates.length > 1 ? randomUUID() : null
+
+  const rows = dates.map((day) => {
+    const planned = recipeFor?.(day)
+    return {
+      title,
+      description: planned ? withRecipe(description, planned.recipe) : description || null,
+      // Mediodía: una fecha sin hora a las 00:00 se corre al día anterior
+      // al oeste de Greenwich.
+      due_date: `${day}T12:00:00`,
       type: taskType.id,
       application_type: taskType.id === 'fertilizante' ? applicationType : null,
       target_stage: taskType.id === 'cambio_etapa' ? targetStage : null,
-      target_space_id: taskType.id === 'ambiente' && targetSpaceId ? targetSpaceId : null,
-      status: 'pending',
+      target_space_id: taskType.id === 'ambiente' ? targetSpaceId : null,
       recurrence_id: recurrenceId,
-      cycle_id: null,
-      metadata: { targets: taskTargets }
-  }));
+      metadata: {
+        targets: taskTargets,
+        ...(nutrition ? { nutrition: { ...nutrition, week: planned?.week ?? null } } : {}),
+      },
+    }
+  })
 
-  const { data: insertedTasks, error } = await supabase.from('tasks').insert(tasksData).select('id');
-  if (error) return { error: friendlyDbError(error, 'No se pudo agendar la tarea.', {}, 'Error creando tareas:') };
+  const { error } = await supabase.rpc('create_tasks', {
+    p_tasks: rows,
+    p_cycle_ids: linkedCycleIds,
+    p_plant_ids: linkedPlantIds,
+  })
 
-  // 4. Link Plants and Cycles via Junction Tables
-  if (insertedTasks) {
-      // 4a. Link Cycles
-      if (uniqueCycleIds.length > 0) {
-          const taskCyclesData = [];
-          for (const task of insertedTasks) {
-              for (const cycleId of uniqueCycleIds) {
-                  taskCyclesData.push({
-                      task_id: task.id,
-                      cycle_id: cycleId
-                  });
-              }
-          }
-          if (taskCyclesData.length > 0) {
-              const { error: tcError } = await supabase.from('task_cycles').insert(taskCyclesData);
-              if (tcError) console.error('Error linking task_cycles:', tcError);
-          }
-      }
-
-      // 4b. Link Plants
-      if (linkedPlantIds.length > 0) {
-          const taskPlantsData = [];
-          for (const task of insertedTasks) {
-              for (const plantId of linkedPlantIds) {
-                  taskPlantsData.push({
-                      task_id: task.id,
-                      plant_id: plantId
-                  });
-              }
-          }
-          if (taskPlantsData.length > 0) {
-              const { error: tpError } = await supabase.from('task_plants').insert(taskPlantsData);
-              if (tpError) console.error('Error linking task_plants:', tpError);
-          }
-      }
-  }
+  if (error) return { error: friendlyDbError(error, 'No se pudo agendar la tarea.', {}, 'Error creando tareas:') }
 
   revalidatePath('/')
   revalidatePath('/calendar')
-  return { success: true }
+  return { success: true, created: rows.length, truncated }
 }
 
 // --- NUEVAS FUNCIONES PARA EL POPUP ---

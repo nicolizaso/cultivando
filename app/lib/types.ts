@@ -1,3 +1,5 @@
+import type { DosageType, FertilizerStage, WeeklyDose } from './nutrition';
+
 export type CycleStage = 
   | 'Germinación' 
   | 'Plántula'
@@ -136,22 +138,28 @@ export interface CycleImage {
   description?: string;
 }
 
+/** Un fertilizante, con los nombres reales de las columnas de `fertilizers`. */
 export interface Fertilizer {
   id: number;
-  user_id: string;
+  user_id: string | null;
   name: string;
-  brand: string;
-  stage: 'enraizamiento' | 'vegetativo' | 'floracion' | 'lavado' | 'todo';
-  dose_type: 'fija' | 'semanal';
-  dose_fixed?: number | null;
-  dose_weekly?: { week: number; dose: number }[] | null;
-  created_at: string;
+  brand: string | null;
+  stage_category: FertilizerStage | null;
+  dosage_type: DosageType | null;
+  /** ml por litro, cuando la dosis es fija. */
+  fixed_dosage: number | null;
+  /** Tabla por semana de la etapa, cuando la dosis es semanal. */
+  weekly_dosages: WeeklyDose[] | null;
+  created_at: string | null;
 }
 
+/** Un combo: varios productos que se aplican en el mismo riego. */
 export interface FertilizerCombo {
   id: number;
-  user_id: string;
+  user_id: string | null;
   name: string;
+  description: string | null;
+  /** Sale de `combo_items`; no es una columna de la tabla. */
   products: { fertilizer_id: number; name: string }[];
-  created_at: string;
+  created_at: string | null;
 }

@@ -1,5 +1,7 @@
 // Tipos generados desde la base de Supabase (proyecto Cultivapp, esquema public).
-// No se editan a mano: se regeneran cuando cambia el esquema.
+// Se regeneran cuando cambia el esquema. Mientras las migraciones de este PR no
+// estén aplicadas, describen la base como queda DESPUÉS de aplicarlas (se
+// ajustaron a mano para eso); al aplicarlas, regenerarlos debería dar lo mismo.
 
 export type Json =
   | string
@@ -618,6 +620,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      create_tasks: {
+        Args: { p_tasks: Json; p_cycle_ids: number[]; p_plant_ids: number[] }
+        Returns: number[]
+      }
       current_age_days: {
         Args: { plant_row: Database["public"]["Tables"]["plants"]["Row"] }
         Returns: number
@@ -627,6 +633,15 @@ export type Database = {
         Returns: number
       }
       email_for_username: { Args: { p_username: string }; Returns: string }
+      save_fertilizer_combo: {
+        Args: {
+          p_combo_id: number | null
+          p_name: string
+          p_description: string | null
+          p_fertilizer_ids: number[]
+        }
+        Returns: number
+      }
     }
     Enums: {
       grow_stage:

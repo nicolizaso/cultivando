@@ -7,13 +7,14 @@ import CreateTaskAction from './CreateTaskAction'
 import AgendaModal from './AgendaModal'
 import PageHeader from '@/components/layout/PageHeader'
 import { Task } from '@/app/lib/types'
+import type { CycleOption, PlantOption } from '@/app/lib/task-targets'
 
 interface CalendarViewProps {
   logs: any[]
   tasks: Task[]
-  plants: any[]
-  spaces: any[]
-  cycles?: { id: number; name: string; space_id?: number }[]
+  plants: PlantOption[]
+  spaces: { id: number; name: string }[]
+  cycles?: CycleOption[]
 }
 
 export default function CalendarView({ logs, tasks, plants, spaces, cycles = [] }: CalendarViewProps) {

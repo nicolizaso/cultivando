@@ -5,7 +5,7 @@ process.env.TZ = 'America/Argentina/Buenos_Aires';
 
 import { test } from 'node:test';
 import assert from 'node:assert';
-import { getDaysSinceWater, parseCultivationDate, todayForInput } from './dates.ts';
+import { addDaysToKey, dateKey, daysBetweenKeys, daysSinceDate, getDaysSinceWater, parseCultivationDate, todayForInput, todayKey } from './dates.ts';
 
 /** Una hora cualquiera del 17 de septiembre, en horario local. */
 const now = new Date('2026-09-17T09:00:00');
@@ -60,4 +60,32 @@ test('parseCultivationDate - ancla las fechas sin hora al mediodía', () => {
 
 test('parseCultivationDate - devuelve null si no se entiende', () => {
   assert.strictEqual(parseCultivationDate('no es una fecha'), null);
+});
+
+test('todayKey - el día es el de Argentina aunque el servidor esté en UTC', () => {
+  // 22:30 en Buenos Aires = 01:30 UTC del día siguiente.
+  assert.strictEqual(todayKey(new Date('2026-10-18T01:30:00Z')), '2026-10-17');
+  assert.strictEqual(todayKey(new Date('2026-10-18T03:30:00Z')), '2026-10-18');
+});
+
+test('dateKey - instantes al día de Argentina; fechas sin hora, tal cual', () => {
+  assert.strictEqual(dateKey('2026-10-17'), '2026-10-17');
+  assert.strictEqual(dateKey('2026-10-17T12:00:00+00:00'), '2026-10-17');
+  assert.strictEqual(dateKey('2026-10-18T02:00:00Z'), '2026-10-17');
+  assert.strictEqual(dateKey('cualquier cosa'), null);
+  assert.strictEqual(dateKey(null), null);
+});
+
+test('daysBetweenKeys y addDaysToKey - cruzan meses y años', () => {
+  assert.strictEqual(daysBetweenKeys('2026-01-30', '2026-03-01'), 30);
+  assert.strictEqual(daysBetweenKeys('2026-12-31', '2027-01-01'), 1);
+  assert.strictEqual(daysBetweenKeys('2026-03-01', '2026-01-30'), -30);
+  assert.strictEqual(addDaysToKey('2026-02-27', 3), '2026-03-02');
+});
+
+test('daysSinceDate - nunca negativo y null si no se entiende', () => {
+  const at = new Date('2026-10-17T15:00:00Z');
+  assert.strictEqual(daysSinceDate('2026-10-10', at), 7);
+  assert.strictEqual(daysSinceDate('2026-10-20', at), 0);
+  assert.strictEqual(daysSinceDate('nunca', at), null);
 });

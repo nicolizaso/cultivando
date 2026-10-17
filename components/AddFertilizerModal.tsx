@@ -8,7 +8,7 @@ import Modal from '@/components/ui/Modal'
 interface AddFertilizerModalProps {
   isOpen: boolean
   onClose: () => void
-  onSave: (data: Partial<Fertilizer>) => Promise<any>
+  onSave: (data: Partial<Fertilizer>) => Promise<{ error?: string | null }>
   initialData?: Fertilizer | null
 }
 
@@ -24,12 +24,15 @@ export default function AddFertilizerModal({ isOpen, onClose, onSave, initialDat
 
   useEffect(() => {
     if (initialData) {
+      // Se leen las columnas reales: antes este bloque leía `stage`,
+      // `dose_type` y `dose_fixed`, que no existen, y al editar un producto
+      // el formulario abría en blanco.
       setName(initialData.name)
-      setBrand(initialData.brand)
-      setStage(initialData.stage)
-      setDoseType(initialData.dose_type)
-      setDoseFixed(initialData.dose_fixed ? initialData.dose_fixed.toString() : '')
-      setDoseWeekly(initialData.dose_weekly || [{ week: 1, dose: 1 }])
+      setBrand(initialData.brand ?? '')
+      setStage(initialData.stage_category ?? 'todo')
+      setDoseType(initialData.dosage_type ?? 'fija')
+      setDoseFixed(initialData.fixed_dosage !== null ? String(initialData.fixed_dosage).replace('.', ',') : '')
+      setDoseWeekly(initialData.weekly_dosages?.length ? initialData.weekly_dosages : [{ week: 1, dose: 1 }])
     } else {
       setName('')
       setBrand('')
@@ -59,8 +62,12 @@ export default function AddFertilizerModal({ isOpen, onClose, onSave, initialDat
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!name || !brand) {
-      setError('Completá el nombre y la marca del producto.')
+    if (!name.trim()) {
+      setError('Completá el nombre del producto.')
+      return
+    }
+    if (doseType === 'fija' && !doseFixed.trim()) {
+      setError('Cargá la dosis en ml por litro.')
       return
     }
 
@@ -68,19 +75,13 @@ export default function AddFertilizerModal({ isOpen, onClose, onSave, initialDat
     setError(null)
 
     // Los nombres de campo son los de las columnas reales de la base.
-    const formData: any = {
+    const formData: Partial<Fertilizer> = {
       name: name.trim(),
-      brand: brand.trim(),
+      brand: brand.trim() || null,
       stage_category: stage,
       dosage_type: doseType,
-    }
-
-    if (doseType === 'fija') {
-      formData.fixed_dosage = parseFloat(doseFixed.toString().replace(',', '.')) || 0;
-      formData.weekly_dosages = null;
-    } else {
-      formData.fixed_dosage = null;
-      formData.weekly_dosages = doseWeekly;
+      fixed_dosage: doseType === 'fija' ? Number(doseFixed.replace(',', '.')) : null,
+      weekly_dosages: doseType === 'semanal' ? doseWeekly : null,
     }
 
     const res = await onSave(formData)

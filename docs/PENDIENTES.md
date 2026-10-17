@@ -26,6 +26,8 @@ hoy está en producción. Aplicalas en este orden, desde el SQL Editor de
 Supabase (pegar el archivo entero y ejecutar) o con `supabase db push`:
 
 1. `20261017140000_seguridad.sql`
+2. `20261017150000_nutricion.sql`
+3. `20261017160000_tareas.sql`
 
 ---
 
@@ -39,6 +41,11 @@ Checklist para el preview del PR, una vez hechos los pasos de arriba:
 - [ ] Subir una foto a la bitácora de una planta.
 - [ ] Subir una foto a la galería de un ciclo y después borrarla.
 - [ ] Editar la ficha técnica de un espacio.
+- [ ] Nutrición: tus 3 productos muestran su dosis y el combo sus 2 productos.
+- [ ] Editar un producto (abre con sus datos) y editar el combo.
+- [ ] Agendar un fertilizante con un combo: la receta aparece en los detalles con la semana de la etapa.
+- [ ] Agendar una serie semanal de fertilizante: cada tarea tiene la dosis de su semana.
+- [ ] Agendar una serie mensual que empiece un 31: cae el último día de los meses cortos.
 
 ---
 

@@ -13,6 +13,7 @@ import EmptyState from "@/components/EmptyState";
 import StageSuggester from "@/components/StageSuggester";
 import { Plant, Task } from "@/app/lib/types";
 import { daysSince, mapTaskCycles } from "@/app/lib/utils";
+import { buildTaskTargetOptions } from "@/app/lib/task-targets";
 
 interface SpaceInfo { id: number; name: string; type: string; }
 interface CycleWithPlantsAndSpace {
@@ -90,12 +91,8 @@ export default async function DashboardData({ user }: { user: { id: string } }) 
     if (c.spaces) activeSpacesMap.set(c.spaces.id, c.spaces);
   });
   const activeSpacesCount = activeSpacesMap.size;
-  const allPlants: { id: string, name: string, space_id?: number }[] = [];
-  activeCycles.forEach(cycle => {
-    cycle.plants?.forEach(p => {
-      allPlants.push({ id: String(p.id), name: p.name, space_id: cycle.space_id });
-    });
-  });
+  // Opciones del modal de tareas, con los días en etapa para la dosis semanal.
+  const taskTargets = buildTaskTargetOptions(activeCycles);
 
   const flatPlantsList: Plant[] = activeCycles.flatMap(c => c.plants || []);
 
@@ -122,9 +119,9 @@ export default async function DashboardData({ user }: { user: { id: string } }) 
         subtitle={todayLabel.charAt(0).toUpperCase() + todayLabel.slice(1)}
         actions={
           <CreateTaskAction
-            plants={allPlants}
+            plants={taskTargets.plants}
             spaces={allSpaces || []}
-            cycles={mappedCyclesList}
+            cycles={taskTargets.cycles}
           />
         }
       />

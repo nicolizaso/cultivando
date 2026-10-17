@@ -15,20 +15,13 @@ import {
   createFertilizerCombo, deleteFertilizerCombo, updateFertilizerCombo
 } from '@/app/actions/fertilizers'
 import { Fertilizer, FertilizerCombo } from '@/app/lib/types'
+import { FERTILIZER_STAGE_LABELS, formatDose } from '@/app/lib/nutrition'
 
 type Tab = 'productos' | 'combos'
 
 type PendingDeletion =
   | { kind: 'product'; id: number; name: string }
   | { kind: 'combo'; id: number; name: string }
-
-const STAGE_LABELS: Record<string, string> = {
-  todo: 'Todo el ciclo',
-  enraizamiento: 'Enraizamiento',
-  vegetativo: 'Vegetativo',
-  floracion: 'Floración',
-  lavado: 'Lavado de raíces',
-}
 
 export default function FertilizersPage() {
   const [activeTab, setActiveTab] = useState<Tab>('productos')
@@ -167,12 +160,14 @@ export default function FertilizersPage() {
                   <dl className="mb-4 flex flex-wrap gap-2">
                     <div>
                       <dt className="sr-only">Etapa</dt>
-                      <dd className="chip chip-neutral">{STAGE_LABELS[fert.stage] ?? fert.stage}</dd>
+                      <dd className="chip chip-neutral">{fert.stage_category ? FERTILIZER_STAGE_LABELS[fert.stage_category] : 'Sin etapa'}</dd>
                     </div>
                     <div>
                       <dt className="sr-only">Dosis</dt>
                       <dd className="chip chip-brand">
-                        {fert.dose_type === 'fija' ? `${fert.dose_fixed} ml/L` : 'Tabla por semanas'}
+                        {fert.dosage_type === 'semanal'
+                          ? `Tabla de ${fert.weekly_dosages?.length ?? 0} semana${fert.weekly_dosages?.length === 1 ? '' : 's'}`
+                          : fert.fixed_dosage === null ? 'Sin dosis' : `${formatDose(fert.fixed_dosage)} ml/L`}
                       </dd>
                     </div>
                   </dl>

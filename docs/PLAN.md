@@ -59,15 +59,16 @@ Lo que te toca hacer a vos está en `docs/PENDIENTES.md`.
 - [ ] (Vos, panel de Supabase) Activar la protección contra contraseñas filtradas.
 
 ### Etapa 2 · Nutrición
-- [ ] Tipos y pantallas con los nombres reales de las columnas.
-- [ ] Base: `dosage_type` por defecto `'fija'` y valores válidos.
-- [ ] Combos: leer y reescribir `combo_items`; crear un combo es todo o nada.
-- [ ] Receta con los días en etapa reales de cada planta o ciclo.
+- [x] Tipos y pantallas con los nombres reales de las columnas.
+- [x] Base: `dosage_type` por defecto `'fija'` y valores válidos; `user_id` por defecto.
+- [x] Combos: se leen desde `combo_items` y se guardan con `save_fertilizer_combo` (todo o nada).
+- [x] Receta con los días en etapa reales: el modal la calcula con el objetivo
+  elegido y el servidor la recalcula para cada fecha de la serie.
 
 ### Etapa 3 · Etapas y fechas de las plantas
+- [x] Una sola fórmula para "días en etapa" y "edad" (`app/lib/plant-metrics.ts`), en días de Argentina. *(Adelantado en la Etapa 2.)*
 - [ ] Una sola acción para cambiar de etapa (`stage`, fecha de la etapa y `stage_updated_at`).
 - [ ] Al crear plantas se anota la fecha de la etapa inicial; esquejes en Enraizamiento.
-- [ ] Una sola fórmula para "días en etapa" y "edad".
 - [ ] Base: completar las 7 plantas sin fechas de etapa; `mother_id` a bigint; madre borrada → esquejes sin madre.
 - [ ] `last_water` de texto a fecha; no más "Nunca" ni "Hoy".
 - [ ] Escrituras de plantas desde el navegador → Server Actions.
@@ -86,7 +87,8 @@ Lo que te toca hacer a vos está en `docs/PENDIENTES.md`.
 ### Etapa 5 · Panel, fechas y tareas
 - [ ] "Hoy" en hora argentina, en un solo lugar; formularios con `todayForInput()`.
 - [ ] Panel: sección de atrasadas y sin plantas archivadas.
-- [ ] Recurrencias: aviso del tope y mensual sin corrimiento desde el 31.
+- [x] Recurrencias: aviso del tope (ahora 90) y mensual sin corrimiento desde el 31. *(Adelantado en la Etapa 2.)*
+- [x] Crear tareas con sus relaciones en una sola transacción (`create_tasks`). *(Adelantado en la Etapa 2.)*
 - [ ] Tareas sin efectos duplicados ni operaciones a medias.
 - [ ] Confirmación y "Deshacer" en "Declarar muerta" y "Cambiar ambiente".
 - [ ] Sugeridor de etapa: recuerda "Ahora no" e ignora archivadas.
