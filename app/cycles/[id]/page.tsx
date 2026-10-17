@@ -14,6 +14,9 @@ import { formatDay } from "@/app/lib/dates";
 /** Cuántas mediciones se traen para el historial de clima (unos tres meses). */
 const HISTORY_SIZE = 120;
 
+/** Tope de registros con foto para el timelapse. */
+const PHOTO_LIMIT = 400;
+
 export default async function CycleDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const supabase = await createClient();
   const { id: rawId } = await params;
@@ -27,6 +30,8 @@ export default async function CycleDetailPage({ params }: { params: Promise<{ id
     { data: spaces },
     { data: recentMeasurements },
     { data: cycleImages },
+    { data: plantPhotoLogs },
+    { data: cyclePhotoLogs },
   ] = await Promise.all([
     supabase.from('cycles').select(`*, spaces ( name, type )`).eq('id', id).single(),
     supabase.from('plants').select('*').eq('cycle_id', id).order('id', { ascending: true }),
@@ -36,6 +41,22 @@ export default async function CycleDetailPage({ params }: { params: Promise<{ id
     // sea las 20 más viejas: una medición nueva nunca entraba al historial.
     supabase.from('measurements').select('*').eq('cycle_id', id).order('date', { ascending: false }).order('created_at', { ascending: false }).limit(HISTORY_SIZE),
     supabase.from('cycle_images').select('*').eq('cycle_id', id).order('taken_at', { ascending: false }),
+    // Para el timelapse: las fotos de la bitácora de las plantas del ciclo y
+    // las del ciclo mismo.
+    supabase
+      .from('logs')
+      .select('id, plant_id, created_at, media_url, title, plants!inner ( cycle_id )')
+      .eq('plants.cycle_id', id)
+      .not('media_url', 'is', null)
+      .order('created_at', { ascending: true })
+      .limit(PHOTO_LIMIT),
+    supabase
+      .from('logs')
+      .select('id, plant_id, created_at, media_url, title')
+      .eq('cycle_id', id)
+      .not('media_url', 'is', null)
+      .order('created_at', { ascending: true })
+      .limit(PHOTO_LIMIT),
   ]);
 
   if (error || !cycle) return notFound();
@@ -113,6 +134,7 @@ export default async function CycleDetailPage({ params }: { params: Promise<{ id
         lastMeasurement={lastMeasurement}
         history={history || []}
         cycleImages={cycleImages || []}
+        photoLogs={[...(plantPhotoLogs ?? []), ...(cyclePhotoLogs ?? [])].map(({ id, plant_id, created_at, media_url, title }) => ({ id, plant_id, created_at, media_url, title }))}
       />
     </PageShell>
   );

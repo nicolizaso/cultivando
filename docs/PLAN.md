@@ -141,7 +141,10 @@ Lo que te toca hacer a vos está en `docs/PENDIENTES.md`.
   para la etapa del ciclo, cursor sincronizado, vista de tabla y "VPD por etapa"
   (promedios y % de días en rango). El diagnóstico del VPD actual usa el rango de la
   etapa en vez de uno fijo.
-- [ ] Etapa 9 · Timelapse del ciclo
+- [x] Etapa 9 · Timelapse del ciclo — botón "Timelapse" en "Seguimiento visual": junta
+  la galería del ciclo y las fotos de la bitácora de sus plantas en orden, con día de
+  cultivo y etapa; reproducir/pausa, barra, flechas, tres velocidades y filtro por planta.
+  Arranca en pausa.
 - [ ] Etapa 10 · Linaje de madres y esquejes
 - [ ] Etapa 11 · Estadísticas por genética
 - [ ] Etapa 12 · Riego con datos

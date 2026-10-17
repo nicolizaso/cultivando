@@ -14,6 +14,9 @@ import {
 import { Plant, CycleImage, Measurement } from "@/app/lib/types";
 import { climateByStage, climateSeries, dominantStage, stageClimate, stagePeriods, vpd, vpdLevel, DEFAULT_VPD_RANGE } from "@/app/lib/climate";
 import ClimateHistory from "./ClimateHistory";
+import CycleTimelapse from "./CycleTimelapse";
+import { buildTimelapseFrames, plantsWithFrames } from "@/app/lib/timelapse";
+import type { PhotoLog } from "@/app/lib/timelapse";
 import { dateKey, daysBetweenKeys, formatDay } from "@/app/lib/dates";
 import { getPlantMetrics, getStageColor } from "@/app/lib/utils";
 import BulkStageModal from "./BulkStageModal";
@@ -33,11 +36,13 @@ interface CycleDetailViewProps {
   lastMeasurement?: Pick<Measurement, 'temperature' | 'humidity' | 'date'> | null;
   history: Measurement[];
   cycleImages?: CycleImage[];
+  /** Registros de bitácora con fotos (de las plantas del ciclo o del ciclo). */
+  photoLogs?: PhotoLog[];
 }
 
 type ViewMode = 'table' | 'grid';
 
-export default function CycleDetailView({ cycle, plants, lastMeasurement, history, cycleImages = [] }: CycleDetailViewProps) {
+export default function CycleDetailView({ cycle, plants, lastMeasurement, history, cycleImages = [], photoLogs = [] }: CycleDetailViewProps) {
   const router = useRouter();
   const { showToast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -186,8 +191,21 @@ export default function CycleDetailView({ cycle, plants, lastMeasurement, histor
         ? { label: `Alto, la planta transpira de más (ideal ${rangeText})`, tone: 'text-[color:var(--danger)]' }
         : { label: `En rango (${rangeText})`, tone: 'text-[color:var(--success)]' };
 
+  const periods = useMemo(() => stagePeriods(plants), [plants]);
   const climatePoints = useMemo(() => climateSeries(history), [history]);
-  const climateStages = useMemo(() => climateByStage(climatePoints, stagePeriods(plants)), [climatePoints, plants]);
+  const climateStages = useMemo(() => climateByStage(climatePoints, periods), [climatePoints, periods]);
+
+  const timelapseFrames = useMemo(() => buildTimelapseFrames({
+    cycleStart: cycle.start_date,
+    gallery: cycleImages,
+    logs: photoLogs,
+    periods,
+    plantNames: new Map(plants.map((plant) => [plant.id, plant.name])),
+  }), [cycle.start_date, cycleImages, photoLogs, periods, plants]);
+  const timelapsePlants = useMemo(() => {
+    const ids = new Set(plantsWithFrames(timelapseFrames));
+    return plants.filter((plant) => ids.has(plant.id)).map((plant) => ({ id: plant.id, name: plant.name }));
+  }, [timelapseFrames, plants]);
 
   const toggleSelectAll = () => {
     setSelectedPlants(
@@ -440,25 +458,28 @@ export default function CycleDetailView({ cycle, plants, lastMeasurement, histor
       <section aria-labelledby="galeria" className="space-y-3">
         <div className="flex items-center justify-between gap-3">
           <h2 id="galeria" className="section-title">Seguimiento visual</h2>
-          <button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={isUploading}
-            className="btn btn-sm btn-secondary"
-          >
-            {isUploading
-              ? <Loader2 className="animate-spin" size={15} aria-hidden="true" />
-              : <Camera size={15} aria-hidden="true" />}
-            {isUploading ? 'Subiendo...' : 'Subir foto'}
-          </button>
-          <input
-            type="file"
-            ref={fileInputRef}
-            onChange={handleFileChange}
-            accept="image/*"
-            className="sr-only"
-            aria-label="Subir foto del ciclo"
-          />
+          <div className="flex items-center gap-2">
+            <CycleTimelapse frames={timelapseFrames} plants={timelapsePlants} />
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isUploading}
+              className="btn btn-sm btn-secondary"
+            >
+              {isUploading
+                ? <Loader2 className="animate-spin" size={15} aria-hidden="true" />
+                : <Camera size={15} aria-hidden="true" />}
+              {isUploading ? 'Subiendo...' : 'Subir foto'}
+            </button>
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleFileChange}
+              accept="image/*"
+              className="sr-only"
+              aria-label="Subir foto del ciclo"
+            />
+          </div>
         </div>
 
         {cycleImages && cycleImages.length > 0 ? (
