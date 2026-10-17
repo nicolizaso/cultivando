@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { deletePlant, updatePlant } from "@/app/actions/plants";
 import { Plant, Cycle } from "@/app/lib/types";
 import { getStageColor, todayForInput } from "@/app/lib/utils";
+import { dateKey as dayKeyOf } from "@/app/lib/dates";
 import { STAGE_DATE_COLUMNS, STAGE_NAMES, StageName } from "@/app/lib/stage-logic";
 import { Sprout, Leaf, Flower, Wind, Thermometer, Calendar, Save, ArrowLeft, Trash2, Dna, Loader2, LucideIcon } from "lucide-react";
 import Link from "next/link";
@@ -286,7 +287,7 @@ export default function EditPlantForm({ plant, cycles }: EditPlantFormProps) {
                         id={`stage-${stage.key}`}
                         type="date"
                         className="field-input w-40"
-                        value={dateValue ? dateValue.split('T')[0] : ''}
+                        value={dayKeyOf(dateValue) ?? ''}
                         onChange={(e) => handleDateChange(dateKey, e.target.value)}
                       />
                     </>

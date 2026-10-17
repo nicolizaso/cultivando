@@ -4,6 +4,7 @@ import { useRef } from 'react'
 import { Check, Trash2, RotateCcw, CheckCircle2, Circle, Pencil, Leaf } from 'lucide-react'
 import { Task } from '@/app/lib/types'
 import { getTaskType } from '@/app/lib/constants'
+import { formatInAppTz } from '@/app/lib/dates'
 
 interface TaskPillProps {
   task: Task
@@ -105,7 +106,7 @@ export default function TaskPill({ task, onComplete, onDelete, onEdit, onClick, 
         )}
         <span className="mt-0.5 flex items-center gap-1.5 truncate text-[11px] text-fg-subtle">
           <time className="mono" dateTime={new Date(task.due_date).toISOString()}>
-            {new Date(task.due_date).toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })}
+            {formatInAppTz(task.due_date, { day: 'numeric', month: 'short' })}
           </time>
           {targetLabel && (
             <>

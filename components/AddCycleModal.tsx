@@ -9,6 +9,7 @@ import EmptyState from "./EmptyState";
 import CreateSpaceInlineModal from "./CreateSpaceInlineModal";
 import Modal from "@/components/ui/Modal";
 import { useToast } from "@/app/context/ToastContext";
+import { todayForInput } from "@/app/lib/dates";
 
 export default function AddCycleModal() {
   const router = useRouter();
@@ -20,7 +21,7 @@ export default function AddCycleModal() {
 
   const [formData, setFormData] = useState({
     name: "",
-    startDate: new Date().toISOString().split('T')[0],
+    startDate: todayForInput(),
     spaceId: "",
   });
 
@@ -65,7 +66,7 @@ export default function AddCycleModal() {
       if (error) throw error;
 
       setIsOpen(false);
-      setFormData({ name: "", startDate: new Date().toISOString().split('T')[0], spaceId: "" });
+      setFormData({ name: "", startDate: todayForInput(), spaceId: "" });
       showToast("Ciclo creado");
       router.refresh();
     } catch (error) {

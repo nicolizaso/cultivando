@@ -59,6 +59,17 @@ Checklist para el preview del PR, una vez hechos los pasos de arriba:
 - [ ] Agenda: editar un "Cambio de etapa" a Floración y guardar: sigue en Floración.
 - [ ] Finalizar y reactivar un ciclo; borrar un ciclo de prueba con fotos: sus plantas quedan sin ciclo.
 - [ ] Borrar un espacio de prueba que sea destino de una tarea "Cambiar ambiente".
+- [ ] Panel después de las 21:00: "Tareas de hoy" sigue mostrando las de hoy, no las de mañana.
+- [ ] Panel: una tarea pendiente de ayer aparece en "Atrasadas"; completarla la saca de ahí.
+- [ ] Panel: una planta archivada no cuenta en "Plantas en curso" ni en el sugeridor.
+- [ ] Completar un riego y tocar "Deshacer" en el aviso: vuelve a pendiente y el riego anterior queda como estaba.
+- [ ] Completar una "Declarar muerta": pide confirmación; después "Deshacer" desarchiva las plantas.
+- [ ] Completar un "Cambiar ambiente": pide confirmación; "Deshacer" devuelve el ciclo a su espacio.
+- [ ] Tocar dos veces rápido una tarea de riego: se completa una sola vez.
+- [ ] Esquejado: completar con 2 esquejes en un ciclo nuevo; desmarcar y volver a completar: no duplica.
+- [ ] Editar una tarea de una serie con "Esta y todas las futuras", cambiando la fecha: todas se corren igual.
+- [ ] En una cuenta sin espacios, "Omitir por ahora" en la bienvenida y recargar: no vuelve a aparecer.
+- [ ] En un ciclo con plantas numeradas ("X #1-6"), tocar el grupo: la lista de plantas abre filtrada.
 
 ---
 

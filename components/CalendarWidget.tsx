@@ -282,7 +282,7 @@ export default function CalendarWidget({
           <div className="space-y-4">
             {/* Las tareas llegan completas: editarlas desde acá ya no pisa la
                 etapa de destino ni el tipo de aplicación con valores por defecto. */}
-            {selected.tasks.length > 0 && <AgendaList tasks={selected.tasks} disableDateFilter={true} />}
+            {selected.tasks.length > 0 && <AgendaList tasks={selected.tasks} />}
 
             {selected.logs.map(event => (
               <article key={event.key} className="rounded-[var(--radius-md)] border border-line bg-surface-2 p-3">

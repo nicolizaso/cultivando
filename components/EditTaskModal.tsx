@@ -5,6 +5,7 @@ import { Loader2, Repeat, Trash2, AlertTriangle } from 'lucide-react'
 import { updateTask, deleteTask, deleteTaskSeries } from '@/app/actions/tasks'
 import { Task } from '@/app/lib/types'
 import { useToast } from '@/app/context/ToastContext'
+import { dateKey, todayKey } from '@/app/lib/dates'
 import DatePicker from './DatePicker'
 import { useRouter } from 'next/navigation'
 import Modal from '@/components/ui/Modal'
@@ -24,9 +25,8 @@ export default function EditTaskModal({ isOpen, onClose, task }: EditTaskModalPr
   const [description, setDescription] = useState(task.description || '')
   const [applicationType, setApplicationType] = useState(task.application_type || 'Riego')
   const [targetStage, setTargetStage] = useState(task.target_stage || 'Vegetativo')
-  const [date, setDate] = useState(() => {
-    return new Date(task.due_date).toLocaleDateString('en-CA')
-  })
+  // El día de la tarea en Argentina, no en el huso del navegador.
+  const [date, setDate] = useState(() => dateKey(task.due_date) ?? todayKey())
 
   const [scope, setScope] = useState<'single' | 'all_future'>('single')
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -40,8 +40,7 @@ export default function EditTaskModal({ isOpen, onClose, task }: EditTaskModalPr
        setDescription(task.description || '')
        setApplicationType(task.application_type || 'Riego')
        setTargetStage(task.target_stage || 'Vegetativo')
-       const d = new Date(task.due_date)
-       setDate(d.toLocaleDateString('en-CA'))
+       setDate(dateKey(task.due_date) ?? todayKey())
        setScope('single')
        setShowDeleteOptions(false)
        setShowDeleteConfirm(false)

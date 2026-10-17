@@ -8,6 +8,7 @@ import { describeCloneBatch, MAX_CLONES_PER_MOTHER } from '@/app/lib/clones'
 import type { CloneEntry } from '@/app/lib/clones'
 import type { EsquejadoMetadata, Task } from '@/app/lib/types'
 import { useToast } from '@/app/context/ToastContext'
+import { formatInAppTz, todayForInput } from '@/app/lib/dates'
 import Modal from '@/components/ui/Modal'
 import ConfirmDialog from '@/components/ui/ConfirmDialog'
 import DatePicker from './DatePicker'
@@ -53,7 +54,7 @@ export default function EsquejarModal({ isOpen, onClose, task }: EsquejarModalPr
   const [spaces, setSpaces] = useState<{ id: number; name: string }[]>([])
   const [alreadyRegistered, setAlreadyRegistered] = useState<EsquejadoMetadata | null>(null)
 
-  const [date, setDate] = useState(() => new Date().toLocaleDateString('en-CA'))
+  const [date, setDate] = useState(() => todayForInput())
   const [counts, setCounts] = useState<Record<number, number>>({})
   const [query, setQuery] = useState('')
   const [cycleChoice, setCycleChoice] = useState<string>('')
@@ -83,10 +84,7 @@ export default function EsquejarModal({ isOpen, onClose, task }: EsquejarModalPr
         setAlreadyRegistered(res.alreadyRegistered ?? null)
         setCycleChoice(res.defaultCycleId ? String(res.defaultCycleId) : '')
 
-        const today = new Date()
-        setNewCycleName(
-          `Esquejes ${String(today.getDate()).padStart(2, '0')}/${String(today.getMonth() + 1).padStart(2, '0')}`
-        )
+        setNewCycleName(`Esquejes ${formatInAppTz(new Date(), { day: '2-digit', month: '2-digit' })}`)
 
         const originCycle = res.cycles?.find((c: Cycle) => c.id === res.defaultCycleId)
         setNewCycleSpaceId(originCycle?.space_id ?? res.spaces?.[0]?.id ?? '')
@@ -140,7 +138,7 @@ export default function EsquejarModal({ isOpen, onClose, task }: EsquejarModalPr
       date,
       entries,
       targetCycleId: creatingCycle ? null : cycleChoice ? Number(cycleChoice) : null,
-      newCycle: creatingCycle ? { name: newCycleName, spaceId: Number(newCycleSpaceId) } : null,
+      newCycle: creatingCycle ? { name: newCycleName, spaceId: newCycleSpaceId === '' ? null : Number(newCycleSpaceId) } : null,
     })
 
     setIsSubmitting(false)

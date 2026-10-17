@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { CalendarCheck, LayoutGrid, RefreshCw, Sprout, Warehouse } from "lucide-react";
 
 import OnboardingWizard from "./OnboardingWizard";
@@ -13,6 +14,8 @@ import EmptyState from "@/components/EmptyState";
 import StageSuggester from "@/components/StageSuggester";
 import { Plant, Task } from "@/app/lib/types";
 import { daysSince, mapTaskCycles } from "@/app/lib/utils";
+import { dayRange, formatInAppTz, todayKey } from "@/app/lib/dates";
+import { ONBOARDING_SKIPPED_COOKIE } from "@/app/lib/onboarding";
 import { buildTaskTargetOptions } from "@/app/lib/task-targets";
 
 interface SpaceInfo { id: number; name: string; type: string; }
@@ -26,43 +29,59 @@ interface CycleWithPlantsAndSpace {
     cycle_images?: { public_url: string }[];
 }
 
+/** Tope de atrasadas en el panel: el resto se ve en la agenda. */
+const OVERDUE_LIMIT = 30;
+
+const TASK_SELECT = '*, task_cycles(cycles(id, name)), task_plants(plants(id, name, cycle_id, cycles(id, name)))';
+
 export default async function DashboardData({ user }: { user: { id: string } }) {
   const supabase = await createClient();
+  const cookieStore = await cookies();
 
-  // Get yesterday's date to ensure we catch tasks regardless of timezone shifts
-  const yesterday = new Date();
-  yesterday.setDate(yesterday.getDate() - 1);
-  const yesterdayStr = yesterday.toLocaleDateString('en-CA');
+  // "Hoy" es el día en Argentina: el servidor corre en UTC y desde las 21:00
+  // ya estaba en mañana.
+  const today = todayKey();
+  const { from: todayFrom, to: todayTo } = dayRange(today);
 
-  // Parallel fetch of all independent dashboard data
   const [
     { data: profile },
     { data: cyclesData },
-    { data: tasksData },
+    { data: todayData },
+    { data: overdueData },
     { data: allSpaces }
   ] = await Promise.all([
-    // Profile info
     supabase
       .from('profiles')
       .select('username')
       .eq('id', user.id)
-      .single(),
-    // Active cycles with plants and spaces info
+      .maybeSingle(),
+    // Ciclos activos con sus plantas (sin las archivadas) y la última foto.
     supabase
       .from('cycles')
       .select(`*, spaces (id, name, type), plants (*), cycle_images(public_url)`)
       .eq('is_active', true)
+      .eq('plants.is_archived', false)
       .order('created_at', { ascending: true })
       .order('taken_at', { foreignTable: 'cycle_images', ascending: false })
       .limit(1, { foreignTable: 'cycle_images' }),
-    // Tasks
+    // Las de hoy, hechas o no.
     supabase
       .from('tasks')
-      .select('*, task_cycles(cycles(id, name)), task_plants(plants(id, name, cycle_id, cycles(id, name)))')
+      .select(TASK_SELECT)
       .eq('user_id', user.id)
-      .gte('due_date', yesterdayStr)
-      .order('created_at', { ascending: true }),
-    // All available spaces for the UI
+      .gte('due_date', todayFrom)
+      .lt('due_date', todayTo)
+      .order('due_date', { ascending: true }),
+    // Las pendientes de días anteriores: antes desaparecían del panel al día
+    // siguiente y nadie se enteraba de que no se habían hecho.
+    supabase
+      .from('tasks')
+      .select(TASK_SELECT)
+      .eq('user_id', user.id)
+      .eq('status', 'pending')
+      .lt('due_date', todayFrom)
+      .order('due_date', { ascending: true })
+      .limit(OVERDUE_LIMIT),
     supabase
       .from('spaces')
       .select('id, name')
@@ -72,9 +91,9 @@ export default async function DashboardData({ user }: { user: { id: string } }) 
 
   const activeCycles = (cyclesData || []) as unknown as CycleWithPlantsAndSpace[];
 
-  const allTodayTasks = (tasksData || []).map((t) => ({ ...t, ...mapTaskCycles(t) })) as unknown as Task[];
+  const todaysTasks = (todayData || []).map((t) => ({ ...t, ...mapTaskCycles(t) })) as unknown as Task[];
+  const overdueTasks = (overdueData || []).map((t) => ({ ...t, ...mapTaskCycles(t) })) as unknown as Task[];
 
-  // Procesamiento
   const totalPlants = activeCycles.reduce((acc, cycle) => acc + (cycle.plants?.length || 0), 0);
   const totalCycles = activeCycles.length;
 
@@ -88,21 +107,18 @@ export default async function DashboardData({ user }: { user: { id: string } }) 
 
   const flatPlantsList: Plant[] = activeCycles.flatMap(c => c.plants || []);
 
-  // Recuento del día: la fecha se compara en local para no desplazarse de huso.
-  const todayStr = new Date().toLocaleDateString('en-CA');
-  const todaysTasks = allTodayTasks.filter(t => t.due_date && t.due_date.split('T')[0] === todayStr);
   const pendingToday = todaysTasks.filter(t => t.status === 'pending').length;
   const doneToday = todaysTasks.length - pendingToday;
 
-  const todayLabel = new Date().toLocaleDateString('es-ES', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-  });
+  const todayLabel = formatInAppTz(new Date(), { weekday: 'long', day: 'numeric', month: 'long' });
+
+  // El asistente es para quien recién llega: sin espacios todavía y sin
+  // haberlo salteado. Antes salía también a quien tenía todo finalizado.
+  const showOnboarding = (allSpaces || []).length === 0 && !cookieStore.has(ONBOARDING_SKIPPED_COOKIE);
 
   return (
     <>
-      {activeSpacesCount === 0 && totalCycles === 0 && <OnboardingWizard />}
+      {showOnboarding && <OnboardingWizard />}
 
       <StageSuggester plants={flatPlantsList} />
 
@@ -210,7 +226,24 @@ export default async function DashboardData({ user }: { user: { id: string } }) 
 
           <div className="surface flex flex-col rounded-[var(--radius-lg)]">
             <div className="custom-scrollbar max-h-[26rem] min-h-[12rem] flex-1 overflow-y-auto p-3">
-              <AgendaList tasks={allTodayTasks} />
+              {overdueTasks.length > 0 && (
+                <section aria-labelledby="tareas-atrasadas" className="mb-4">
+                  <h3
+                    id="tareas-atrasadas"
+                    className="mb-2 flex items-center gap-2 text-xs font-bold text-[color:var(--danger)]"
+                  >
+                    Atrasadas
+                    <span className="mono">{overdueTasks.length === OVERDUE_LIMIT ? `${OVERDUE_LIMIT}+` : overdueTasks.length}</span>
+                  </h3>
+                  <AgendaList tasks={overdueTasks} />
+                </section>
+              )}
+              {overdueTasks.length > 0 && todaysTasks.length > 0 && (
+                <h3 className="mb-2 text-xs font-bold text-fg-muted">Hoy</h3>
+              )}
+              {(todaysTasks.length > 0 || overdueTasks.length === 0) && (
+                <AgendaList tasks={todaysTasks} emptyLabel="Nada pendiente para hoy" />
+              )}
             </div>
 
             <Link

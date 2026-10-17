@@ -10,6 +10,7 @@ import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import MoveCycleSpaceModal from "@/components/MoveCycleSpaceModal";
 import { useToast } from "@/app/context/ToastContext";
 import { Space } from "@/app/lib/types";
+import { formatDay } from "@/app/lib/dates";
 
 export interface CycleWithSpace {
   id: number;
@@ -135,7 +136,7 @@ export default function CycleCard({ cycle, days, plantCount, spaces = [] }: Cycl
                 {cycle.spaces?.name || "Sin espacio"}
               </dd>
               <dd className="mt-0.5 text-[11px] text-fg-subtle">
-                Desde el {new Date(cycle.start_date).toLocaleDateString('es-AR')}
+                Desde el {formatDay(cycle.start_date)}
               </dd>
             </div>
           </dl>

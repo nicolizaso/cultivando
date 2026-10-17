@@ -69,7 +69,7 @@ export default function CalendarView({ month, initialSelectedDay, logs, tasks, p
             plants={plants}
             spaces={spaces}
             cycles={cycles}
-            initialDate={new Date(`${selectedDay}T12:00:00`)}
+            initialDay={selectedDay}
           />
         }
       />

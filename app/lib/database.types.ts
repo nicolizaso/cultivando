@@ -581,6 +581,15 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      complete_esquejado: {
+        Args: {
+          p_task_id: number
+          p_seeds: Json
+          p_summary: Json
+          p_new_cycle: Json | null
+        }
+        Returns: Json
+      }
       create_tasks: {
         Args: { p_tasks: Json; p_cycle_ids: number[]; p_plant_ids: number[] }
         Returns: number[]
@@ -592,6 +601,17 @@ export type Database = {
           p_name: string
           p_description: string | null
           p_fertilizer_ids: number[]
+        }
+        Returns: number
+      }
+      update_task_series: {
+        Args: {
+          p_task_id: number
+          p_title: string
+          p_description: string | null
+          p_application_type: string | null
+          p_target_stage: string | null
+          p_new_day: string
         }
         Returns: number
       }

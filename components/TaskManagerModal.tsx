@@ -9,6 +9,7 @@ import EditTaskModal from './EditTaskModal'
 import { useRouter } from 'next/navigation'
 import Modal from '@/components/ui/Modal'
 import ConfirmDialog from '@/components/ui/ConfirmDialog'
+import { formatInAppTz } from '@/app/lib/dates'
 
 interface CycleSimple {
   id: number
@@ -217,7 +218,7 @@ export default function TaskManagerModal() {
                       )}
                       <p className="mt-1.5 flex flex-wrap items-center gap-2 text-xs text-fg-muted">
                         <time dateTime={new Date(task.due_date).toISOString()}>
-                          {new Date(task.due_date).toLocaleDateString('es-AR', { day: '2-digit', month: 'short', year: 'numeric' })}
+                          {formatInAppTz(task.due_date, { day: '2-digit', month: 'short', year: 'numeric' })}
                         </time>
                         <span className="chip chip-neutral">{task.type}</span>
                         {task.cycleName && (

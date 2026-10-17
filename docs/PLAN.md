@@ -90,22 +90,22 @@ Lo que te toca hacer a vos está en `docs/PENDIENTES.md`.
 - [x] Agenda por mes y agrupada por día; ficha de ciclo con consultas en paralelo. *(Adelantado de la Etapa 6.)*
 
 ### Etapa 5 · Panel, fechas y tareas
-- [ ] "Hoy" en hora argentina, en un solo lugar; formularios con `todayForInput()`.
-- [ ] Panel: sección de atrasadas y sin plantas archivadas.
+- [x] "Hoy" en hora argentina, en un solo lugar; formularios con `todayForInput()`. Fechas mostradas con `formatInAppTz`.
+- [x] Panel: sección de atrasadas y sin plantas archivadas.
 - [x] Recurrencias: aviso del tope (ahora 90) y mensual sin corrimiento desde el 31. *(Adelantado en la Etapa 2.)*
 - [x] Crear tareas con sus relaciones en una sola transacción (`create_tasks`). *(Adelantado en la Etapa 2.)*
-- [ ] Tareas sin efectos duplicados ni operaciones a medias.
-- [ ] Confirmación y "Deshacer" en "Declarar muerta" y "Cambiar ambiente".
+- [x] Tareas sin efectos duplicados ni operaciones a medias: cambio de estado condicional, esquejado en una transacción (`complete_esquejado`) y "esta y las siguientes" en una consulta (`update_task_series`).
+- [x] Confirmación en "Declarar muerta" y "Cambiar ambiente"; "Deshacer" en el aviso para todas las tareas con efecto (30 minutos).
 - [x] Sugeridor de etapa: recuerda "Ahora no" una semana e ignora archivadas. *(Adelantado en la Etapa 3.)*
-- [ ] Onboarding sólo sin espacios; "Omitir" se recuerda.
-- [ ] Los links `/plants?search=` filtran.
+- [x] Onboarding sólo sin espacios; "Omitir" se recuerda (cookie `onboarding_omitido`).
+- [x] Los links `/plants?search=` filtran.
 
 ### Etapa 6 · Rendimiento
 - [ ] Base: políticas con `(select auth.uid())`, índices en `user_id`, relaciones y `tasks.due_date`; fuera `idx_tasks_date`.
 - [x] Ficha de ciclo con consultas en paralelo. *(Hecho en la Etapa 4.)*
 - [ ] Sesión verificada una sola vez por página.
 - [x] Agenda por mes y agrupada por día. *(Hecho en la Etapa 4.)*
-- [ ] Menos consultas al crear o editar series de tareas.
+- [x] Menos consultas al crear o editar series de tareas. *(Hecho en las Etapas 2 y 5.)*
 
 ### Etapa 7 · Limpieza
 - [ ] Lint sin errores; los `any` reemplazados por tipos generados. Con Next 16.4

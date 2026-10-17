@@ -5,7 +5,7 @@ process.env.TZ = 'America/Argentina/Buenos_Aires';
 
 import { test } from 'node:test';
 import assert from 'node:assert';
-import { addDaysToKey, dateKey, daysBetweenKeys, daysSinceDate, formatDay, getDaysSinceWater, parseCultivationDate, todayForInput, todayKey } from './dates.ts';
+import { addDaysToKey, dateKey, dayRange, daysBetweenKeys, daysSinceDate, formatDay, formatInAppTz, getDaysSinceWater, parseCultivationDate, todayForInput, todayKey } from './dates.ts';
 
 /** Una hora cualquiera del 17 de septiembre, en horario local. */
 const now = new Date('2026-09-17T09:00:00');
@@ -94,4 +94,21 @@ test('formatDay - día argentino, sin correrse', () => {
   assert.strictEqual(formatDay('2026-10-17'), '17/10/2026');
   assert.strictEqual(formatDay('2026-10-18T02:00:00Z'), '17/10/2026');
   assert.strictEqual(formatDay(null), '');
+});
+
+test('dayRange - el día de Argentina en instantes', () => {
+  const { from, to } = dayRange('2026-10-17');
+  assert.strictEqual(new Date(from).toISOString(), '2026-10-17T03:00:00.000Z');
+  assert.strictEqual(new Date(to).toISOString(), '2026-10-18T03:00:00.000Z');
+  // Una tarea a las 23:30 de Argentina cae en ese día aunque en UTC ya sea mañana.
+  const late = new Date('2026-10-18T02:30:00Z').getTime();
+  assert.ok(late >= new Date(from).getTime() && late < new Date(to).getTime());
+});
+
+test('formatInAppTz - formatea en el huso de Argentina', () => {
+  // 01:00 UTC del 18 son las 22:00 del 17 en Argentina.
+  assert.strictEqual(formatInAppTz('2026-10-18T01:00:00Z', { day: 'numeric', month: 'numeric' }), '17/10');
+  assert.strictEqual(formatInAppTz('2026-10-17', { day: 'numeric', month: 'numeric' }), '17/10');
+  assert.strictEqual(formatInAppTz(null, { day: 'numeric' }), '');
+  assert.strictEqual(formatInAppTz('basura', { day: 'numeric' }), '');
 });

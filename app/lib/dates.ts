@@ -19,6 +19,12 @@
 /** El huso de la app. Fijo por decisión: se puede volver configurable más adelante. */
 export const APP_TIME_ZONE = 'America/Argentina/Buenos_Aires';
 
+/**
+ * El desfase de Argentina con UTC. Es fijo: el país no cambia la hora desde
+ * 2009. Si eso cambiara, alcanza con tocar esta constante.
+ */
+export const APP_UTC_OFFSET = '-03:00';
+
 /** Una fecha de calendario pelada, sin hora: "2026-09-17". */
 const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -111,6 +117,39 @@ export function getDaysSinceWater(lastWater?: string | null, now: Date = new Dat
   if (!lastWater) return null;
   if (lastWater === 'Hoy') return 0;
   return daysSinceDate(lastWater, now);
+}
+
+/**
+ * El día `key` como rango de instantes [desde, hasta), para filtrar una columna
+ * timestamptz: "las tareas de hoy" son las que caen entre las 00:00 y las
+ * 24:00 de Argentina, no las del día UTC.
+ */
+export function dayRange(key: string): { from: string; to: string } {
+  return {
+    from: `${key}T00:00:00${APP_UTC_OFFSET}`,
+    to: `${addDaysToKey(key, 1)}T00:00:00${APP_UTC_OFFSET}`,
+  };
+}
+
+const appFormatters = new Map<string, Intl.DateTimeFormat>();
+
+/**
+ * Formatea una fecha en el huso de la app, con las opciones de
+ * `toLocaleDateString`. Sin esto, el servidor (en UTC) y el navegador podían
+ * mostrar días distintos para la misma tarea. Una fecha sin hora se toma al
+ * mediodía para que no se corra de día.
+ */
+export function formatInAppTz(value: Date | string | null | undefined, options: Intl.DateTimeFormatOptions): string {
+  if (value === null || value === undefined || value === '') return '';
+  const date = typeof value === 'string' ? parseCultivationDate(value) : value;
+  if (!date || isNaN(date.getTime())) return '';
+  const cacheKey = JSON.stringify(options);
+  let formatter = appFormatters.get(cacheKey);
+  if (!formatter) {
+    formatter = new Intl.DateTimeFormat('es-AR', { ...options, timeZone: APP_TIME_ZONE });
+    appFormatters.set(cacheKey, formatter);
+  }
+  return formatter.format(date);
 }
 
 /** "17/10/2026": un día en formato argentino, o '' si no se entiende. */

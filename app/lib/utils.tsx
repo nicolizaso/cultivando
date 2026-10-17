@@ -1,4 +1,4 @@
-import { daysSinceDate, getDaysSinceWater } from './dates';
+import { daysSinceDate, formatInAppTz, getDaysSinceWater } from './dates';
 import { Dna, Droplets, Flower2, Leaf, Package, Sprout, Wind, HelpCircle } from 'lucide-react';
 
 // Las cuentas de fechas y de métricas viven en archivos sin JSX, que sí se
@@ -6,19 +6,10 @@ import { Dna, Droplets, Flower2, Leaf, Package, Sprout, Wind, HelpCircle } from 
 export { getDaysSinceWater, todayForInput } from './dates';
 export { getPlantMetrics } from './plant-metrics';
 
+/** "17/10/26": un día corto, en el huso de la app. Si no se entiende, el texto tal cual. */
 export function formatDateShort(dateString: string): string {
   if (!dateString) return '';
-  const date = new Date(dateString);
-
-  // Check for invalid date
-  if (isNaN(date.getTime())) return dateString;
-
-  // Use es-ES locale for dd/mm/yy format
-  return date.toLocaleDateString('es-ES', {
-    day: '2-digit',
-    month: '2-digit',
-    year: '2-digit'
-  });
+  return formatInAppTz(dateString, { day: '2-digit', month: '2-digit', year: '2-digit' }) || dateString;
 }
 
 /**

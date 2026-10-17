@@ -28,6 +28,8 @@ interface PlantsGridManagerProps {
   plants: Plant[];
   cycles: Pick<Cycle, 'id' | 'name' | 'space_id'>[];
   spaces: Pick<Space, 'id' | 'name'>[];
+  /** Búsqueda con la que abre la grilla (`/plants?search=…`). */
+  initialQuery?: string;
 }
 
 type Scope = 'active' | 'archived';
@@ -39,7 +41,7 @@ type BulkModal = 'stage' | 'water' | 'cycle' | 'archive' | 'restore';
 const normalize = (value: string) =>
   value.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
 
-export default function PlantsGridManager({ plants, cycles, spaces }: PlantsGridManagerProps) {
+export default function PlantsGridManager({ plants, cycles, spaces, initialQuery = "" }: PlantsGridManagerProps) {
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [isDeleting, setIsDeleting] = useState(false);
@@ -47,7 +49,9 @@ export default function PlantsGridManager({ plants, cycles, spaces }: PlantsGrid
   const [openModal, setOpenModal] = useState<BulkModal | null>(null);
 
   const [scope, setScope] = useState<Scope>('active');
-  const [query, setQuery] = useState("");
+  // Los grupos de los ciclos ("Gorilla #1-6") enlazan acá con la búsqueda
+  // puesta; antes el parámetro se ignoraba y se veían todas las plantas.
+  const [query, setQuery] = useState(initialQuery);
   const [showFilters, setShowFilters] = useState(false);
   const [selectedCycleId, setSelectedCycleId] = useState<string>("all");
   const [selectedSpaceId, setSelectedSpaceId] = useState<string>("all");

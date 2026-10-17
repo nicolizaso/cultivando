@@ -8,6 +8,7 @@ import { useRouter } from 'next/navigation'
 import { createTask } from '@/app/actions/tasks'
 import DatePicker from './DatePicker'
 import { useToast } from '@/app/context/ToastContext'
+import { addDaysToKey, todayKey } from '@/app/lib/dates'
 import { TASK_TYPES } from '@/app/lib/constants'
 import Modal from '@/components/ui/Modal'
 
@@ -37,25 +38,19 @@ interface AddTaskModalProps {
   plants: Plant[]
   spaces: Space[]
   cycles?: CycleOption[]
-  initialDate?: Date
+  /** Día con el que abre el formulario ("YYYY-MM-DD"); si no, hoy en Argentina. */
+  initialDay?: string
 }
 
-export default function AddTaskModal({ isOpen, onClose, plants, spaces, cycles = [], initialDate }: AddTaskModalProps) {
+export default function AddTaskModal({ isOpen, onClose, plants, spaces, cycles = [], initialDay }: AddTaskModalProps) {
   const router = useRouter()
   const { showToast } = useToast()
 
   const [selectedTargets, setSelectedTargets] = useState<{ id: string | number, name: string, type: 'plant' | 'space' | 'cycle' }[]>([])
   const [selectedTaskType, setSelectedTaskType] = useState<typeof TASK_TYPES[0] | null>(null)
-  const [date, setDate] = useState(() => {
-    const d = initialDate || new Date()
-    return d.toLocaleDateString('en-CA')
-  })
-
-  useEffect(() => {
-    if (initialDate) {
-      setDate(initialDate.toLocaleDateString('en-CA'))
-    }
-  }, [initialDate])
+  // Si cambia el día elegido en la agenda, quien lo abre cambia la `key` y el
+  // formulario arranca de cero con el día nuevo.
+  const [date, setDate] = useState(() => initialDay ?? todayKey())
 
   const [description, setDescription] = useState('')
   const [otherText, setOtherText] = useState('')
@@ -72,11 +67,7 @@ export default function AddTaskModal({ isOpen, onClose, plants, spaces, cycles =
   // Recurrencia
   const [isRecurring, setIsRecurring] = useState(false)
   const [frequency, setFrequency] = useState('daily')
-  const [endDate, setEndDate] = useState(() => {
-    const d = new Date()
-    d.setMonth(d.getMonth() + 1)
-    return d.toLocaleDateString('en-CA')
-  })
+  const [endDate, setEndDate] = useState(() => addDaysToKey(initialDay ?? todayKey(), 30))
 
   const [isTargetOpen, setIsTargetOpen] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)

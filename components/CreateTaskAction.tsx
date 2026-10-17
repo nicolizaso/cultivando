@@ -12,7 +12,8 @@ interface CreateTaskActionProps {
   plants: PlantOption[]
   spaces: Space[]
   cycles?: CycleOption[]
-  initialDate?: Date
+  /** Día con el que abre el formulario ("YYYY-MM-DD"). */
+  initialDay?: string
 }
 
 /**
@@ -23,7 +24,7 @@ interface CreateTaskActionProps {
  * con un único estado y un único modal, así que no hay dos rutas distintas para
  * la misma acción ni dos etiquetas que mantener sincronizadas.
  */
-export default function CreateTaskAction({ plants, spaces, cycles, initialDate }: CreateTaskActionProps) {
+export default function CreateTaskAction({ plants, spaces, cycles, initialDay }: CreateTaskActionProps) {
   const [isModalOpen, setIsModalOpen] = useState(false)
 
   return (
@@ -53,12 +54,13 @@ export default function CreateTaskAction({ plants, spaces, cycles, initialDate }
       </button>
 
       <AddTaskModal
+        key={initialDay ?? 'hoy'}
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         plants={plants}
         spaces={spaces}
         cycles={cycles}
-        initialDate={initialDate}
+        initialDay={initialDay}
       />
     </>
   )

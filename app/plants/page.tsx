@@ -9,8 +9,14 @@ type PlantWithCycle = Plant & { cycles?: { id: number; name: string; space_id: n
 
 export const metadata = { title: "Plantas" };
 
-export default async function PlantsPage() {
+export default async function PlantsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ search?: string | string[] }>;
+}) {
   const supabase = await createClient();
+  const { search } = await searchParams;
+  const initialQuery = (Array.isArray(search) ? search[0] : search ?? '').slice(0, 100);
 
   const [
     { data: plants },
@@ -46,6 +52,8 @@ export default async function PlantsPage() {
         plants={(plants ?? []) as PlantWithCycle[]}
         cycles={(cycles ?? []) as Pick<Cycle, 'id' | 'name' | 'space_id'>[]}
         spaces={(spaces ?? []) as Pick<Space, 'id' | 'name'>[]}
+        initialQuery={initialQuery}
+        key={initialQuery}
       />
     </PageShell>
   );
