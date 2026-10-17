@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Archive, ArchiveRestore, ArrowRightCircle, ArrowRightLeft, CheckSquare, Droplets,
-  Filter, FilterX, Search, Sprout, Square, Trash2, X
+  Filter, FilterX, GitBranch, Search, Sprout, Square, Trash2, X
 } from "lucide-react";
 
 import PlantCard from "./plantcard";
@@ -32,7 +32,8 @@ interface PlantsGridManagerProps {
   initialQuery?: string;
 }
 
-type Scope = 'active' | 'archived';
+/** Madres es un subconjunto de las activas: las que se guardan para esquejes. */
+type Scope = 'active' | 'mothers' | 'archived';
 
 /** Los modales que puede abrir la barra de selección; uno por vez. */
 type BulkModal = 'stage' | 'water' | 'cycle' | 'archive' | 'restore';
@@ -61,6 +62,7 @@ export default function PlantsGridManager({ plants, cycles, spaces, initialQuery
 
   const activeCount = useMemo(() => plants.filter(p => !p.is_archived).length, [plants]);
   const archivedCount = plants.length - activeCount;
+  const motherCount = useMemo(() => plants.filter(p => !p.is_archived && p.is_mother).length, [plants]);
 
   const filteredPlants = useMemo(() => {
     const term = normalize(query);
@@ -68,6 +70,7 @@ export default function PlantsGridManager({ plants, cycles, spaces, initialQuery
     return plants.filter(plant => {
       // Archivadas y activas son conjuntos excluyentes, nunca una mezcla.
       if (scope === 'archived' ? plant.is_archived !== true : Boolean(plant.is_archived)) return false;
+      if (scope === 'mothers' && !plant.is_mother) return false;
 
       if (selectedCycleId !== "all" && plant.cycle_id !== Number(selectedCycleId)) return false;
 
@@ -176,6 +179,7 @@ export default function PlantsGridManager({ plants, cycles, spaces, initialQuery
             onChange={(next) => { setScope(next); exitSelectionMode(); }}
             options={[
               { value: 'active', label: 'Activas', count: activeCount },
+              ...(motherCount > 0 ? [{ value: 'mothers' as const, label: 'Madres', icon: GitBranch, count: motherCount }] : []),
               { value: 'archived', label: 'Archivadas', icon: Archive, count: archivedCount },
             ]}
           />
@@ -253,7 +257,7 @@ export default function PlantsGridManager({ plants, cycles, spaces, initialQuery
         <p className="text-sm text-fg-muted" aria-live="polite">
           <span className="mono font-semibold text-fg">{filteredPlants.length}</span>{' '}
           {filteredPlants.length === 1 ? 'planta' : 'plantas'}
-          {isNarrowed && <span className="text-fg-subtle"> de {scope === 'archived' ? archivedCount : activeCount}</span>}
+          {isNarrowed && <span className="text-fg-subtle"> de {scope === 'archived' ? archivedCount : scope === 'mothers' ? motherCount : activeCount}</span>}
         </p>
 
         {isSelectionMode && (

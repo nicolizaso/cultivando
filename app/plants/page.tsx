@@ -3,6 +3,7 @@ import PageShell from "@/components/layout/PageShell";
 import PageHeader from "@/components/layout/PageHeader";
 import PlantsGridManager from "@/components/PlantsGridManager";
 import AddPlantModal from "@/components/AddPlantModal";
+import { sortMotherOptions } from "@/app/lib/lineage";
 import { Cycle, Plant, Space } from "@/app/lib/types";
 
 type PlantWithCycle = Plant & { cycles?: { id: number; name: string; space_id: number } | null };
@@ -48,7 +49,7 @@ export default async function PlantsPage({
         actions={
           <AddPlantModal
             activeCycles={(cycles ?? []).filter((cycle) => cycle.is_active)}
-            potentialMothers={(plants ?? []).filter((plant) => !plant.is_archived).sort((a, b) => a.name.localeCompare(b.name, 'es'))}
+            potentialMothers={sortMotherOptions((plants ?? []).filter((plant) => !plant.is_archived))}
           />
         }
       />

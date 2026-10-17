@@ -58,6 +58,7 @@ export default function EditPlantForm({ plant, cycles }: EditPlantFormProps) {
     breeder: plant.breeder || '',
     source_type: plant.source_type || 'Semilla',
     cycle_id: plant.cycle_id,
+    is_mother: Boolean(plant.is_mother),
   });
 
   // Dates State
@@ -65,7 +66,7 @@ export default function EditPlantForm({ plant, cycles }: EditPlantFormProps) {
     Object.fromEntries(STAGE_CONFIG.map((stage) => [stage.key, plant[stage.key] || '']))
   );
 
-  const handleBasicChange = (field: string, value: string | number | null) => {
+  const handleBasicChange = (field: string, value: string | number | boolean | null) => {
     setBasicInfo(prev => ({ ...prev, [field]: value }));
   };
 
@@ -95,6 +96,7 @@ export default function EditPlantForm({ plant, cycles }: EditPlantFormProps) {
         breeder: basicInfo.breeder,
         source_type: basicInfo.source_type,
         cycle_id: basicInfo.cycle_id,
+        is_mother: basicInfo.is_mother,
         dates,
       });
 
@@ -216,6 +218,22 @@ export default function EditPlantForm({ plant, cycles }: EditPlantFormProps) {
                 ))}
               </select>
             </div>
+
+            <label htmlFor="edit-plant-mother" className="flex cursor-pointer items-start gap-3 rounded-[var(--radius-md)] border border-line p-3 md:col-span-2">
+              <input
+                id="edit-plant-mother"
+                type="checkbox"
+                className="mt-0.5 h-4 w-4 accent-[color:var(--brand)]"
+                checked={basicInfo.is_mother}
+                onChange={(e) => handleBasicChange('is_mother', e.target.checked)}
+              />
+              <span>
+                <span className="block text-sm font-semibold text-fg">Planta madre</span>
+                <span className="block text-xs text-fg-muted">
+                  La guardás para sacar esquejes. Aparece primera al elegir madre y en el filtro de madres.
+                </span>
+              </span>
+            </label>
           </div>
         </section>
 

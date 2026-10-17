@@ -295,6 +295,7 @@ export type Database = {
           id: number
           image_url: string | null
           is_archived: boolean | null
+          is_mother: boolean
           last_water: string | null
           mother_id: number | null
           name: string
@@ -319,6 +320,7 @@ export type Database = {
           id?: never
           image_url?: string | null
           is_archived?: boolean | null
+          is_mother?: boolean
           last_water?: string | null
           mother_id?: number | null
           name: string
@@ -343,6 +345,7 @@ export type Database = {
           id?: never
           image_url?: string | null
           is_archived?: boolean | null
+          is_mother?: boolean
           last_water?: string | null
           mother_id?: number | null
           name?: string

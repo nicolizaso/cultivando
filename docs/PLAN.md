@@ -145,7 +145,10 @@ Lo que te toca hacer a vos está en `docs/PENDIENTES.md`.
   la galería del ciclo y las fotos de la bitácora de sus plantas en orden, con día de
   cultivo y etapa; reproducir/pausa, barra, flechas, tres velocidades y filtro por planta.
   Arranca en pausa.
-- [ ] Etapa 10 · Linaje de madres y esquejes
+- [x] Etapa 10 · Linaje de madres y esquejes — `plants.is_mother` (las que ya dieron
+  esquejes quedan marcadas; un esqueje nuevo marca a su madre). Ficha de la planta con
+  "Linaje": de quién viene y el árbol de sus esquejes con generaciones y activos. Marca
+  "Planta madre" al editar, filtro "Madres" en Plantas y madres primero al elegir madre.
 - [ ] Etapa 11 · Estadísticas por genética
 - [ ] Etapa 12 · Riego con datos
 - [ ] Etapa 13 · Stock de fertilizantes

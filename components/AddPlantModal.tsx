@@ -12,7 +12,7 @@ import { useToast } from "@/app/context/ToastContext";
 const SEED_STAGES = ['Germinación', 'Plántula', 'Vegetativo', 'Floración'];
 
 type CycleOption = Pick<Cycle, 'id' | 'name'>;
-type MotherOption = Pick<Plant, 'id' | 'name' | 'strain' | 'breeder'>;
+type MotherOption = Pick<Plant, 'id' | 'name' | 'strain' | 'breeder' | 'is_mother'>;
 
 interface AddPlantModalProps {
   /** Ciclos activos, para elegir dónde va la planta. Los trae la página. */
@@ -218,9 +218,19 @@ export default function AddPlantModal({ activeCycles, potentialMothers }: AddPla
                 onChange={(e) => changeMother(e.target.value)}
               >
                 <option value="">Sin madre asignada</option>
-                {potentialMothers.map(plant => (
-                  <option key={plant.id} value={plant.id}>{plant.name} ({plant.strain || 'sin genética'})</option>
-                ))}
+                {/* Las marcadas como madre van primero, en su propio grupo. */}
+                {potentialMothers.some((plant) => plant.is_mother) && (
+                  <optgroup label="Madres">
+                    {potentialMothers.filter((plant) => plant.is_mother).map(plant => (
+                      <option key={plant.id} value={plant.id}>{plant.name} ({plant.strain || 'sin genética'})</option>
+                    ))}
+                  </optgroup>
+                )}
+                <optgroup label={potentialMothers.some((plant) => plant.is_mother) ? 'Otras plantas' : 'Plantas'}>
+                  {potentialMothers.filter((plant) => !plant.is_mother).map(plant => (
+                    <option key={plant.id} value={plant.id}>{plant.name} ({plant.strain || 'sin genética'})</option>
+                  ))}
+                </optgroup>
               </select>
               <p className="field-hint">Al elegirla se copian su genética, banco y nombre.</p>
             </div>

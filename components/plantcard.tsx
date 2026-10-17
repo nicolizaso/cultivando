@@ -123,10 +123,13 @@ export default function PlantCard({
         </p>
       </div>
 
-      <span className={`chip mt-2.5 w-fit ${stageInfo.bgColor} ${stageInfo.textColor} ${stageInfo.borderColor}`}>
-        {stageInfo.icon}
-        {displayStage}
-      </span>
+      <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+        <span className={`chip w-fit ${stageInfo.bgColor} ${stageInfo.textColor} ${stageInfo.borderColor}`}>
+          {stageInfo.icon}
+          {displayStage}
+        </span>
+        {plant.is_mother && <span className="chip chip-brand">Madre</span>}
+      </div>
 
       <div className="mt-auto flex flex-wrap items-center gap-x-2.5 gap-y-1 pt-2.5 text-[11px]">
         {/* Las edades se calculan con la fecha del cliente: hasta montar se

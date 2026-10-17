@@ -166,6 +166,8 @@ interface PlantUpdateInput {
   breeder?: unknown;
   source_type?: unknown;
   cycle_id?: unknown;
+  /** Planta madre: la que se guarda para sacar esquejes. */
+  is_mother?: unknown;
   /** Fecha de inicio de cada etapa, por columna (`date_floracion`…). Vacío borra la etapa. */
   dates?: Record<string, unknown>;
 }
@@ -221,6 +223,7 @@ export async function updatePlant(plantId: number, input: PlantUpdateInput) {
     breeder: cleanText(input?.breeder, 80) || null,
     source_type: sourceType,
     cycle_id: cycleId,
+    ...(typeof input?.is_mother === 'boolean' ? { is_mother: input.is_mother } : {}),
     ...stageDates,
   };
 

@@ -14,6 +14,9 @@ import { canonicalLogType } from "@/app/lib/logs";
 import { getTaskType } from "@/app/lib/constants";
 import { parseId } from "@/app/lib/sanitize";
 import { taskAppliesToPlant } from "@/app/lib/task-effects";
+import { ancestors, descendants, lineageStats } from "@/app/lib/lineage";
+import type { LineagePlant } from "@/app/lib/lineage";
+import LineageSection from "@/components/LineageSection";
 
 interface TaskRow {
   id: number;
@@ -75,12 +78,21 @@ export default async function PlantDetailPage({ params }: { params: Promise<{ id
         .order('taken_at', { ascending: false })
     : Promise.resolve({ data: [] as { id: string; taken_at: string | null; created_at: string | null; description: string | null; public_url: string }[] });
 
-  const [logsResult, linkedTasksResult, cycleTasksResult, imagesResult] = await Promise.all([
+  // Para el linaje: todas las plantas, sólo lo necesario para armar el árbol.
+  const lineageQuery = supabase
+    .from('plants')
+    .select('id, name, mother_id, stage, is_archived, is_mother, planted_at');
+
+  const [logsResult, linkedTasksResult, cycleTasksResult, imagesResult, lineageResult] = await Promise.all([
     logsQuery,
     linkedTasksQuery,
     cycleTasksQuery,
     imagesQuery,
+    lineageQuery,
   ]);
+
+  const lineagePlants = (lineageResult.data ?? []) as LineagePlant[];
+  const lineageSelf = lineagePlants.find((p) => p.id === id) ?? { id, name: plant.name, mother_id: plant.mother_id, is_mother: plant.is_mother };
 
   const logs = logsResult.data || [];
   const cycleImages = imagesResult.data || [];
@@ -199,6 +211,7 @@ export default async function PlantDetailPage({ params }: { params: Promise<{ id
               {stageInfo.icon}
               {displayStage}
             </span>
+            {plant.is_mother && <span className="chip chip-brand">Planta madre</span>}
             {plant.cycles?.name && (
               <Link href={`/cycles/${plant.cycles.id}`} className="chip chip-neutral transition-colors hover:text-fg">
                 {plant.cycles.name}
@@ -248,6 +261,13 @@ export default async function PlantDetailPage({ params }: { params: Promise<{ id
           </dl>
         </div>
       </div>
+
+      <LineageSection
+        plant={lineageSelf}
+        ancestors={ancestors(id, lineagePlants)}
+        tree={descendants(id, lineagePlants)}
+        stats={lineageStats(id, lineagePlants)}
+      />
 
       <section aria-labelledby="bitacora" className="mx-auto max-w-3xl">
         <div className="mb-6 flex items-center gap-2.5 border-b border-line pb-4">
