@@ -1,6 +1,6 @@
 import { createClient } from "@/app/lib/supabase-server";
 import { notFound } from "next/navigation";
-import { CalendarDays, MapPin, PlayCircle, Sprout, StopCircle } from "lucide-react";
+import { CalendarDays, MapPin, PlayCircle, Scissors, Sprout, StopCircle } from "lucide-react";
 
 import CycleDetailView from "@/components/CycleDetailView";
 import MoveCycleSpaceModal from "@/components/MoveCycleSpaceModal";
@@ -9,7 +9,11 @@ import PageHeader from "@/components/layout/PageHeader";
 import { daysSince } from "@/app/lib/utils";
 import { Space } from "@/app/lib/types";
 import { parseId } from "@/app/lib/sanitize";
-import { formatDay } from "@/app/lib/dates";
+import { formatDay, todayKey } from "@/app/lib/dates";
+import { dominantStage, stagePeriods } from "@/app/lib/climate";
+import { dominantStrain, estimateHarvest } from "@/app/lib/harvest";
+import { STRAIN_PLANT_COLUMNS, strainDurationIndex, strainStats } from "@/app/lib/strain-stats";
+import CycleHarvestSection from "@/components/CycleHarvestSection";
 
 /** Cuántas mediciones se traen para el historial de clima (unos tres meses). */
 const HISTORY_SIZE = 120;
@@ -32,8 +36,10 @@ export default async function CycleDetailPage({ params }: { params: Promise<{ id
     { data: cycleImages },
     { data: plantPhotoLogs },
     { data: cyclePhotoLogs },
+    { data: harvests },
+    { data: strainPlants },
   ] = await Promise.all([
-    supabase.from('cycles').select(`*, spaces ( name, type )`).eq('id', id).single(),
+    supabase.from('cycles').select(`*, spaces ( name, type, area_m2, width, length, light_watts )`).eq('id', id).single(),
     supabase.from('plants').select('*').eq('cycle_id', id).order('id', { ascending: true }),
     // Destinos posibles para mudar el ciclo de espacio.
     supabase.from('spaces').select('id, name, type').order('name', { ascending: true }),
@@ -57,6 +63,9 @@ export default async function CycleDetailPage({ params }: { params: Promise<{ id
       .not('media_url', 'is', null)
       .order('created_at', { ascending: true })
       .limit(PHOTO_LIMIT),
+    supabase.from('harvests').select('plant_id, cycle_id, harvested_on, dried_on, wet_g, dry_g, rating, notes').eq('cycle_id', id),
+    // Para estimar la cosecha con los días de floración de la genética.
+    supabase.from('plants').select(STRAIN_PLANT_COLUMNS),
   ]);
 
   if (error || !cycle) return notFound();
@@ -67,6 +76,16 @@ export default async function CycleDetailPage({ params }: { params: Promise<{ id
   const days = daysSince(cycle.start_date);
 
   const activePlants = (plants ?? []).filter(p => !p.is_archived);
+
+  // Cosecha estimada: sólo si el ciclo está en floración.
+  const estimate = cycle.is_active && dominantStage(activePlants) === 'Floración'
+    ? estimateHarvest({
+        flowerStart: stagePeriods(activePlants).find((period) => period.stage === 'Floración')?.from,
+        strain: dominantStrain(activePlants),
+        durations: strainDurationIndex(strainStats(strainPlants ?? [])),
+        today: todayKey(),
+      })
+    : null;
 
   return (
     <PageShell>
@@ -93,6 +112,14 @@ export default async function CycleDetailPage({ params }: { params: Promise<{ id
             {cycle.spaces?.name || 'Sin espacio'}
             {cycle.spaces?.type ? ` · ${cycle.spaces.type}` : ''}
           </span>
+
+          {estimate && (
+            <span className="chip chip-brand" title={estimate.basis === 'strain' ? `Floración de ${estimate.flowerDays} días, el promedio de tu genética` : `Floración de ${estimate.flowerDays} días (sin historia de la genética)`}>
+              <Scissors size={12} aria-hidden="true" />
+              Cosecha estimada {formatDay(estimate.day)}
+              {estimate.daysLeft > 0 ? ` · en ${estimate.daysLeft} días` : estimate.daysLeft === 0 ? ' · hoy' : ` · hace ${-estimate.daysLeft} días`}
+            </span>
+          )}
 
           <MoveCycleSpaceModal
             cycleId={cycle.id}
@@ -136,6 +163,15 @@ export default async function CycleDetailPage({ params }: { params: Promise<{ id
         cycleImages={cycleImages || []}
         photoLogs={[...(plantPhotoLogs ?? []), ...(cyclePhotoLogs ?? [])].map(({ id, plant_id, created_at, media_url, title }) => ({ id, plant_id, created_at, media_url, title }))}
       />
+
+      <div className="mt-8">
+        <CycleHarvestSection
+          cycleId={cycle.id}
+          plants={(plants ?? []).map(({ id, name, stage, is_archived }) => ({ id, name, stage, is_archived }))}
+          harvests={harvests ?? []}
+          space={cycle.spaces ?? null}
+        />
+      </div>
     </PageShell>
   );
 }

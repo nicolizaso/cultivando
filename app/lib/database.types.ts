@@ -235,6 +235,66 @@ export type Database = {
         }
         Relationships: []
       }
+      harvests: {
+        Row: {
+          created_at: string
+          cycle_id: number | null
+          dried_on: string | null
+          dry_g: number | null
+          harvested_on: string
+          id: number
+          notes: string | null
+          plant_id: number
+          rating: number | null
+          updated_at: string
+          user_id: string
+          wet_g: number | null
+        }
+        Insert: {
+          created_at?: string
+          cycle_id?: number | null
+          dried_on?: string | null
+          dry_g?: number | null
+          harvested_on: string
+          id?: never
+          notes?: string | null
+          plant_id: number
+          rating?: number | null
+          updated_at?: string
+          user_id?: string
+          wet_g?: number | null
+        }
+        Update: {
+          created_at?: string
+          cycle_id?: number | null
+          dried_on?: string | null
+          dry_g?: number | null
+          harvested_on?: string
+          id?: never
+          notes?: string | null
+          plant_id?: number
+          rating?: number | null
+          updated_at?: string
+          user_id?: string
+          wet_g?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "harvests_plant_id_fkey"
+            columns: ["plant_id"]
+            isOneToOne: true
+            referencedRelation: "plants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "harvests_cycle_id_fkey"
+            columns: ["cycle_id"]
+            isOneToOne: false
+            referencedRelation: "cycles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       logs: {
         Row: {
           created_at: string | null

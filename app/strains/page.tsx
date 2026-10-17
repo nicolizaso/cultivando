@@ -6,6 +6,7 @@ import PageHeader from "@/components/layout/PageHeader";
 import EmptyState from "@/components/EmptyState";
 import { MIN_SAMPLES, STRAIN_PLANT_COLUMNS, strainStats } from "@/app/lib/strain-stats";
 import type { Average } from "@/app/lib/strain-stats";
+import { strainYields } from "@/app/lib/harvest";
 
 export const metadata = { title: "Genéticas" };
 
@@ -16,8 +17,12 @@ export const metadata = { title: "Genéticas" };
  */
 export default async function StrainsPage() {
   const supabase = await createClient();
-  const { data: plants } = await supabase.from("plants").select(STRAIN_PLANT_COLUMNS);
+  const [{ data: plants }, { data: harvests }] = await Promise.all([
+    supabase.from("plants").select(STRAIN_PLANT_COLUMNS),
+    supabase.from("harvests").select("plant_id, harvested_on, dry_g"),
+  ]);
   const stats = strainStats(plants ?? []);
+  const yields = strainYields(harvests ?? [], new Map((plants ?? []).map((plant) => [plant.id, plant.strain])));
   const withoutStrain = (plants ?? []).filter((plant) => !plant.strain?.trim()).length;
 
   return (
@@ -39,7 +44,7 @@ export default async function StrainsPage() {
       ) : (
         <>
           <div className="surface overflow-x-auto rounded-[var(--radius-lg)]">
-            <table className="w-full min-w-[46rem] text-sm">
+            <table className="w-full min-w-[52rem] text-sm">
               <caption className="sr-only">Estadísticas por genética</caption>
               <thead className="text-left text-xs text-fg-muted">
                 <tr className="border-b border-line">
@@ -50,6 +55,7 @@ export default async function StrainsPage() {
                   <th scope="col" className="px-3 py-3 text-right font-semibold">Floración</th>
                   <th scope="col" className="px-3 py-3 text-right font-semibold">Hasta cosecha</th>
                   <th scope="col" className="px-3 py-3 text-right font-semibold">Cosechadas</th>
+                  <th scope="col" className="px-3 py-3 text-right font-semibold">Seco por planta</th>
                   <th scope="col" className="px-4 py-3 text-right font-semibold">Pérdidas</th>
                 </tr>
               </thead>
@@ -78,6 +84,16 @@ export default async function StrainsPage() {
                     <td className="mono px-3 py-3 text-right"><Days value={strain.stages["Floración"]} /></td>
                     <td className="mono px-3 py-3 text-right"><Days value={strain.toHarvest} /></td>
                     <td className="mono px-3 py-3 text-right text-fg">{strain.harvested}</td>
+                    <td className="mono px-3 py-3 text-right">
+                      {yields[strain.key] ? (
+                        <span className="text-fg">
+                          {yields[strain.key].avg.toLocaleString("es-AR")} g
+                          <span className="ml-1 text-xs text-fg-subtle">({yields[strain.key].n})</span>
+                        </span>
+                      ) : (
+                        <span className="text-fg-subtle">–</span>
+                      )}
+                    </td>
                     <td className="mono px-4 py-3 text-right text-fg">
                       {strain.lossRate === null ? <span className="text-fg-subtle">–</span> : `${Math.round(strain.lossRate * 100)}%`}
                       {strain.lost > 0 && <span className="ml-1 text-xs text-fg-subtle">({strain.lost})</span>}

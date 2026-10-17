@@ -34,6 +34,7 @@ Supabase (pegar el archivo entero y ejecutar) o con `supabase db push`:
 7. `20261017200000_limpieza.sql`
 8. `20261017210000_linaje.sql`
 9. `20261017220000_stock.sql`
+10. `20261017230000_cosechas.sql`
 
 ---
 
@@ -90,6 +91,8 @@ Checklist para el preview del PR, una vez hechos los pasos de arriba:
 - [ ] Riego en lote con la calculadora: elegir un combo, poner los litros y "Anotar en la nota".
 - [ ] Nutrición: editar un producto y cargar "Queda 500 ml", "Envase 1000", "Avisar con 100"; la tarjeta muestra la barra. "Compré" suma un envase.
 - [ ] Riego con la calculadora y "Descontar del stock": el producto baja; si queda menos del aviso, sale "Queda poco" en el aviso, en Nutrición y en el panel.
+- [ ] Ciclo en floración: aparece "Cosecha estimada" con la fecha; en "Cosecha", "Cargar pesos" para varias plantas (pasan a Secado).
+- [ ] Ficha de una planta cosechada: "Editar" la cosecha y cargar el peso seco; en el ciclo se actualizan g/planta, g/m² y g/W (si el espacio tiene medidas y potencia).
 - [ ] En Supabase → Advisors → Performance: ya no aparecen los avisos "Auth RLS Initialization Plan" ni los de claves foráneas sin índice de las tablas de Cultivando.
 
 ---

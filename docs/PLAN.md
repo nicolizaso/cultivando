@@ -164,7 +164,11 @@ Lo que te toca hacer a vos está en `docs/PENDIENTES.md`.
   `fertilizer_movements` (`move_fertilizer_stock`, atómica). Aviso de stock bajo en el
   panel, en Nutrición y al registrar el riego. Las tareas de fertilizante no descuentan
   (no saben los litros).
-- [ ] Etapa 14 · Cosecha y rendimiento
+- [x] Etapa 14 · Cosecha y rendimiento — tabla `harvests` (una por planta: húmedo, seco,
+  fechas, calificación y notas). En la ficha de la planta se registra y, si estaba en
+  floración, pasa a Secado. En el ciclo: seco total, por planta, por m² y por watt, y una
+  planilla para pesar todas juntas. Cosecha estimada en ciclos en floración (días de
+  floración de la genética o 63). "Seco por planta" en Genéticas.
 - [ ] Etapa 15 · Plan de cultivo automático
 - [ ] Etapa 16 · Exportar o compartir un ciclo
 - [ ] Etapa 17 · Notificaciones push

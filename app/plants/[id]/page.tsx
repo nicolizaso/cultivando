@@ -20,6 +20,7 @@ import { taskAppliesToPlant } from "@/app/lib/task-effects";
 import { ancestors, descendants, lineageStats } from "@/app/lib/lineage";
 import type { LineagePlant } from "@/app/lib/lineage";
 import LineageSection from "@/components/LineageSection";
+import HarvestCard from "@/components/HarvestCard";
 
 interface TaskRow {
   id: number;
@@ -86,12 +87,19 @@ export default async function PlantDetailPage({ params }: { params: Promise<{ id
     .from('plants')
     .select('id, name, mother_id, stage, is_archived, is_mother, planted_at');
 
-  const [logsResult, linkedTasksResult, cycleTasksResult, imagesResult, lineageResult] = await Promise.all([
+  const harvestQuery = supabase
+    .from('harvests')
+    .select('plant_id, cycle_id, harvested_on, dried_on, wet_g, dry_g, rating, notes')
+    .eq('plant_id', id)
+    .maybeSingle();
+
+  const [logsResult, linkedTasksResult, cycleTasksResult, imagesResult, lineageResult, harvestResult] = await Promise.all([
     logsQuery,
     linkedTasksQuery,
     cycleTasksQuery,
     imagesQuery,
     lineageQuery,
+    harvestQuery,
   ]);
 
   const lineagePlants = (lineageResult.data ?? []) as LineagePlant[];
@@ -274,6 +282,8 @@ export default async function PlantDetailPage({ params }: { params: Promise<{ id
           </dl>
         </div>
       </div>
+
+      <HarvestCard plantId={plant.id} plantName={plant.name} stage={rawStage} harvest={harvestResult.data ?? null} />
 
       <LineageSection
         plant={lineageSelf}
