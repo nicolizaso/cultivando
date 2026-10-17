@@ -174,5 +174,9 @@ Lo que te toca hacer a vos está en `docs/PENDIENTES.md`.
   cada N con el fertilizante de la etapa (con la receta de su semana), lavado de raíces,
   cambios de etapa y cosecha. Vista previa por semana con cada tarea destildable; se crean
   con `create_tasks` y se pueden borrar juntas (las pendientes).
-- [ ] Etapa 16 · Exportar o compartir un ciclo
+- [x] Etapa 16 · Exportar o compartir un ciclo — "Reporte" del ciclo (resumen, plantas,
+  clima, fotos y rendimiento) listo para imprimir o guardar en PDF, y CSV de plantas,
+  bitácora, clima y cosechas (separador ";" y coma decimal, para Excel en español).
+  "Compartir" crea un enlace de sólo lectura (`cycle_shares`, token al azar) que se abre
+  sin cuenta en `/compartido/…` vía `get_shared_cycle`; se puede cortar.
 - [ ] Etapa 17 · Notificaciones push

@@ -163,6 +163,7 @@ export default function ClimateHistory({ points, stageLabel, climate, byStage }:
           </p>
         </div>
         <SegmentedControl<View>
+          className="print:hidden"
           label="Cómo ver el historial"
           value={view}
           onChange={setView}

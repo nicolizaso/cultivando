@@ -20,7 +20,9 @@ export default function BottomNav({ email }: { email?: string }) {
   const reduceMotion = useReducedMotion();
   const [isMoreOpen, setIsMoreOpen] = useState(false);
 
-  if (pathname === "/login") return null;
+  // Sin navegación en el login ni en un ciclo compartido (quien lo mira puede
+  // no tener cuenta).
+  if (pathname === "/login" || pathname.startsWith("/compartido")) return null;
 
   const isSecondaryActive = SECONDARY_NAV.some((item) => isNavItemActive(pathname, item.href));
 
@@ -33,7 +35,7 @@ export default function BottomNav({ email }: { email?: string }) {
     <>
       <nav
         aria-label="Navegación principal"
-        className="chrome-bar fixed inset-x-0 bottom-0 z-50 border-t pb-[env(safe-area-inset-bottom)] lg:hidden"
+        className="chrome-bar fixed inset-x-0 bottom-0 z-50 border-t pb-[env(safe-area-inset-bottom)] lg:hidden print:hidden"
       >
         <ul className="mx-auto flex max-w-lg items-stretch justify-around gap-0.5 px-1.5 py-1">
           {PRIMARY_NAV.map((item) => {

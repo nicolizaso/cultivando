@@ -11,8 +11,18 @@ const AUTH_TIMEOUT_MS = 3000;
 /** Rutas accesibles sin sesión. */
 const PUBLIC_PATHS = ['/login'];
 
+/**
+ * Rutas abiertas a cualquiera, con o sin sesión: los ciclos compartidos por
+ * enlace. A diferencia de /login, quien tiene sesión no se redirige al panel.
+ */
+const OPEN_PATHS = ['/compartido'];
+
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+function isOpenPath(pathname: string) {
+  return OPEN_PATHS.some((path) => pathname === path || pathname.startsWith(`${path}/`));
+}
 
 function isPublicPath(pathname: string) {
   return PUBLIC_PATHS.some(
@@ -44,6 +54,11 @@ export async function proxy(request: NextRequest) {
   // Sin configuración de Supabase el proxy no puede decidir nada:
   // dejamos pasar en vez de colgarnos contra una URL indefinida.
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+    return NextResponse.next();
+  }
+
+  // Un ciclo compartido no necesita sesión ni la refresca.
+  if (isOpenPath(pathname)) {
     return NextResponse.next();
   }
 

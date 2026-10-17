@@ -87,6 +87,41 @@ export type Database = {
           },
         ]
       }
+      cycle_shares: {
+        Row: {
+          created_at: string
+          cycle_id: number
+          id: number
+          revoked_at: string | null
+          token: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          cycle_id: number
+          id?: never
+          revoked_at?: string | null
+          token: string
+          user_id?: string
+        }
+        Update: {
+          created_at?: string
+          cycle_id?: number
+          id?: never
+          revoked_at?: string | null
+          token?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cycle_shares_cycle_id_fkey"
+            columns: ["cycle_id"]
+            isOneToOne: false
+            referencedRelation: "cycles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       cycles: {
         Row: {
           created_at: string | null
@@ -714,6 +749,7 @@ export type Database = {
         }
         Returns: number
       }
+      get_shared_cycle: { Args: { p_token: string }; Returns: Json }
       move_fertilizer_stock: {
         Args: { p_changes: Json; p_reason: string; p_note?: string | null }
         Returns: {

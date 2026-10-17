@@ -20,10 +20,12 @@ export default function DesktopNavbar({ email }: { email?: string }) {
   const pathname = usePathname();
   const reduceMotion = useReducedMotion();
 
-  if (pathname === "/login") return null;
+  // Sin navegación en el login ni en un ciclo compartido (quien lo mira puede
+  // no tener cuenta).
+  if (pathname === "/login" || pathname.startsWith("/compartido")) return null;
 
   return (
-    <header className="chrome-bar sticky top-0 z-50 hidden border-b lg:block">
+    <header className="chrome-bar sticky top-0 z-50 hidden border-b lg:block print:hidden">
       <nav
         aria-label="Navegación principal"
         className="mx-auto flex h-16 max-w-[1280px] items-center gap-6 px-6 lg:px-8"

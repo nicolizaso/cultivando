@@ -1,6 +1,7 @@
 import { createClient } from "@/app/lib/supabase-server";
 import { notFound } from "next/navigation";
-import { CalendarDays, MapPin, PlayCircle, Scissors, Sprout, StopCircle } from "lucide-react";
+import Link from "next/link";
+import { CalendarDays, FileText, MapPin, PlayCircle, Scissors, Sprout, StopCircle } from "lucide-react";
 
 import CycleDetailView from "@/components/CycleDetailView";
 import MoveCycleSpaceModal from "@/components/MoveCycleSpaceModal";
@@ -15,6 +16,7 @@ import { DEFAULT_FLOWER_DAYS, dominantStrain, estimateHarvest } from "@/app/lib/
 import { DEFAULT_VEG_DAYS } from "@/app/lib/grow-plan";
 import { MIN_SAMPLES, STRAIN_PLANT_COLUMNS, strainDurationIndex, strainKey, strainStats } from "@/app/lib/strain-stats";
 import GrowPlanModal from "@/components/GrowPlanModal";
+import ShareCycleButton from "@/components/ShareCycleButton";
 import CycleHarvestSection from "@/components/CycleHarvestSection";
 
 /** Cuántas mediciones se traen para el historial de clima (unos tres meses). */
@@ -140,6 +142,12 @@ export default async function CycleDetailPage({ params }: { params: Promise<{ id
               {estimate.daysLeft > 0 ? ` · en ${estimate.daysLeft} días` : estimate.daysLeft === 0 ? ' · hoy' : ` · hace ${-estimate.daysLeft} días`}
             </span>
           )}
+
+          <Link href={`/cycles/${cycle.id}/reporte`} className="btn btn-sm btn-ghost">
+            <FileText size={15} aria-hidden="true" />
+            Reporte
+          </Link>
+          <ShareCycleButton cycleId={cycle.id} cycleName={cycle.name} />
 
           {cycle.is_active && activePlants.length > 0 && (
             <GrowPlanModal
