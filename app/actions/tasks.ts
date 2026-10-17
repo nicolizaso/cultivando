@@ -1,6 +1,5 @@
 'use server'
 
-import { createClient } from "@/app/lib/supabase-server"
 import { requireUser } from "@/app/lib/auth"
 import type { ServerSupabase } from "@/app/lib/auth"
 import { TASK_TYPES, getTaskType } from "@/app/lib/constants"
@@ -821,9 +820,9 @@ export async function deleteTaskSeries(recurrenceId: string, currentTaskId: stri
 }
 
 export async function getAllPendingTasks() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { error: 'Debes iniciar sesión.' }
+  const session = await requireUser()
+  if ('error' in session) return { error: session.error }
+  const { supabase, user } = session
 
   const [tasksResult, cyclesResult] = await Promise.all([
      supabase
@@ -877,9 +876,9 @@ export async function getEsquejadoCandidates(rawTaskId: string | number) {
   const taskId = parseId(rawTaskId)
   if (!taskId) return { error: 'Esa tarea no es válida.' }
 
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { error: 'Debes iniciar sesión.' }
+  const session = await requireUser()
+  if ('error' in session) return { error: session.error }
+  const { supabase, user } = session
 
   const { data: task, error: taskError } = await supabase
     .from('tasks')

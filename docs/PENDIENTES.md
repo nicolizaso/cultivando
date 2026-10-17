@@ -30,6 +30,7 @@ Supabase (pegar el archivo entero y ejecutar) o con `supabase db push`:
 3. `20261017160000_tareas.sql`
 4. `20261017170000_plantas.sql`
 5. `20261017180000_bitacora_y_borrados.sql`
+6. `20261017190000_rendimiento.sql`
 
 ---
 
@@ -70,6 +71,8 @@ Checklist para el preview del PR, una vez hechos los pasos de arriba:
 - [ ] Editar una tarea de una serie con "Esta y todas las futuras", cambiando la fecha: todas se corren igual.
 - [ ] En una cuenta sin espacios, "Omitir por ahora" en la bienvenida y recargar: no vuelve a aparecer.
 - [ ] En un ciclo con plantas numeradas ("X #1-6"), tocar el grupo: la lista de plantas abre filtrada.
+- [ ] Después de aplicar `rendimiento.sql`: entrar, ver plantas, ciclos, espacios, nutrición y agenda; crear y borrar algo en cada una (las reglas de acceso se reescribieron).
+- [ ] En Supabase → Advisors → Performance: ya no aparecen los avisos "Auth RLS Initialization Plan" ni los de claves foráneas sin índice de las tablas de Cultivando.
 
 ---
 

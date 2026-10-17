@@ -1,4 +1,4 @@
-import { createClient } from "@/app/lib/supabase-server";
+import { getCurrentUser } from "@/app/lib/auth";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
 import PageShell from "@/components/layout/PageShell";
@@ -8,9 +8,8 @@ import DashboardData from "@/components/DashboardData";
 export const dynamic = 'force-dynamic';
 
 export default async function Home() {
-  const supabase = await createClient();
-
-  const { data: { user } } = await supabase.auth.getUser();
+  // La misma verificación que ya hizo el layout: `getCurrentUser` la comparte.
+  const user = await getCurrentUser();
   if (!user) redirect('/login');
 
   return (

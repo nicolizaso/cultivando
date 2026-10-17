@@ -5,7 +5,7 @@ import BottomNav from "@/components/BottomNav";
 import DesktopNavbar from "@/components/DesktopNavbar";
 import { ToastProvider } from "@/app/context/ToastContext";
 import { ThemeProvider } from "@/components/ThemeProvider";
-import { createClient } from "@/app/lib/supabase-server";
+import { getCurrentUser } from "@/app/lib/auth";
 
 const outfit = Outfit({
   weight: ["500", "600", "700"],
@@ -63,10 +63,7 @@ export default async function RootLayout({
 }>) {
   // La identidad se resuelve una sola vez acá. Antes cada página se la pasaba
   // a su propia cabecera, y la navegación no tenía forma de conocerla.
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
 
   return (
     <html lang="es" suppressHydrationWarning>

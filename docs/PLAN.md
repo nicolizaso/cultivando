@@ -101,9 +101,9 @@ Lo que te toca hacer a vos está en `docs/PENDIENTES.md`.
 - [x] Los links `/plants?search=` filtran.
 
 ### Etapa 6 · Rendimiento
-- [ ] Base: políticas con `(select auth.uid())`, índices en `user_id`, relaciones y `tasks.due_date`; fuera `idx_tasks_date`.
+- [x] Base: políticas con `(select auth.uid())` y `to authenticated`, índices en `user_id`, relaciones y `tasks(user_id, due_date)`; fuera `idx_tasks_date` e `idx_tasks_user_id` (`20261017190000_rendimiento.sql`).
 - [x] Ficha de ciclo con consultas en paralelo. *(Hecho en la Etapa 4.)*
-- [ ] Sesión verificada una sola vez por página.
+- [x] Sesión verificada una sola vez por página (`getCurrentUser` con `cache`).
 - [x] Agenda por mes y agrupada por día. *(Hecho en la Etapa 4.)*
 - [x] Menos consultas al crear o editar series de tareas. *(Hecho en las Etapas 2 y 5.)*
 
