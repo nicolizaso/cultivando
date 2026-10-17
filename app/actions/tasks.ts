@@ -1,6 +1,9 @@
 'use server'
 
 import { createClient } from "@/app/lib/supabase-server"
+import { requireUser } from "@/app/lib/auth"
+import { friendlyDbError } from "@/app/lib/errors"
+import { parseIds } from "@/app/lib/sanitize"
 import { revalidatePath } from "next/cache"
 import { randomUUID } from 'crypto'
 import { mapTaskCycles } from "../lib/utils"
@@ -140,7 +143,7 @@ export async function createTask(formData: any) {
   }));
 
   const { data: insertedTasks, error } = await supabase.from('tasks').insert(tasksData).select('id');
-  if (error) return { error: error.message };
+  if (error) return { error: friendlyDbError(error, 'No se pudo agendar la tarea.', {}, 'Error creando tareas:') };
 
   // 4. Link Plants and Cycles via Junction Tables
   if (insertedTasks) {
@@ -187,7 +190,9 @@ export async function createTask(formData: any) {
 // --- NUEVAS FUNCIONES PARA EL POPUP ---
 
 export async function updateTask(taskId: string | number, updates: any, scope: 'single' | 'all_future' = 'single', recurrenceId?: string) {
-  const supabase = await createClient()
+  const session = await requireUser()
+  if ('error' in session) return { error: session.error }
+  const { supabase } = session
   
   if (scope === 'single') {
     const { error } = await supabase
@@ -202,7 +207,7 @@ export async function updateTask(taskId: string | number, updates: any, scope: '
       })
       .eq('id', taskId)
 
-    if (error) return { error: error.message }
+    if (error) return { error: friendlyDbError(error, 'No se pudo actualizar la tarea.', {}, 'Error actualizando tarea:') }
   } else if (scope === 'all_future' && recurrenceId) {
     // 1. Fetch current task to get old date
     const { data: currentTask, error: fetchError } = await supabase
@@ -211,7 +216,7 @@ export async function updateTask(taskId: string | number, updates: any, scope: '
       .eq('id', taskId)
       .single()
 
-    if (fetchError || !currentTask) return { error: 'Task not found' }
+    if (fetchError || !currentTask) return { error: 'No se encontró la tarea.' }
 
     // 2. Calculate delta days
     // Ensure we parse dates correctly (YYYY-MM-DD)
@@ -231,7 +236,7 @@ export async function updateTask(taskId: string | number, updates: any, scope: '
       .eq('recurrence_id', recurrenceId)
       .gte('due_date', currentTask.due_date)
 
-    if (listError) return { error: listError.message }
+    if (listError) return { error: friendlyDbError(listError, 'No se pudo leer la serie.', {}, 'Error leyendo la serie:') }
     if (!futureTasks || futureTasks.length === 0) return { success: true }
 
     // 4. Update each task
@@ -263,14 +268,19 @@ export async function updateTask(taskId: string | number, updates: any, scope: '
 }
 
 export async function deleteTasks(taskIds: (string | number)[]) {
-  const supabase = await createClient()
+  const session = await requireUser()
+  if ('error' in session) return { error: session.error }
+  const { supabase } = session
+
+  const ids = parseIds(taskIds)
+  if (ids.length === 0) return { error: 'No hay tareas seleccionadas.' }
 
   const { error } = await supabase
     .from('tasks')
     .delete()
-    .in('id', taskIds)
+    .in('id', ids)
 
-  if (error) return { error: error.message }
+  if (error) return { error: friendlyDbError(error, 'No se pudieron eliminar las tareas.', {}, 'Error eliminando tareas:') }
 
   revalidatePath('/')
   revalidatePath('/calendar')
@@ -278,7 +288,11 @@ export async function deleteTasks(taskIds: (string | number)[]) {
 }
 
 export async function toggleTaskStatus(taskId: string | number, newStatus: 'pending' | 'completed') {
-  const supabase = await createClient()
+  const session = await requireUser()
+  if ('error' in session) return { error: session.error }
+  const { supabase } = session
+
+  if (newStatus !== 'pending' && newStatus !== 'completed') return { error: 'Estado inválido.' }
 
   // Check current status to prevent duplicate logs/updates
   const { data: currentTask, error: fetchError } = await supabase
@@ -287,7 +301,7 @@ export async function toggleTaskStatus(taskId: string | number, newStatus: 'pend
     .eq('id', taskId)
     .single()
 
-  if (fetchError) return { error: fetchError.message }
+  if (fetchError || !currentTask) return { error: friendlyDbError(fetchError, 'No se encontró la tarea.', {}, 'Error leyendo la tarea:') }
   if (currentTask.status === newStatus) return { success: true }
 
   const completedAt = new Date().toISOString()
@@ -303,7 +317,7 @@ export async function toggleTaskStatus(taskId: string | number, newStatus: 'pend
     .update(updateData)
     .eq('id', taskId)
 
-  if (error) return { error: error.message }
+  if (error) return { error: friendlyDbError(error, 'No se pudo actualizar la tarea.', {}, 'Error cambiando el estado de la tarea:') }
 
   let effects: TaskCompletionEffects | null = null
   let ambiente: AmbienteMoveResult | null = null
@@ -558,36 +572,14 @@ async function applyTaskCompletionEffect(
   return { kind: 'stage', count: ids.length, stage: effect.stage }
 }
 
-export async function completeTask(taskId: string | number) {
-  const supabase = await createClient()
-  
-  const { error } = await supabase
-    .from('tasks')
-    .update({ status: 'completed' })
-    .eq('id', taskId)
-
-  if (error) return { error: error.message }
-  
-  revalidatePath('/')
-  return { success: true }
-}
-
 export async function deleteTask(taskId: string | number) {
-  const supabase = await createClient()
-  
-  const { error } = await supabase
-    .from('tasks')
-    .delete()
-    .eq('id', taskId)
-
-  if (error) return { error: error.message }
-  
-  revalidatePath('/')
-  return { success: true }
+  return deleteTasks([taskId])
 }
 
 export async function deleteTaskSeries(recurrenceId: string, currentTaskId: string | number, scope: 'this' | 'series') {
-  const supabase = await createClient()
+  const session = await requireUser()
+  if ('error' in session) return { error: session.error }
+  const { supabase } = session
 
   if (scope === 'this') {
     return deleteTask(currentTaskId)
@@ -600,14 +592,14 @@ export async function deleteTaskSeries(recurrenceId: string, currentTaskId: stri
       .select('id')
       .eq('recurrence_id', recurrenceId)
 
-    if (error) return { error: error.message }
+    if (error) return { error: friendlyDbError(error, 'No se pudo leer la serie.', {}, 'Error leyendo la serie:') }
     if (!tasks || tasks.length === 0) return { success: true }
 
     const ids = tasks.map((t: any) => t.id)
     return deleteTasks(ids)
   }
 
-  return { error: 'Invalid scope' }
+  return { error: 'Opción inválida.' }
 }
 
 export async function getAllPendingTasks() {
@@ -628,8 +620,8 @@ export async function getAllPendingTasks() {
       .eq('is_active', true)
   ])
 
-  if (tasksResult.error) return { error: tasksResult.error.message }
-  if (cyclesResult.error) return { error: cyclesResult.error.message }
+  if (tasksResult.error) return { error: friendlyDbError(tasksResult.error, 'No se pudieron cargar las tareas.', {}, 'Error leyendo tareas pendientes:') }
+  if (cyclesResult.error) return { error: friendlyDbError(cyclesResult.error, 'No se pudieron cargar los ciclos.', {}, 'Error leyendo ciclos:') }
 
   // Map tasks to flatten cycleName
   const tasks = tasksResult.data.map((t: any) => {
@@ -767,7 +759,7 @@ export async function completeEsquejado(
       .update({ status: 'completed', completed_at: new Date().toISOString() })
       .eq('id', taskId)
 
-    if (error) return { error: error.message }
+    if (error) return { error: friendlyDbError(error, 'No se pudo completar la tarea.', {}, 'Error completando el esquejado:') }
 
     revalidateEsquejado()
     return { success: true, created: 0, alreadyRegistered: previous }
@@ -818,7 +810,7 @@ export async function completeEsquejado(
       })
       .eq('id', taskId)
 
-    if (error) return { error: error.message }
+    if (error) return { error: friendlyDbError(error, 'No se pudo completar la tarea.', {}, 'Error completando el esquejado:') }
 
     revalidateEsquejado()
     return { success: true, created: 0 }
@@ -924,7 +916,7 @@ export async function completeEsquejado(
     })
     .eq('id', taskId)
 
-  if (updateError) return { error: updateError.message }
+  if (updateError) return { error: friendlyDbError(updateError, 'Los esquejes se crearon pero la tarea no se pudo cerrar.', {}, 'Error cerrando el esquejado:') }
 
   revalidateEsquejado()
   return { success: true, created: total, cycleId: targetCycleId, cycleName: targetCycleName }

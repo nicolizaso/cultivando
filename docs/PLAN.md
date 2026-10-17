@@ -13,6 +13,15 @@ siguiente. Lo del esquema `vicio` queda afuera: esa tienda no está online.
 - **Borrar una planta:** borra también su bitácora, como promete el aviso.
 - **Huso horario:** fijo en Argentina (`America/Argentina/Buenos_Aires`).
 
+## Migraciones en dos partes
+
+- `supabase/migrations/`: compatibles con la versión publicada. Se aplican antes
+  de probar el preview.
+- `supabase/post-deploy/`: cierran lo que la versión vieja todavía usa. Se
+  aplican después del merge.
+
+Lo que te toca hacer a vos está en `docs/PENDIENTES.md`.
+
 ## Cómo se trabaja cada etapa
 
 1. Código y migración (`supabase/migrations/`) en la rama de la sesión.
@@ -36,17 +45,18 @@ siguiente. Lo del esquema `vicio` queda afuera: esa tienda no está online.
 - [x] Scripts `test` y `typecheck`; fuera `export`, `gh-pages`, `homepage` y `dotenv`.
 
 ### Etapa 1 · Seguridad
-- [ ] Base: sacar a `anon` de `email_for_username` y `handle_new_user`.
-- [ ] Base: `search_path` fijo en `current_age_days` y `days_in_stage`.
-- [ ] Bucket `images`: borrado del propio dueño, sin listado público, 5 MB y sólo imágenes.
-- [ ] Borrar las 4 reglas del bucket inexistente `plant-photos`.
-- [ ] Borrar los 11 archivos huérfanos (6,3 MB), con confirmación.
-- [ ] Login por usuario resuelto en el servidor.
-- [ ] Server Actions: verifican sesión y aceptan sólo campos permitidos.
-- [ ] Subidas: validación de tipo y tamaño, carpeta por usuario, límite de las Server Actions.
-- [ ] Errores amigables en vez de los mensajes crudos de la base.
-- [ ] Contraseña mínima de 8 caracteres.
-- [ ] (Panel de Supabase) Activar la protección contra contraseñas filtradas.
+- [x] Base: sacar a `anon` de `email_for_username` (cierre) y de `handle_new_user`.
+- [x] Base: `search_path` fijo en `current_age_days` y `days_in_stage`.
+- [x] Base: nombre de usuario único sin distinguir mayúsculas.
+- [x] Bucket `images`: cada uno ve y borra lo suyo, sin listado público, 5 MB y sólo imágenes; subida sólo en la carpeta propia (cierre).
+- [x] Borrar las 4 reglas del bucket inexistente `plant-photos`.
+- [x] Script para borrar los 11 archivos huérfanos (`scripts/limpiar-fotos-huerfanas.mjs`; lo corrés vos).
+- [x] Login por usuario resuelto en el servidor con la clave de servicio.
+- [x] Server Actions de tareas, ciclos, espacios y bitácora: verifican sesión; `updateSpace` y `updateCycleImage` aceptan sólo sus campos.
+- [x] Subidas: validación de tipo y tamaño en el servidor, carpeta por usuario, límite de las Server Actions a 4 MB; la bitácora sube por el servidor.
+- [x] Errores amigables en vez de los mensajes crudos de la base (tareas, ciclos, espacios, bitácora).
+- [x] Contraseña mínima de 8 caracteres y validación de email y usuario al registrarse.
+- [ ] (Vos, panel de Supabase) Activar la protección contra contraseñas filtradas.
 
 ### Etapa 2 · Nutrición
 - [ ] Tipos y pantallas con los nombres reales de las columnas.
