@@ -77,6 +77,8 @@ Checklist para el preview del PR, una vez hechos los pasos de arriba:
 - [ ] Agregar una planta: el desplegable de ciclos y el de madres se cargan; elegir una madre completa genética y nombre.
 - [ ] "Gestionar tareas" en el panel: filtrar por ciclo muestra las tareas de ese ciclo.
 - [ ] Editar un producto y un combo de nutrición, cerrar y abrir otro: cada uno abre con sus datos.
+- [ ] Ficha de un ciclo con varias mediciones: aparece el historial; pasar el dedo o el mouse muestra los tres valores del día; el botón de tabla muestra lo mismo en filas.
+- [ ] Ficha de un ciclo en floración: el VPD dice "ideal 1,2–1,6 kPa en Floración"; en "VPD por etapa" aparecen las etapas que pasó el ciclo.
 - [ ] En Supabase → Advisors → Performance: ya no aparecen los avisos "Auth RLS Initialization Plan" ni los de claves foráneas sin índice de las tablas de Cultivando.
 
 ---

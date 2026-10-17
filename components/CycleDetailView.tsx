@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useMemo, useState, useRef } from "react";
 import { useIsClient } from "@/app/hooks/useIsClient";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
@@ -12,7 +12,8 @@ import {
 } from "lucide-react";
 
 import { Plant, CycleImage, Measurement } from "@/app/lib/types";
-import { vpd } from "@/app/lib/climate";
+import { climateByStage, climateSeries, dominantStage, stageClimate, stagePeriods, vpd, vpdLevel, DEFAULT_VPD_RANGE } from "@/app/lib/climate";
+import ClimateHistory from "./ClimateHistory";
 import { dateKey, daysBetweenKeys, formatDay } from "@/app/lib/dates";
 import { getPlantMetrics, getStageColor } from "@/app/lib/utils";
 import BulkStageModal from "./BulkStageModal";
@@ -36,7 +37,7 @@ interface CycleDetailViewProps {
 
 type ViewMode = 'table' | 'grid';
 
-export default function CycleDetailView({ cycle, plants, lastMeasurement, cycleImages = [] }: CycleDetailViewProps) {
+export default function CycleDetailView({ cycle, plants, lastMeasurement, history, cycleImages = [] }: CycleDetailViewProps) {
   const router = useRouter();
   const { showToast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -167,15 +168,26 @@ export default function CycleDetailView({ cycle, plants, lastMeasurement, cycleI
 
   const vpdValue = lastMeasurement ? vpd(lastMeasurement.temperature, lastMeasurement.humidity) : null;
 
-  // El rango sano se dice con palabras además de con color: quien no distingue
-  // el verde del rojo tiene que poder leer el diagnóstico igual.
-  const vpdStatus = vpdValue === null
+  // El rango sano depende de la etapa: un VPD de 1,4 es ideal en floración y
+  // demasiado alto para un esqueje. Antes el rango era fijo (0,4 a 1,6).
+  const cycleStage = dominantStage(plants);
+  const climate = stageClimate(cycleStage);
+  const vpdRange = climate?.vpd ?? DEFAULT_VPD_RANGE;
+  const level = vpdLevel(vpdValue, vpdRange);
+
+  // Se dice con palabras además de con color: quien no distingue el verde del
+  // rojo tiene que poder leer el diagnóstico igual.
+  const rangeText = `${vpdRange.min.toLocaleString('es-AR')}–${vpdRange.max.toLocaleString('es-AR')} kPa${cycleStage && climate ? ` en ${cycleStage}` : ''}`;
+  const vpdStatus = level === 'unknown'
     ? { label: 'Sin medición', tone: 'text-fg-muted' }
-    : vpdValue < 0.4
-      ? { label: 'Bajo, riesgo de hongos', tone: 'text-[color:var(--danger)]' }
-      : vpdValue > 1.6
-        ? { label: 'Alto, la planta transpira de más', tone: 'text-[color:var(--danger)]' }
-        : { label: 'En rango', tone: 'text-[color:var(--success)]' };
+    : level === 'low'
+      ? { label: `Bajo, riesgo de hongos (ideal ${rangeText})`, tone: 'text-[color:var(--danger)]' }
+      : level === 'high'
+        ? { label: `Alto, la planta transpira de más (ideal ${rangeText})`, tone: 'text-[color:var(--danger)]' }
+        : { label: `En rango (${rangeText})`, tone: 'text-[color:var(--success)]' };
+
+  const climatePoints = useMemo(() => climateSeries(history), [history]);
+  const climateStages = useMemo(() => climateByStage(climatePoints, stagePeriods(plants)), [climatePoints, plants]);
 
   const toggleSelectAll = () => {
     setSelectedPlants(
@@ -243,6 +255,13 @@ export default function CycleDetailView({ cycle, plants, lastMeasurement, cycleI
             <p className={`mt-1 text-xs font-medium ${vpdStatus.tone}`}>{vpdStatus.label}</p>
           </div>
         </div>
+
+        <ClimateHistory
+          points={climatePoints}
+          stageLabel={cycleStage}
+          climate={climate}
+          byStage={climateStages}
+        />
       </section>
 
       {/* 2. Plantas del ciclo */}

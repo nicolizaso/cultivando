@@ -11,8 +11,8 @@ import { Space } from "@/app/lib/types";
 import { parseId } from "@/app/lib/sanitize";
 import { formatDay } from "@/app/lib/dates";
 
-/** Cuántas mediciones se traen para el historial de clima. */
-const HISTORY_SIZE = 30;
+/** Cuántas mediciones se traen para el historial de clima (unos tres meses). */
+const HISTORY_SIZE = 120;
 
 export default async function CycleDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const supabase = await createClient();

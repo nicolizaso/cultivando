@@ -136,7 +136,11 @@ Lo que te toca hacer a vos está en `docs/PENDIENTES.md`.
 | 16 | Exportar o compartir un ciclo | 8 y 14 |
 | 17 | Notificaciones push | 5 y 8 |
 
-- [ ] Etapa 8 · Clima histórico y VPD por etapa
+- [x] Etapa 8 · Clima histórico y VPD por etapa — en la ficha del ciclo: temperatura,
+  humedad y VPD en tres paneles con el mismo eje de fechas, la franja del rango sano
+  para la etapa del ciclo, cursor sincronizado, vista de tabla y "VPD por etapa"
+  (promedios y % de días en rango). El diagnóstico del VPD actual usa el rango de la
+  etapa en vez de uno fijo.
 - [ ] Etapa 9 · Timelapse del ciclo
 - [ ] Etapa 10 · Linaje de madres y esquejes
 - [ ] Etapa 11 · Estadísticas por genética
