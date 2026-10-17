@@ -16,9 +16,25 @@ Proyecto → Settings → Environment Variables. Cargalas para **Production** y
 
 | Variable | De dónde sale | Para qué |
 |---|---|---|
-| `SUPABASE_SERVICE_ROLE_KEY` | Supabase → Project Settings → API Keys → `service_role` (secreta) | Login con nombre de usuario. Sin ella, se entra sólo con email. |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase → Project Settings → API Keys → `service_role` (secreta) | Login con nombre de usuario y el aviso diario. Sin ella, se entra sólo con email y no salen avisos. |
+| `NEXT_PUBLIC_VAPID_PUBLIC_KEY` | La "Public Key" que imprime `npx web-push generate-vapid-keys` (ver abajo) | Que el navegador pueda suscribirse a los avisos. |
+| `VAPID_PRIVATE_KEY` | La "Private Key" del mismo comando (secreta) | Firmar cada aviso. |
+| `VAPID_SUBJECT` | `mailto:` + tu email, por ejemplo `mailto:tu-email@ejemplo.com` | Contacto que piden los servicios de push. |
+| `CRON_SECRET` | Cualquier texto largo al azar (por ejemplo, el resultado de `openssl rand -hex 32`) | Que sólo el cron de Vercel pueda disparar el aviso diario. |
 
-Nunca la cargues con prefijo `NEXT_PUBLIC_`: saltea la seguridad de la base.
+Nunca cargues `SUPABASE_SERVICE_ROLE_KEY` ni `VAPID_PRIVATE_KEY` con prefijo
+`NEXT_PUBLIC_`: quedarían a la vista en el navegador.
+
+Para las claves VAPID, en tu compu (una sola vez; no las cambies después o los
+dispositivos suscriptos dejan de recibir):
+
+```
+npx web-push generate-vapid-keys
+```
+
+El aviso diario corre con el cron de `vercel.json` a las 8:00 de Argentina
+(11:00 UTC) y **sólo en Production**: en el preview se prueba con el botón
+"Mandar uno ahora".
 
 ### 1.2 · Migraciones compatibles (`supabase/migrations/`)
 Se pueden aplicar con la versión actual publicada: no rompen nada de lo que
@@ -36,6 +52,7 @@ Supabase (pegar el archivo entero y ejecutar) o con `supabase db push`:
 9. `20261017220000_stock.sql`
 10. `20261017230000_cosechas.sql`
 11. `20261017240000_compartir.sql`
+12. `20261017250000_notificaciones.sql`
 
 ---
 
@@ -97,6 +114,8 @@ Checklist para el preview del PR, una vez hechos los pasos de arriba:
 - [ ] Ciclo en vegetativo → "Plan de cultivo": elegir productos, destildar un par de tareas y crear; aparecen en la agenda con la receta de su semana. Después, el tachito al lado borra las pendientes del plan.
 - [ ] Ciclo → "Reporte": "Imprimir o guardar PDF" y bajar los cuatro CSV; abrirlos en Excel (acentos y decimales bien).
 - [ ] Ciclo → "Compartir": copiar el enlace y abrirlo en una ventana privada (sin sesión): se ve el ciclo y no la bitácora. "Cortar enlace" y recargar: ya no abre.
+- [ ] Menú de la cuenta (en el celular: "Más") → "Notificaciones" → "Activar en este dispositivo" y "Mandar uno ahora": llega el resumen del día. En iPhone, primero agregá la app a la pantalla de inicio.
+- [ ] Tocar la notificación abre la app.
 - [ ] En Supabase → Advisors → Performance: ya no aparecen los avisos "Auth RLS Initialization Plan" ni los de claves foráneas sin índice de las tablas de Cultivando.
 
 ---

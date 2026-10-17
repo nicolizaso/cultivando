@@ -179,4 +179,9 @@ Lo que te toca hacer a vos está en `docs/PENDIENTES.md`.
   bitácora, clima y cosechas (separador ";" y coma decimal, para Excel en español).
   "Compartir" crea un enlace de sólo lectura (`cycle_shares`, token al azar) que se abre
   sin cuenta en `/compartido/…` vía `get_shared_cycle`; se puede cortar.
-- [ ] Etapa 17 · Notificaciones push
+- [x] Etapa 17 · Notificaciones push — Web Push con VAPID (`web-push`), service worker
+  `public/sw.js` que sólo muestra avisos, tabla `push_subscriptions` con preferencias por
+  dispositivo y "Notificaciones" en el menú de la cuenta (activar, elegir qué avisar,
+  mandar uno de prueba). Cron diario de Vercel (8:00 de Argentina) protegido con
+  `CRON_SECRET`: tareas del día, atrasadas, VPD fuera de rango y stock bajo, una vez por
+  día; borra las suscripciones que el navegador dio de baja.

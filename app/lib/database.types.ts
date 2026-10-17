@@ -539,6 +539,45 @@ export type Database = {
         }
         Relationships: []
       }
+      push_subscriptions: {
+        Row: {
+          auth: string
+          created_at: string
+          endpoint: string
+          failures: number
+          id: number
+          last_sent_on: string | null
+          p256dh: string
+          prefs: Json
+          user_agent: string | null
+          user_id: string
+        }
+        Insert: {
+          auth: string
+          created_at?: string
+          endpoint: string
+          failures?: number
+          id?: never
+          last_sent_on?: string | null
+          p256dh: string
+          prefs?: Json
+          user_agent?: string | null
+          user_id?: string
+        }
+        Update: {
+          auth?: string
+          created_at?: string
+          endpoint?: string
+          failures?: number
+          id?: never
+          last_sent_on?: string | null
+          p256dh?: string
+          prefs?: Json
+          user_agent?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       spaces: {
         Row: {
           area_m2: number | null

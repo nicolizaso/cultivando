@@ -2,10 +2,12 @@
 
 import { useState, useRef, useEffect } from "react";
 import { signout } from "@/app/login/actions";
-import { LogOut, ChevronDown } from "lucide-react";
+import { Bell, LogOut, ChevronDown } from "lucide-react";
+import NotificationSettings from "@/components/NotificationSettings";
 
 export default function UserMenu({ email }: { email?: string }) {
   const [isOpen, setIsOpen] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -95,6 +97,18 @@ export default function UserMenu({ email }: { email?: string }) {
             <button
               type="button"
               role="menuitem"
+              onClick={() => {
+                setIsOpen(false);
+                setShowNotifications(true);
+              }}
+              className="flex w-full items-center gap-3 rounded-[var(--radius-md)] px-3 py-2.5 text-left text-sm font-medium text-fg transition-colors hover:bg-surface-2"
+            >
+              <Bell size={16} aria-hidden="true" />
+              Notificaciones
+            </button>
+            <button
+              type="button"
+              role="menuitem"
               onClick={() => signout()}
               className="group flex w-full items-center gap-3 rounded-[var(--radius-md)] px-3 py-2.5 text-left text-sm font-medium text-[color:var(--danger)] transition-colors hover:bg-[color:var(--danger-soft)]"
             >
@@ -104,6 +118,8 @@ export default function UserMenu({ email }: { email?: string }) {
           </div>
         </div>
       )}
+
+      <NotificationSettings isOpen={showNotifications} onClose={() => setShowNotifications(false)} />
     </div>
   );
 }
