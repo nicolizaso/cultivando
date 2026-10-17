@@ -85,6 +85,8 @@ Checklist para el preview del PR, una vez hechos los pasos de arriba:
 - [ ] Editar una planta y marcar "Planta madre": en Plantas aparece el filtro "Madres" y al crear un esqueje sale primera.
 - [ ] Plantas → "Genéticas": aparecen tus genéticas con sus días por etapa; tocar una abre la lista filtrada.
 - [ ] Con dos plantas de una genética que ya terminaron la floración, una tercera en floración recibe el aviso "pasaron a secado a los N días".
+- [ ] Ficha de una planta → "Regar": cargar litros, pH y EC; en la bitácora aparece "2 L · pH 6,2 · EC 1,4 (700 ppm)" y en "Último riego" también.
+- [ ] Riego en lote con la calculadora: elegir un combo, poner los litros y "Anotar en la nota".
 - [ ] En Supabase → Advisors → Performance: ya no aparecen los avisos "Auth RLS Initialization Plan" ni los de claves foráneas sin índice de las tablas de Cultivando.
 
 ---

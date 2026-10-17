@@ -14,6 +14,7 @@ import {
 import { Plant, CycleImage, Measurement } from "@/app/lib/types";
 import { climateByStage, climateSeries, dominantStage, stageClimate, stagePeriods, vpd, vpdLevel, DEFAULT_VPD_RANGE } from "@/app/lib/climate";
 import ClimateHistory from "./ClimateHistory";
+import { averageDays, weekInStage } from "@/app/lib/nutrition";
 import CycleTimelapse from "./CycleTimelapse";
 import { buildTimelapseFrames, plantsWithFrames } from "@/app/lib/timelapse";
 import type { PhotoLog } from "@/app/lib/timelapse";
@@ -665,7 +666,13 @@ export default function CycleDetailView({ cycle, plants, lastMeasurement, histor
 
       <BulkArchiveModal isOpen={isArchiveModalOpen} onClose={() => setIsArchiveModalOpen(false)} selectedIds={selectedPlants} onSuccess={handleBulkSuccess} />
       <BulkStageModal isOpen={isStageModalOpen} onClose={() => setIsStageModalOpen(false)} selectedIds={selectedPlants} onSuccess={handleBulkSuccess} />
-      <BulkWaterModal isOpen={isWaterModalOpen} onClose={() => setIsWaterModalOpen(false)} selectedIds={selectedPlants} onSuccess={handleBulkSuccess} />
+      <BulkWaterModal
+        isOpen={isWaterModalOpen}
+        onClose={() => setIsWaterModalOpen(false)}
+        selectedIds={selectedPlants}
+        onSuccess={handleBulkSuccess}
+        defaultWeek={weekInStage(averageDays(plants.filter((p) => selectedPlants.includes(p.id)).map((p) => getPlantMetrics(p).daysInCurrentStage)))}
+      />
       <MeasurementModal isOpen={isMeasureModalOpen} onClose={() => setIsMeasureModalOpen(false)} cycleId={cycle.id} />
     </div>
   );

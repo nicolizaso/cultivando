@@ -153,7 +153,11 @@ Lo que te toca hacer a vos está en `docs/PENDIENTES.md`.
   ciclos, días promedio de vegetativo y floración, días hasta cosecha, cosechadas y
   pérdidas. El sugeridor del panel usa el promedio de la genética (con 2 plantas o más)
   y, con datos, también sugiere pasar a secado.
-- [ ] Etapa 12 · Riego con datos
+- [x] Etapa 12 · Riego con datos — el registro de riego (en lote, desde un ciclo o con
+  "Regar" en la ficha) guarda litros, pH, EC y, opcional, drenaje y temperatura del agua
+  en `logs.data.watering`, validados. Calculadora de nutrientes: ml de cada producto o
+  combo para esos litros y la semana de la etapa, que se anota en la nota. La ficha muestra
+  los datos del último riego.
 - [ ] Etapa 13 · Stock de fertilizantes
 - [ ] Etapa 14 · Cosecha y rendimiento
 - [ ] Etapa 15 · Plan de cultivo automático

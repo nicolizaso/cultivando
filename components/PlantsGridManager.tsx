@@ -19,6 +19,8 @@ import EmptyState from "@/components/EmptyState";
 import SegmentedControl from "@/components/ui/SegmentedControl";
 import SelectionBar from "@/components/ui/SelectionBar";
 import { useToast } from "@/app/context/ToastContext";
+import { averageDays, weekInStage } from "@/app/lib/nutrition";
+import { getPlantMetrics } from "@/app/lib/plant-metrics";
 
 interface Plant extends BasePlant {
   cycles?: { id: number; name: string; space_id: number } | null;
@@ -387,6 +389,7 @@ export default function PlantsGridManager({ plants, cycles, spaces, initialQuery
         onClose={() => setOpenModal(null)}
         selectedIds={targetIds}
         onSuccess={handleBulkSuccess}
+        defaultWeek={weekInStage(averageDays(plants.filter((p) => targetIds.includes(p.id)).map((p) => getPlantMetrics(p).daysInCurrentStage)))}
       />
 
       <BulkMoveCycleModal

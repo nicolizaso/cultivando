@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { requireUser } from "@/app/lib/auth";
 import type { ServerSupabase } from "@/app/lib/auth";
 import { friendlyDbError } from "@/app/lib/errors";
+import { describeWatering, hasWateringData, parseWateringData } from "@/app/lib/watering";
 import { LOG_TYPE } from "@/app/lib/logs";
 import { STAGE_DATE_COLUMNS, STAGE_NAMES, getStageDateColumn, isStageName } from "@/app/lib/stage-logic";
 import type { StageName } from "@/app/lib/stage-logic";
@@ -403,7 +404,7 @@ export async function bulkChangeStage(
 export async function bulkWaterPlants(
   plantIds: number[],
   date: string,
-  details: { amount?: string; nutrients?: string } = {}
+  details: { nutrients?: string; watering?: unknown } = {}
 ): Promise<BulkResult> {
   const timestamp = toTimestamp(date);
   const day = dateKey(date);
@@ -414,6 +415,11 @@ export async function bulkWaterPlants(
 
   const { supabase, userId, plants } = selection;
 
+  // pH, EC y litros: se validan antes de escribir nada.
+  const parsed = parseWateringData(details?.watering, plants.length);
+  if (parsed.error !== null) return { success: false, error: parsed.error };
+  const watering = parsed.data;
+
   const { error } = await supabase
     .from('plants')
     .update({ last_water: day })
@@ -423,8 +429,7 @@ export async function bulkWaterPlants(
     return { success: false, error: friendlyDbError(error, 'No se pudo registrar el riego.', {}, 'Error en el riego en lote:') };
   }
 
-  const amount = cleanText(details?.amount);
-  const nutrients = cleanText(details?.nutrients);
+  const nutrients = cleanText(details?.nutrients, 500);
 
   await logForEachPlant(
     supabase,
@@ -435,11 +440,14 @@ export async function bulkWaterPlants(
       title: 'Riego',
       notes: [
         plants.length > 1 ? `Riego en lote sobre ${plantCountLabel(plants.length)}.` : null,
-        amount ? `Cantidad: ${amount}` : null,
+        hasWateringData(watering) ? describeWatering(watering) : null,
         nutrients ? `Nutrientes: ${nutrients}` : null,
       ]
         .filter(Boolean)
         .join('\n'),
+      data: hasWateringData(watering) || nutrients
+        ? { ...(hasWateringData(watering) ? { watering: { ...watering } } : {}), ...(nutrients ? { nutrients } : {}) }
+        : null,
     },
     timestamp
   );

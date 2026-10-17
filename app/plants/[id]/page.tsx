@@ -10,7 +10,10 @@ import LogModal from "@/components/LogModal";
 import PlantMetricsDisplay from "@/components/PlantMetricsDisplay";
 import TimelineSection, { TimelineItem } from "@/components/TimelineSection";
 import { getPlantMetrics, getStageColor, getWaterStatus } from "@/app/lib/utils";
-import { canonicalLogType } from "@/app/lib/logs";
+import { LOG_TYPE, canonicalLogType } from "@/app/lib/logs";
+import { describeWatering, readWatering } from "@/app/lib/watering";
+import { weekInStage } from "@/app/lib/nutrition";
+import WaterPlantButton from "@/components/WaterPlantButton";
 import { getTaskType } from "@/app/lib/constants";
 import { parseId } from "@/app/lib/sanitize";
 import { taskAppliesToPlant } from "@/app/lib/task-effects";
@@ -154,6 +157,12 @@ export default async function PlantDetailPage({ params }: { params: Promise<{ id
     }))
   ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
+  // Los datos del último riego que los tenga (pH, EC, litros).
+  const lastWatering = logs
+    .filter((log) => canonicalLogType(log.type) === LOG_TYPE.water)
+    .map((log) => readWatering(log.data))
+    .find((data) => data !== null) ?? null;
+
   const { currentStage } = getPlantMetrics(plant);
   const rawStage = currentStage || plant.stage || '';
   const displayStage = (rawStage === 'Esqueje' || rawStage === 'Plántula') ? 'Plántula' : rawStage;
@@ -177,6 +186,7 @@ export default async function PlantDetailPage({ params }: { params: Promise<{ id
         subtitle={plant.strain || 'Genética sin cargar'}
         actions={
           <>
+            <WaterPlantButton plantId={plant.id} defaultWeek={weekInStage(getPlantMetrics(plant).daysInCurrentStage)} />
             <LogModal plantId={plant.id} plantName={plant.name} />
             <Link href={`/plants/${plant.id}/edit`} className="btn btn-secondary">
               <Pencil size={16} aria-hidden="true" />
@@ -256,6 +266,9 @@ export default async function PlantDetailPage({ params }: { params: Promise<{ id
               </dd>
               {water.level === 'late' && (
                 <p className="mt-1 text-xs text-[color:var(--danger)]">Lleva demasiados días sin agua.</p>
+              )}
+              {lastWatering && (
+                <p className="mt-1 text-xs text-fg-muted">{describeWatering(lastWatering)}</p>
               )}
             </div>
           </dl>
