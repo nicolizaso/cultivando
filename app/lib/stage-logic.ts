@@ -20,7 +20,7 @@ export function getStageSuggestion(plant: Plant, now: Date = new Date()): string
   if (plant.is_archived) return null;
 
   const { currentStage, totalAge } = getPlantMetrics(plant, now);
-  const threshold = STAGE_THRESHOLDS[currentStage || plant.stage];
+  const threshold = STAGE_THRESHOLDS[currentStage || plant.stage || ''];
 
   if (threshold && totalAge >= threshold.days) {
     return threshold.nextStage;

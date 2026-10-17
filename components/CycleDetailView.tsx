@@ -10,7 +10,9 @@ import {
   List as ListIcon, Loader2, Archive, Thermometer, Trash2, Gauge
 } from "lucide-react";
 
-import { Plant, CycleImage } from "@/app/lib/types";
+import { Plant, CycleImage, Measurement } from "@/app/lib/types";
+import { vpd } from "@/app/lib/climate";
+import { dateKey, daysBetweenKeys, formatDay } from "@/app/lib/dates";
 import { getPlantMetrics, getStageColor } from "@/app/lib/utils";
 import BulkStageModal from "./BulkStageModal";
 import BulkArchiveModal from "./BulkArchiveModal";
@@ -24,10 +26,10 @@ import SelectionBar from "@/components/ui/SelectionBar";
 import { uploadCycleImage, deleteCycleImages, updateCycleImage } from "@/app/cycles/actions";
 
 interface CycleDetailViewProps {
-  cycle: { id: number; name: string; start_date: string; spaces: { name: string; type: string }; };
+  cycle: { id: number; name: string; start_date: string | null; spaces: { name: string; type: string | null } | null };
   plants: Plant[];
-  lastMeasurement?: { temperature: number; humidity: number; date: string } | null;
-  history: any[];
+  lastMeasurement?: Pick<Measurement, 'temperature' | 'humidity' | 'date'> | null;
+  history: Measurement[];
   cycleImages?: CycleImage[];
 }
 
@@ -166,10 +168,7 @@ export default function CycleDetailView({ cycle, plants, lastMeasurement, cycleI
     }
   };
 
-  const vpdValue = lastMeasurement
-    ? (0.61078 * Math.exp((17.27 * lastMeasurement.temperature) / (lastMeasurement.temperature + 237.3))) *
-      (1 - lastMeasurement.humidity / 100)
-    : null;
+  const vpdValue = lastMeasurement ? vpd(lastMeasurement.temperature, lastMeasurement.humidity) : null;
 
   // El rango sano se dice con palabras además de con color: quien no distingue
   // el verde del rojo tiene que poder leer el diagnóstico igual.
@@ -219,7 +218,7 @@ export default function CycleDetailView({ cycle, plants, lastMeasurement, cycleI
               Temperatura
             </p>
             <p className="metric mt-2 text-3xl text-fg">
-              {lastMeasurement ? `${lastMeasurement.temperature}°` : '--'}
+              {lastMeasurement?.temperature != null ? `${lastMeasurement.temperature}°` : '--'}
             </p>
             <p className="mt-1 text-xs text-fg-subtle">Celsius</p>
           </div>
@@ -230,7 +229,7 @@ export default function CycleDetailView({ cycle, plants, lastMeasurement, cycleI
               Humedad
             </p>
             <p className="metric mt-2 text-3xl text-fg">
-              {lastMeasurement ? `${lastMeasurement.humidity}%` : '--'}
+              {lastMeasurement?.humidity != null ? `${lastMeasurement.humidity}%` : '--'}
             </p>
             <p className="mt-1 text-xs text-fg-subtle">Relativa</p>
           </div>
@@ -450,9 +449,10 @@ export default function CycleDetailView({ cycle, plants, lastMeasurement, cycleI
           <ul className="custom-scrollbar flex snap-x gap-3 overflow-x-auto pb-3">
             {cycleImages.map((img) => {
               const isSelected = selectedImages.includes(img.id);
-              const dayNumber = Math.max(0, Math.floor(
-                (new Date(img.taken_at).getTime() - new Date(cycle.start_date).getTime()) / (1000 * 60 * 60 * 24)
-              ));
+              // Día de cultivo de la foto, en días de calendario de Argentina.
+              const startKey = dateKey(cycle.start_date);
+              const photoKey = dateKey(img.taken_at ?? img.created_at);
+              const dayNumber = startKey && photoKey ? Math.max(0, daysBetweenKeys(startKey, photoKey)) : 0;
 
               return (
                 <li key={img.id} className="shrink-0 snap-center">
@@ -497,7 +497,7 @@ export default function CycleDetailView({ cycle, plants, lastMeasurement, cycleI
                     <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 to-transparent p-2.5 text-left">
                       <span className="mono block text-[11px] font-semibold text-white">Día {dayNumber}</span>
                       <span className="block text-[10px] text-white/75">
-                        {new Date(img.taken_at).toLocaleDateString('es-AR')}
+                        {formatDay(img.taken_at ?? img.created_at)}
                       </span>
                     </span>
                   </button>
@@ -548,7 +548,7 @@ export default function CycleDetailView({ cycle, plants, lastMeasurement, cycleI
                   type="date"
                   name="date"
                   data-autofocus
-                  defaultValue={new Date(selectedImage.taken_at).toLocaleDateString('en-CA')}
+                  defaultValue={dateKey(selectedImage.taken_at ?? selectedImage.created_at) ?? ''}
                   className="field-input"
                 />
               </div>

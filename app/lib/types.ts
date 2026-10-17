@@ -1,3 +1,4 @@
+import type { Tables } from './database.types';
 import type { DosageType, FertilizerStage, WeeklyDose } from './nutrition';
 
 export type CycleStage = 
@@ -9,60 +10,28 @@ export type CycleStage =
   | 'Secado' 
   | 'Curado';
 
-export interface Plant {
-  id: number;
-  name: string;
-  stage: string;
-  planted_at?: string; // ISO timestamp
-  stage_updated_at?: string; // ISO timestamp
-  /** Día del último riego ("YYYY-MM-DD"), o null si nunca se regó. */
-  last_water: string | null;
-  cycle_id: number | null;
-  image_url?: string;
-  strain?: string;
-  breeder?: string;
-  source_type?: 'Semilla' | 'Esqueje';
-  mother_id?: number | null;
-  date_germinacion?: string;
-  date_plantula?: string;
-  date_enraizamiento?: string;
-  date_vegetativo?: string;
-  date_floracion?: string;
-  date_secado?: string;
-  date_curado?: string;
-  is_archived?: boolean;
-}
+/*
+ * Las filas de la base salen de los tipos generados (`database.types.ts`):
+ * así un nombre de columna equivocado falla al compilar. Antes estos tipos se
+ * escribían a mano y se habían separado de la base (Nutrición leía columnas
+ * que no existían y nadie se enteraba hasta abrir la pantalla).
+ */
 
-export interface Cycle {
-  id: number;
-  name: string;
-  start_date: string;
-  is_active: boolean;
-  space_id: number;
-  stage?: CycleStage; // Opcional por si no lo usas aún
-}
+/** Una planta tal como está en la base. */
+export type Plant = Tables<'plants'>;
 
-export interface Space {
-  id: number;
-  name: string;
-  type: 'Indoor' | 'Outdoor' | 'Mixto';
-  cycleCount?: number;
-  width?: number;
-  length?: number;
-  height?: number;
-  area_m2?: number;
-  light_type?: string;
-  light_brand_model?: string;
-  light_watts?: number;
-  light_ppfd?: number;
-  vent_extraction?: number;
-  vent_intraction?: number;
-  vent_filter_brand?: string;
-  vent_extra_equipment?: string;
-  pot_capacity?: number;
-}
+/** Un ciclo tal como está en la base. */
+export type Cycle = Tables<'cycles'>;
 
-// ESTA ES LA INTERFAZ QUE FALTABA:
+export type SpaceType = 'Indoor' | 'Outdoor' | 'Mixto';
+
+/** Un espacio tal como está en la base, más el recuento que arma la página. */
+export type Space = Tables<'spaces'> & { cycleCount?: number };
+
+/** Una medición de clima. */
+export type Measurement = Tables<'measurements'>;
+
+/** Una tarea, con los ciclos que arma la página para filtrar y mostrar. */
 export interface Task {
   id: number | string;
   title: string;
@@ -70,7 +39,6 @@ export interface Task {
   completed?: boolean;
   status?: 'pending' | 'completed';
   completed_at?: string;
-  cycle_id?: number; // Deprecated
   cycleId?: string;
   cycleIds?: number[];
   cycleName?: string; // Deprecated
@@ -115,26 +83,11 @@ export interface TaskMetadata {
   [key: string]: unknown;
 }
 
-export interface Log {
-  id: number;
-  plant_id: number | null;
-  cycle_id?: number | null;
-  type: string;
-  title: string;
-  notes?: string;
-  media_url?: string[];
-  created_at: string;
-}
+/** Un registro de la bitácora. */
+export type Log = Tables<'logs'>;
 
-export interface CycleImage {
-  id: string;
-  cycle_id: number;
-  storage_path: string;
-  public_url: string;
-  taken_at: string; // ISO Timestamp
-  created_at: string; // ISO Timestamp
-  description?: string;
-}
+/** Una foto de la galería de un ciclo. */
+export type CycleImage = Tables<'cycle_images'>;
 
 /** Un fertilizante, con los nombres reales de las columnas de `fertilizers`. */
 export interface Fertilizer {

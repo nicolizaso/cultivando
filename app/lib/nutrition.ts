@@ -26,10 +26,11 @@ export const FERTILIZER_STAGE_LABELS: Record<FertilizerStage, string> = {
   lavado: 'Lavado de raíces',
 };
 
-export interface WeeklyDose {
+// `type` y no `interface`: así se puede guardar tal cual en una columna jsonb.
+export type WeeklyDose = {
   week: number;
   dose: number;
-}
+};
 
 export interface FertilizerDoseInfo {
   id: number;

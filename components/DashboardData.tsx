@@ -71,16 +71,8 @@ export default async function DashboardData({ user }: { user: { id: string } }) 
   const username = profile?.username;
 
   const activeCycles = (cyclesData || []) as unknown as CycleWithPlantsAndSpace[];
-  const mappedCyclesList = activeCycles.map(c => ({ id: c.id, name: c.name, space_id: c.space_id }));
 
-  const allTodayTasks = (tasksData || []).map((t: Task) => {
-    const { cycleIds, cycleNames } = mapTaskCycles(t, mappedCyclesList);
-    return {
-      ...t,
-      cycleIds,
-      cycleNames
-    };
-  }) as Task[];
+  const allTodayTasks = (tasksData || []).map((t) => ({ ...t, ...mapTaskCycles(t) })) as unknown as Task[];
 
   // Procesamiento
   const totalPlants = activeCycles.reduce((acc, cycle) => acc + (cycle.plants?.length || 0), 0);

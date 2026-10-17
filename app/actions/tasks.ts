@@ -23,6 +23,7 @@ import {
 } from "../lib/clones"
 import type { CloneEntry, CloneMother } from "../lib/clones"
 import type { TaskMetadata } from "../lib/types"
+import type { Json } from "../lib/database.types"
 import { moveCycleToSpace } from "../cycles/actions"
 import { bulkMoveToCycle } from "./plants"
 import { STAGE_DATE_COLUMNS, getStageDateColumn, isStageName } from "../lib/stage-logic"
@@ -249,7 +250,7 @@ export async function createTask(input: unknown) {
   })
 
   const { error } = await supabase.rpc('create_tasks', {
-    p_tasks: rows,
+    p_tasks: rows as unknown as Json,
     p_cycle_ids: linkedCycleIds,
     p_plant_ids: linkedPlantIds,
   })
@@ -263,7 +264,10 @@ export async function createTask(input: unknown) {
 
 // --- NUEVAS FUNCIONES PARA EL POPUP ---
 
-export async function updateTask(taskId: string | number, updates: any, scope: 'single' | 'all_future' = 'single', recurrenceId?: string) {
+export async function updateTask(rawTaskId: string | number, updates: any, scope: 'single' | 'all_future' = 'single', recurrenceId?: string) {
+  const taskId = parseId(rawTaskId)
+  if (!taskId) return { error: 'Esa tarea no es válida.' }
+
   const session = await requireUser()
   if ('error' in session) return { error: session.error }
   const { supabase } = session
@@ -277,7 +281,6 @@ export async function updateTask(taskId: string | number, updates: any, scope: '
         application_type: updates.application_type !== undefined ? updates.application_type : null,
         target_stage: updates.target_stage !== undefined ? updates.target_stage : null,
         due_date: updates.date,
-        date: updates.date
       })
       .eq('id', taskId)
 
@@ -329,7 +332,6 @@ export async function updateTask(taskId: string | number, updates: any, scope: '
         application_type: updates.application_type !== undefined ? updates.application_type : task.application_type,
         target_stage: updates.target_stage !== undefined ? updates.target_stage : task.target_stage,
         due_date: shiftedDateFull,
-        date: shiftedDateFull
       }).eq('id', task.id)
     })
 
@@ -361,7 +363,10 @@ export async function deleteTasks(taskIds: (string | number)[]) {
   return { success: true }
 }
 
-export async function toggleTaskStatus(taskId: string | number, newStatus: 'pending' | 'completed') {
+export async function toggleTaskStatus(rawTaskId: string | number, newStatus: 'pending' | 'completed') {
+  const taskId = parseId(rawTaskId)
+  if (!taskId) return { error: 'Esa tarea no es válida.' }
+
   const session = await requireUser()
   if ('error' in session) return { error: session.error }
   const { supabase } = session
@@ -700,7 +705,7 @@ export async function getAllPendingTasks() {
 
   // Map tasks to flatten cycleName
   const tasks = tasksResult.data.map((t: any) => {
-    const { cycleIds, cycleNames } = mapTaskCycles(t, cyclesResult.data);
+    const { cycleIds, cycleNames } = mapTaskCycles(t);
 
     return {
       ...t,
@@ -733,10 +738,13 @@ interface CandidatePlantRow {
 interface CycleRow {
   id: number
   name: string
-  space_id?: number
+  space_id?: number | null
 }
 
-export async function getEsquejadoCandidates(taskId: string | number) {
+export async function getEsquejadoCandidates(rawTaskId: string | number) {
+  const taskId = parseId(rawTaskId)
+  if (!taskId) return { error: 'Esa tarea no es válida.' }
+
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Debes iniciar sesión.' }
@@ -804,7 +812,7 @@ export async function getEsquejadoCandidates(taskId: string | number) {
  * y se volvió a completar), vuelve a marcarla completada sin duplicar plantas.
  */
 export async function completeEsquejado(
-  taskId: string | number,
+  rawTaskId: string | number,
   payload: {
     date: string
     entries: CloneEntry[]
@@ -812,6 +820,8 @@ export async function completeEsquejado(
     newCycle?: { name: string; spaceId: number } | null
   }
 ) {
+  const taskId = parseId(rawTaskId)
+  if (!taskId) return { error: 'Esa tarea no es válida.' }
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Debes iniciar sesión.' }

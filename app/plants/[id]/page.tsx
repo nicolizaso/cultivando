@@ -10,11 +10,30 @@ import LogModal from "@/components/LogModal";
 import PlantMetricsDisplay from "@/components/PlantMetricsDisplay";
 import TimelineSection, { TimelineItem } from "@/components/TimelineSection";
 import { getPlantMetrics, getStageColor, getWaterStatus } from "@/app/lib/utils";
-import { isPhotoLog } from "@/app/lib/logs";
+import { canonicalLogType } from "@/app/lib/logs";
+import { getTaskType } from "@/app/lib/constants";
+import { parseId } from "@/app/lib/sanitize";
+import { taskAppliesToPlant } from "@/app/lib/task-effects";
+
+interface TaskRow {
+  id: number;
+  title: string;
+  type: string | null;
+  status: string | null;
+  due_date: string;
+  completed_at: string | null;
+  description: string | null;
+  metadata: unknown;
+  task_plants: { plant_id: number }[] | null;
+}
+
+const TASK_COLUMNS = 'id, title, type, status, due_date, completed_at, description, metadata, task_plants ( plant_id )';
 
 export default async function PlantDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const supabase = await createClient();
-  const { id } = await params;
+  const { id: rawId } = await params;
+  const id = parseId(rawId);
+  if (!id) return notFound();
 
   const { data: plant, error } = await supabase
     .from('plants')
@@ -24,100 +43,99 @@ export default async function PlantDetailPage({ params }: { params: Promise<{ id
 
   if (error || !plant) return notFound();
 
-  // 1. Fetch logs
-  let logsQuery = supabase
-    .from('logs')
-    .select('*')
-    .order('created_at', { ascending: false });
+  // La bitácora de la planta y lo que se anotó para todo su ciclo (mudanzas).
+  const logsQuery = plant.cycle_id
+    ? supabase
+        .from('logs')
+        .select('*')
+        .or(`plant_id.eq.${id},and(cycle_id.eq.${Number(plant.cycle_id)},plant_id.is.null)`)
+        .order('created_at', { ascending: false })
+    : supabase.from('logs').select('*').eq('plant_id', id).order('created_at', { ascending: false });
 
-  if (plant.cycle_id) {
-     logsQuery = logsQuery.or(`plant_id.eq.${id},and(cycle_id.eq.${plant.cycle_id},plant_id.is.null)`);
-  } else {
-     logsQuery = logsQuery.eq('plant_id', id);
-  }
-
-  // 2. Fetch Tasks (Both Pending and Completed)
-  const spaceTasksQuery = supabase
-    .from('tasks')
-    .select('*')
-    .eq('space_id', plant.space_id);
-
+  // Tareas enlazadas a la planta o a su ciclo; después se queda sólo con las
+  // que de verdad le tocan (ver `taskAppliesToPlant`). Antes se buscaban
+  // además por un `space_id` que las plantas no tienen.
   const linkedTasksQuery = supabase
     .from('tasks')
-    .select('*, task_plants!inner(plant_id)')
-    .eq('task_plants.plant_id', id);
+    .select(`${TASK_COLUMNS}, linked:task_plants!inner ( plant_id )`)
+    .eq('linked.plant_id', id);
 
-  // 3. Fetch Cycle Images (if cycle exists)
-  let imagesQuery: any = Promise.resolve({ data: [] });
-  if (plant.cycle_id) {
-    imagesQuery = supabase
-      .from('cycle_images')
-      .select('*')
-      .eq('cycle_id', plant.cycle_id)
-      .order('taken_at', { ascending: false });
-  }
+  const cycleTasksQuery = plant.cycle_id
+    ? supabase
+        .from('tasks')
+        .select(`${TASK_COLUMNS}, linked:task_cycles!inner ( cycle_id )`)
+        .eq('linked.cycle_id', Number(plant.cycle_id))
+    : Promise.resolve({ data: [] as TaskRow[] });
 
-  const [logsResult, spaceTasksResult, linkedTasksResult, imagesResult] = await Promise.all([
+  const imagesQuery = plant.cycle_id
+    ? supabase
+        .from('cycle_images')
+        .select('*')
+        .eq('cycle_id', Number(plant.cycle_id))
+        .order('taken_at', { ascending: false })
+    : Promise.resolve({ data: [] as { id: string; taken_at: string | null; created_at: string | null; description: string | null; public_url: string }[] });
+
+  const [logsResult, linkedTasksResult, cycleTasksResult, imagesResult] = await Promise.all([
     logsQuery,
-    spaceTasksQuery,
     linkedTasksQuery,
-    imagesQuery
+    cycleTasksQuery,
+    imagesQuery,
   ]);
 
   const logs = logsResult.data || [];
-  const spaceTasks = spaceTasksResult.data || [];
-  const linkedTasks = linkedTasksResult.data || [];
   const cycleImages = imagesResult.data || [];
 
-  // Deduplicate tasks
-  const uniqueTasksMap = new Map();
-  [...spaceTasks, ...linkedTasks].forEach((t: any) => uniqueTasksMap.set(t.id, t));
-  const uniqueTasks = Array.from(uniqueTasksMap.values());
+  const tasksById = new Map<number, TaskRow>();
+  for (const task of [...(linkedTasksResult.data ?? []), ...(cycleTasksResult.data ?? [])] as TaskRow[]) {
+    if (taskAppliesToPlant(task, { id, cycle_id: plant.cycle_id })) tasksById.set(Number(task.id), task);
+  }
+  const uniqueTasks = Array.from(tasksById.values());
 
-  const pendingTasksList = uniqueTasks.filter((t: any) => t.status === 'pending');
-  const completedTasksList = uniqueTasks.filter((t: any) => t.status !== 'pending');
+  const pendingTasksList = uniqueTasks.filter((t) => t.status === 'pending');
+  const completedTasksList = uniqueTasks.filter((t) => t.status !== 'pending');
 
-  // Map to TimelineItem
-  const pendingTimelineItems: TimelineItem[] = pendingTasksList.map((task: any) => ({
+  const pendingTimelineItems: TimelineItem[] = pendingTasksList.map((task) => ({
     id: `task-${task.id}`,
     originalId: task.id,
     date: task.due_date,
     title: task.title,
-    type: task.type,
-    notes: task.description,
+    type: task.type ?? 'otro',
+    notes: task.description ?? undefined,
     isTask: true,
     status: 'pending'
   })).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
+  // Toda la bitácora: notas, riegos, cambios de etapa, archivados y fotos.
+  // Antes sólo se mostraban las fotos y el resto quedaba guardado sin verse.
   const historyTimelineItems: TimelineItem[] = [
-    ...logs.filter(isPhotoLog).map((log: any) => ({
+    ...logs.map((log) => ({
       id: `log-${log.id}`,
       originalId: log.id,
-      date: log.created_at,
-      title: log.title,
-      type: log.type || 'log',
-      notes: log.notes,
-      media_url: log.media_url,
+      date: log.created_at ?? '',
+      title: log.title || getTaskType(log.type).label,
+      type: canonicalLogType(log.type) || 'log',
+      notes: log.notes ?? undefined,
+      media_url: log.media_url ?? undefined,
       isTask: false,
       status: 'completed'
     })),
-    ...completedTasksList.map((task: any) => ({
+    ...completedTasksList.map((task) => ({
       id: `task-${task.id}`,
       originalId: task.id,
       date: task.completed_at || task.due_date,
       title: task.title,
-      type: task.type,
-      notes: task.description,
+      type: task.type ?? 'otro',
+      notes: task.description ?? undefined,
       isTask: true,
       status: 'completed'
     })),
-    ...cycleImages.map((img: any) => ({
+    ...cycleImages.map((img) => ({
       id: `img-${img.id}`,
       originalId: img.id,
-      date: img.taken_at,
+      date: img.taken_at ?? img.created_at ?? '',
       title: 'Foto de ciclo',
       type: 'image',
-      notes: img.description,
+      notes: img.description ?? undefined,
       media_url: [img.public_url],
       isTask: false,
       status: 'completed'
@@ -125,7 +143,7 @@ export default async function PlantDetailPage({ params }: { params: Promise<{ id
   ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
   const { currentStage } = getPlantMetrics(plant);
-  const rawStage = currentStage || plant.stage;
+  const rawStage = currentStage || plant.stage || '';
   const displayStage = (rawStage === 'Esqueje' || rawStage === 'Plántula') ? 'Plántula' : rawStage;
   const stageInfo = getStageColor(displayStage);
   const water = getWaterStatus(plant.last_water);

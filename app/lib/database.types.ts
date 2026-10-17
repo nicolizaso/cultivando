@@ -522,90 +522,51 @@ export type Database = {
           application_type: string | null
           completed_at: string | null
           created_at: string | null
-          cycle_id: number | null
-          date: string
           description: string | null
           due_date: string
-          fertilizer_combo_id: number | null
           id: number
-          is_completed: boolean | null
           metadata: Json | null
-          plant_id: number | null
           recurrence_id: string | null
-          space_id: number | null
-          status: string | null
+          status: string
           target_space_id: number | null
           target_stage: string | null
           title: string
           type: string | null
-          user_id: string | null
+          user_id: string
         }
         Insert: {
           application_type?: string | null
           completed_at?: string | null
           created_at?: string | null
-          cycle_id?: number | null
-          date?: string
           description?: string | null
           due_date: string
-          fertilizer_combo_id?: number | null
           id?: never
-          is_completed?: boolean | null
           metadata?: Json | null
-          plant_id?: number | null
           recurrence_id?: string | null
-          space_id?: number | null
-          status?: string | null
+          status?: string
           target_space_id?: number | null
           target_stage?: string | null
           title: string
           type?: string | null
-          user_id?: string | null
+          user_id?: string
         }
         Update: {
           application_type?: string | null
           completed_at?: string | null
           created_at?: string | null
-          cycle_id?: number | null
-          date?: string
           description?: string | null
           due_date?: string
-          fertilizer_combo_id?: number | null
           id?: never
-          is_completed?: boolean | null
           metadata?: Json | null
-          plant_id?: number | null
           recurrence_id?: string | null
-          space_id?: number | null
-          status?: string | null
+          status?: string
           target_space_id?: number | null
           target_stage?: string | null
           title?: string
           type?: string | null
-          user_id?: string | null
+          user_id?: string
         }
         Relationships: [
-          {
-            foreignKeyName: "tasks_cycle_id_fkey"
-            columns: ["cycle_id"]
-            isOneToOne: false
-            referencedRelation: "cycles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "tasks_plant_id_fkey"
-            columns: ["plant_id"]
-            isOneToOne: false
-            referencedRelation: "plants"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "tasks_space_id_fkey"
-            columns: ["space_id"]
-            isOneToOne: false
-            referencedRelation: "spaces"
-            referencedColumns: ["id"]
-          },
           {
             foreignKeyName: "tasks_target_space_id_fkey"
             columns: ["target_space_id"]

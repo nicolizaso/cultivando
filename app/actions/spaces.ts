@@ -75,3 +75,32 @@ export async function createSpaceInline(name: string, type: 'Indoor' | 'Outdoor'
   revalidatePath("/spaces");
   return { success: true, spaceId: data.id };
 }
+
+/**
+ * Borra un espacio. Sus ciclos no se borran: quedan sin espacio. Una tarea de
+ * "Cambiar ambiente" que lo tenía de destino queda sin destino (antes el
+ * borrado fallaba con un error de la base).
+ */
+export async function deleteSpace(id: number) {
+  const session = await requireUser();
+  if ('error' in session) return { success: false, error: session.error };
+  const { supabase } = session;
+
+  const spaceId = parseId(id);
+  if (!spaceId) return { success: false, error: "Ese espacio no es válido." };
+
+  const { error } = await supabase.from("spaces").delete().eq("id", spaceId);
+  if (error) {
+    return {
+      success: false,
+      error: friendlyDbError(error, "No se pudo eliminar el espacio.", {
+        '23503': "Hay tareas que todavía apuntan a este espacio.",
+      }, "Error eliminando el espacio:"),
+    };
+  }
+
+  revalidatePath("/spaces");
+  revalidatePath("/cycles");
+  revalidatePath("/");
+  return { success: true };
+}

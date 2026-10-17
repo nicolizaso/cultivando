@@ -282,3 +282,54 @@ export async function moveCycleToSpace(cycleId: number, spaceId: number) {
 
   return { success: true, spaceName: space.name };
 }
+
+/** Finaliza o reactiva un ciclo. */
+export async function setCycleActive(cycleId: number, active: boolean) {
+  const session = await requireUser();
+  if ('error' in session) return { success: false, error: session.error };
+  const { supabase } = session;
+
+  const id = parseId(cycleId);
+  if (!id) return { success: false, error: 'Ese ciclo no es válido.' };
+
+  const { error } = await supabase.from('cycles').update({ is_active: active === true }).eq('id', id);
+  if (error) return { success: false, error: friendlyDbError(error, 'No se pudo actualizar el ciclo.', {}, 'Error cambiando el estado del ciclo:') };
+
+  revalidateCycleViews();
+  revalidatePath('/plants');
+  revalidatePath('/spaces');
+  revalidatePath('/calendar');
+  return { success: true };
+}
+
+/**
+ * Borra un ciclo. La base se lleva la galería, las mediciones y las tareas
+ * del ciclo; las plantas no se borran, quedan sin ciclo. Los archivos de la
+ * galería se borran del bucket (antes quedaban ahí para siempre).
+ */
+export async function deleteCycle(cycleId: number) {
+  const session = await requireUser();
+  if ('error' in session) return { success: false, error: session.error };
+  const { supabase } = session;
+
+  const id = parseId(cycleId);
+  if (!id) return { success: false, error: 'Ese ciclo no es válido.' };
+
+  const { data: images } = await supabase.from('cycle_images').select('storage_path').eq('cycle_id', id);
+  const paths = (images ?? []).map((image) => image.storage_path).filter((path): path is string => Boolean(path));
+
+  const { error } = await supabase.from('cycles').delete().eq('id', id);
+  if (error) return { success: false, error: friendlyDbError(error, 'No se pudo eliminar el ciclo.', {}, 'Error eliminando el ciclo:') };
+
+  if (paths.length > 0) {
+    const { error: storageError } = await supabase.storage.from(IMAGES_BUCKET).remove(paths);
+    if (storageError) console.error('No se pudieron borrar las fotos del ciclo:', paths, storageError);
+  }
+
+  revalidateCycleViews();
+  revalidatePath('/plants');
+  revalidatePath('/plants/[id]', 'page');
+  revalidatePath('/spaces');
+  revalidatePath('/calendar');
+  return { success: true };
+}

@@ -1,5 +1,6 @@
 import { createClient } from "@/app/lib/supabase-server";
 import { notFound } from "next/navigation";
+import { parseId } from "@/app/lib/sanitize";
 import PageShell from "@/components/layout/PageShell";
 import PageHeader from "@/components/layout/PageHeader";
 import EditPlantForm from "@/components/EditPlantForm";
@@ -7,7 +8,9 @@ import { Plant, Cycle } from "@/app/lib/types";
 
 export default async function EditPlantPage({ params }: { params: Promise<{ id: string }> }) {
   const supabase = await createClient();
-  const { id } = await params;
+  const { id: rawId } = await params;
+  const id = parseId(rawId);
+  if (!id) return notFound();
 
   // Fetch Plant
   const { data: plant, error } = await supabase

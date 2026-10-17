@@ -1,8 +1,11 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useTransition } from 'react'
+import { useRouter } from 'next/navigation'
 import { ListChecks } from 'lucide-react'
 import CalendarWidget from './CalendarWidget'
+import type { CalendarLog } from './CalendarWidget'
+import { todayKey } from '@/app/lib/dates'
 import CreateTaskAction from './CreateTaskAction'
 import AgendaModal from './AgendaModal'
 import PageHeader from '@/components/layout/PageHeader'
@@ -10,15 +13,28 @@ import { Task } from '@/app/lib/types'
 import type { CycleOption, PlantOption } from '@/app/lib/task-targets'
 
 interface CalendarViewProps {
-  logs: any[]
+  /** El mes que se mira, "YYYY-MM". */
+  month: string
+  /** El día que llega elegido en la URL (`?dia=`), si es de este mes. */
+  initialSelectedDay?: string
+  logs: CalendarLog[]
   tasks: Task[]
   plants: PlantOption[]
   spaces: { id: number; name: string }[]
   cycles?: CycleOption[]
 }
 
-export default function CalendarView({ logs, tasks, plants, spaces, cycles = [] }: CalendarViewProps) {
-  const [selectedDate, setSelectedDate] = useState<Date>(new Date())
+/** El día que arranca seleccionado: el de la URL, hoy si es este mes, o el 1. */
+function initialDay(month: string, fromUrl?: string): string {
+  if (fromUrl && fromUrl.startsWith(month)) return fromUrl
+  const today = todayKey()
+  return today.startsWith(month) ? today : `${month}-01`
+}
+
+export default function CalendarView({ month, initialSelectedDay, logs, tasks, plants, spaces, cycles = [] }: CalendarViewProps) {
+  const router = useRouter()
+  const [isNavigating, startNavigation] = useTransition()
+  const [selectedDay, setSelectedDay] = useState<string>(() => initialDay(month, initialSelectedDay))
   const [selectedCycleId, setSelectedCycleId] = useState<number | 'all'>('all')
   const [isAgendaOpen, setIsAgendaOpen] = useState(false)
 
@@ -27,6 +43,19 @@ export default function CalendarView({ logs, tasks, plants, spaces, cycles = [] 
   const filteredLogs = isAll ? logs : logs.filter(l => l.cycle_id === selectedCycleId)
 
   const pendingCount = tasks.filter(t => t.status === 'pending').length
+
+  // Cambiar de mes pide ese mes al servidor: la página trae sólo lo que se ve.
+  const goToMonth = (next: string, day?: string) => {
+    startNavigation(() => {
+      router.push(`/calendar?mes=${next}${day ? `&dia=${day}` : ''}`)
+    })
+  }
+
+  const selectDay = (day: string) => {
+    // Un día del mes vecino (los bordes de la grilla) abre ese mes con el día elegido.
+    if (day.slice(0, 7) !== month) goToMonth(day.slice(0, 7), day)
+    else setSelectedDay(day)
+  }
 
   return (
     <>
@@ -40,7 +69,7 @@ export default function CalendarView({ logs, tasks, plants, spaces, cycles = [] 
             plants={plants}
             spaces={spaces}
             cycles={cycles}
-            initialDate={selectedDate}
+            initialDate={new Date(`${selectedDay}T12:00:00`)}
           />
         }
       />
@@ -90,16 +119,19 @@ export default function CalendarView({ logs, tasks, plants, spaces, cycles = [] 
       </div>
 
       <CalendarWidget
+        month={month}
         logs={filteredLogs}
         tasks={filteredTasks}
-        selectedDate={selectedDate}
-        onDateSelect={setSelectedDate}
+        selectedDay={selectedDay}
+        onDaySelect={selectDay}
+        onMonthChange={goToMonth}
+        isLoading={isNavigating}
       />
 
       <AgendaModal
         isOpen={isAgendaOpen}
         onClose={() => setIsAgendaOpen(false)}
-        tasks={tasks} // Pass all tasks, modal handles its own filtering
+        tasks={tasks} // Las del mes y todas las pendientes; el modal filtra.
         cycles={cycles}
       />
     </>

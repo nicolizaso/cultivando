@@ -7,6 +7,7 @@ import { friendlyDbError } from "@/app/lib/errors";
 import { LOG_TYPE } from "@/app/lib/logs";
 import { STAGE_DATE_COLUMNS, STAGE_NAMES, getStageDateColumn, isStageName } from "@/app/lib/stage-logic";
 import type { StageName } from "@/app/lib/stage-logic";
+import type { Json } from "@/app/lib/database.types";
 import { dateKey, parseCultivationDate, todayKey } from "@/app/lib/dates";
 import { parseId, parseIds } from "@/app/lib/sanitize";
 import { IMAGES_BUCKET, storagePathFromPublicUrl } from "@/app/lib/uploads";
@@ -322,7 +323,7 @@ async function logForEachPlant(
   supabase: ServerSupabase,
   plants: SelectedPlant[],
   userId: string,
-  entry: { type: string; title: string; notes: string; data?: Record<string, unknown> | null },
+  entry: { type: string; title: string; notes: string; data?: Json | null },
   createdAt: string
 ) {
   const { error } = await supabase.from('logs').insert(

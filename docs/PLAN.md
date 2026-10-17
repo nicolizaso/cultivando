@@ -78,14 +78,16 @@ Lo que te toca hacer a vos está en `docs/PENDIENTES.md`.
 - [x] Borrar una planta borra también sus fotos del bucket.
 
 ### Etapa 4 · Bitácora, tareas y borrados
-- [ ] Base: unificar los tipos de registro y limitar los valores válidos.
-- [ ] Ficha y Agenda muestran todos los registros, no sólo las fotos.
-- [ ] Ficha de planta: tareas de su ciclo; fuera la consulta por `space_id`.
-- [ ] Editar desde la Agenda no pisa etapa ni tipo de aplicación.
-- [ ] Columnas viejas de `tasks`: migrar `cycle_id` y `space_id`, borrar `is_completed`, `plant_id` y `date`; `user_id` obligatorio.
-- [ ] Borrados: espacio destino de "Cambiar ambiente", planta con su bitácora, archivos de ciclos y fotos.
-- [ ] Historial de clima con las mediciones más recientes.
-- [ ] Clientes de Supabase tipados con `Database` (`createBrowserClient<Database>` y `createServerClient<Database>`).
+- [x] Base: tipos de registro unificados (`app/lib/logs.ts` y migración); valores válidos en el cierre.
+- [x] Ficha de planta y Agenda muestran todos los registros con su tipo, no sólo las fotos.
+- [x] Ficha de planta: sus tareas reales (las de su ciclo y las suyas, ver `taskAppliesToPlant`); fuera la consulta por `space_id`.
+- [x] Editar desde la Agenda recibe la tarea completa y no pisa etapa ni tipo de aplicación.
+- [x] Columnas viejas de `tasks` fuera (cierre), con copia previa a las tablas de cruce; `user_id` obligatorio; `status` con valores válidos.
+- [x] Borrados: espacio destino de "Cambiar ambiente" (queda sin destino), planta con su bitácora,
+  ciclo y espacio por Server Actions, y los archivos del bucket se borran con su ciclo o planta.
+- [x] Historial de clima con las mediciones más recientes.
+- [x] Clientes de Supabase tipados con `Database`: los 61 errores de tipos quedaron resueltos.
+- [x] Agenda por mes y agrupada por día; ficha de ciclo con consultas en paralelo. *(Adelantado de la Etapa 6.)*
 
 ### Etapa 5 · Panel, fechas y tareas
 - [ ] "Hoy" en hora argentina, en un solo lugar; formularios con `todayForInput()`.
@@ -100,9 +102,9 @@ Lo que te toca hacer a vos está en `docs/PENDIENTES.md`.
 
 ### Etapa 6 · Rendimiento
 - [ ] Base: políticas con `(select auth.uid())`, índices en `user_id`, relaciones y `tasks.due_date`; fuera `idx_tasks_date`.
-- [ ] Ficha de ciclo con consultas en paralelo.
+- [x] Ficha de ciclo con consultas en paralelo. *(Hecho en la Etapa 4.)*
 - [ ] Sesión verificada una sola vez por página.
-- [ ] Agenda por mes y agrupada por día.
+- [x] Agenda por mes y agrupada por día. *(Hecho en la Etapa 4.)*
 - [ ] Menos consultas al crear o editar series de tareas.
 
 ### Etapa 7 · Limpieza

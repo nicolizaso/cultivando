@@ -29,6 +29,7 @@ Supabase (pegar el archivo entero y ejecutar) o con `supabase db push`:
 2. `20261017150000_nutricion.sql`
 3. `20261017160000_tareas.sql`
 4. `20261017170000_plantas.sql`
+5. `20261017180000_bitacora_y_borrados.sql`
 
 ---
 
@@ -52,6 +53,12 @@ Checklist para el preview del PR, una vez hechos los pasos de arriba:
 - [ ] Editar una planta de un ciclo finalizado: el desplegable muestra su ciclo; probar "Sin ciclo".
 - [ ] Regar desde el menú de la tarjeta: aparece en la bitácora.
 - [ ] Aceptar una sugerencia de etapa del panel; descartar otra con "Ahora no" y recargar: no vuelve.
+- [ ] Ficha de una planta: aparecen notas, riegos y cambios de etapa, no sólo fotos.
+- [ ] Ficha de una planta: aparecen las tareas de su ciclo entero, pero no las de otra planta del mismo ciclo.
+- [ ] Agenda: cambiar de mes (carga ese mes), tocar un día del mes vecino, ver registros con su tipo.
+- [ ] Agenda: editar un "Cambio de etapa" a Floración y guardar: sigue en Floración.
+- [ ] Finalizar y reactivar un ciclo; borrar un ciclo de prueba con fotos: sus plantas quedan sin ciclo.
+- [ ] Borrar un espacio de prueba que sea destino de una tarea "Cambiar ambiente".
 
 ---
 
@@ -63,6 +70,7 @@ que el código nuevo esté en producción. Mismo método que en 1.2, en orden:
 
 1. `20261017140000_seguridad_cierre.sql`
 2. `20261017170000_plantas_cierre.sql`
+3. `20261017180000_bitacora_y_tareas_cierre.sql`
 
 Después de aplicarlas, se pueden mover a `supabase/migrations/` para que el
 historial quede en un solo lugar.

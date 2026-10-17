@@ -23,7 +23,7 @@ interface Candidate {
 interface Cycle {
   id: number
   name: string
-  space_id?: number
+  space_id?: number | null
 }
 
 interface EsquejarModalProps {

@@ -9,6 +9,7 @@ import {
   readTaskTargets,
   resolveTaskPlants,
   shouldApplyStage,
+  taskAppliesToPlant,
 } from './task-effects.ts';
 import type { StageEffect, TargetPlant } from './task-effects.ts';
 
@@ -178,4 +179,23 @@ test('ambiente: no se mueve lo que ya está en el destino ni lo que viaja con su
 test('ambiente: una planta sin ciclo también pasa al ciclo del destino', () => {
   const plan = planAmbienteMove({ cycle_ids: [], plant_ids: [7] }, 2, [{ id: 7, cycle_id: null }], spaces, [20]);
   assert.deepStrictEqual(plan.plantIds, [7]);
+});
+
+test('taskAppliesToPlant - ciclo entero alcanza a las plantas que están hoy', () => {
+  const task = { metadata: { targets: { cycle_ids: [10], plant_ids: [] } }, task_plants: [{ plant_id: 1 }] };
+  assert.strictEqual(taskAppliesToPlant(task, { id: 1, cycle_id: 10 }), true);
+  assert.strictEqual(taskAppliesToPlant(task, { id: 2, cycle_id: 10 }), true, 'entró después de agendarla');
+  assert.strictEqual(taskAppliesToPlant(task, { id: 1, cycle_id: 11 }), false, 'se fue a otro ciclo');
+});
+
+test('taskAppliesToPlant - una planta suelta no arrastra al resto de su ciclo', () => {
+  const task = { metadata: { targets: { cycle_ids: [], plant_ids: [5] } }, task_plants: [{ plant_id: 5 }] };
+  assert.strictEqual(taskAppliesToPlant(task, { id: 5, cycle_id: 10 }), true);
+  assert.strictEqual(taskAppliesToPlant(task, { id: 6, cycle_id: 10 }), false);
+});
+
+test('taskAppliesToPlant - tareas viejas: por task_plants', () => {
+  const task = { metadata: null, task_plants: [{ plant_id: 7 }] };
+  assert.strictEqual(taskAppliesToPlant(task, { id: 7, cycle_id: 1 }), true);
+  assert.strictEqual(taskAppliesToPlant(task, { id: 8, cycle_id: 1 }), false);
 });

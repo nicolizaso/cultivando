@@ -38,7 +38,7 @@ export default async function CyclesPage() {
   });
 
   const days: Record<number, number> = {};
-  (cycles ?? []).forEach((cycle: { id: number; start_date: string }) => {
+  (cycles ?? []).forEach((cycle) => {
     days[cycle.id] = daysSince(cycle.start_date);
   });
 

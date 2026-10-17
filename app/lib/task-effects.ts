@@ -249,3 +249,26 @@ export function planAmbienteMove(
 
   return { cycleIds, plantIds, targetCycleId, unplacedPlantIds };
 }
+
+/**
+ * ¿La tarea es de esta planta? Para la ficha de la planta.
+ *
+ * Una tarea de ciclo entero alcanza a todas las plantas que hoy están en el
+ * ciclo, aunque hayan entrado después de agendarla; una tarea de una planta
+ * suelta, sólo a esa. No alcanza mirar `task_cycles`: una tarea de una planta
+ * también enlaza su ciclo (para mostrarlo en la agenda), y aparecería en la
+ * ficha de todas las demás. Las tareas viejas, sin `metadata.targets`, se
+ * reconocen por la foto de `task_plants`.
+ */
+export function taskAppliesToPlant(
+  task: { metadata?: unknown; task_plants?: { plant_id: number }[] | null },
+  plant: { id: number; cycle_id?: number | null }
+): boolean {
+  const plantId = Number(plant.id);
+  const targets = readTaskTargets(task.metadata);
+  if (targets) {
+    if (targets.plant_ids.includes(plantId)) return true;
+    return plant.cycle_id != null && targets.cycle_ids.includes(Number(plant.cycle_id));
+  }
+  return (task.task_plants ?? []).some((link) => Number(link.plant_id) === plantId);
+}

@@ -112,3 +112,11 @@ export function getDaysSinceWater(lastWater?: string | null, now: Date = new Dat
   if (lastWater === 'Hoy') return 0;
   return daysSinceDate(lastWater, now);
 }
+
+/** "17/10/2026": un día en formato argentino, o '' si no se entiende. */
+export function formatDay(value: Date | string | null | undefined): string {
+  const key = dateKey(value);
+  if (!key) return '';
+  const [year, month, day] = key.split('-');
+  return `${day}/${month}/${year}`;
+}

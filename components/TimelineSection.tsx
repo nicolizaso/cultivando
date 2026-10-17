@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import Image from 'next/image';
 import { formatDateShort } from '@/app/lib/utils';
-import { getTaskIcon } from '@/app/lib/constants';
+import { getTaskIcon, getTaskType } from '@/app/lib/constants';
 
 export interface TimelineItem {
   id: string;
@@ -106,7 +106,7 @@ export default function TimelineSection({ pendingTasks, historyItems }: Timeline
           <li key={item.id} className="group relative mb-6 flex items-start gap-4 last:mb-0">
             <span
               className={`relative z-10 flex h-10 w-10 shrink-0 items-center justify-center rounded-full border bg-surface ${
-                item.type === 'image'
+                item.type === 'image' || item.type === 'foto'
                   ? 'border-[color:var(--brand)] text-[color:var(--brand-text)]'
                   : 'border-line text-[color:var(--brand-text)]'
               }`}
@@ -117,13 +117,15 @@ export default function TimelineSection({ pendingTasks, historyItems }: Timeline
 
             <article className="min-w-0 flex-1 rounded-[var(--radius-lg)] border border-line bg-surface p-4">
               <div className="mb-1.5 flex flex-wrap items-start justify-between gap-2">
-                <h3 className="flex items-center gap-2 text-sm font-semibold text-fg">
+                <h3 className="flex flex-wrap items-center gap-2 text-sm font-semibold text-fg">
                   {item.title}
-                  {item.type === 'image' && (
-                    <span className="chip chip-brand">
-                      Foto
-                    </span>
-                  )}
+                  {/* Cada registro dice qué es: con toda la bitácora a la vista
+                      (riegos, notas, cambios de etapa) el icono solo no alcanza. */}
+                  {(item.type === 'image' || item.type === 'foto') ? (
+                    <span className="chip chip-brand">Foto</span>
+                  ) : !item.isTask && getTaskType(item.type).label !== item.title ? (
+                    <span className="chip chip-neutral">{getTaskType(item.type).label}</span>
+                  ) : null}
                 </h3>
                 <time className="text-xs font-medium text-fg-muted" dateTime={item.date}>
                   {formatDateShort(item.date)}

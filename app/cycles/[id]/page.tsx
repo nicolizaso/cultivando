@@ -8,34 +8,40 @@ import PageShell from "@/components/layout/PageShell";
 import PageHeader from "@/components/layout/PageHeader";
 import { daysSince } from "@/app/lib/utils";
 import { Space } from "@/app/lib/types";
+import { parseId } from "@/app/lib/sanitize";
+import { formatDay } from "@/app/lib/dates";
+
+/** Cuántas mediciones se traen para el historial de clima. */
+const HISTORY_SIZE = 30;
 
 export default async function CycleDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const supabase = await createClient();
-  const { id } = await params;
+  const { id: rawId } = await params;
+  const id = parseId(rawId);
+  if (!id) return notFound();
 
-  const { data: cycle, error } = await supabase
-    .from('cycles')
-    .select(`*, spaces ( name, type )`)
-    .eq('id', id)
-    .single();
+  // Todo en paralelo: antes eran seis consultas una detrás de otra.
+  const [
+    { data: cycle, error },
+    { data: plants },
+    { data: spaces },
+    { data: recentMeasurements },
+    { data: cycleImages },
+  ] = await Promise.all([
+    supabase.from('cycles').select(`*, spaces ( name, type )`).eq('id', id).single(),
+    supabase.from('plants').select('*').eq('cycle_id', id).order('id', { ascending: true }),
+    // Destinos posibles para mudar el ciclo de espacio.
+    supabase.from('spaces').select('id, name, type').order('name', { ascending: true }),
+    // Las más recientes. Antes se pedían en orden ascendente con límite, o
+    // sea las 20 más viejas: una medición nueva nunca entraba al historial.
+    supabase.from('measurements').select('*').eq('cycle_id', id).order('date', { ascending: false }).order('created_at', { ascending: false }).limit(HISTORY_SIZE),
+    supabase.from('cycle_images').select('*').eq('cycle_id', id).order('taken_at', { ascending: false }),
+  ]);
 
   if (error || !cycle) return notFound();
 
-  const { data: plants } = await supabase.from('plants').select('*').eq('cycle_id', id).order('id', { ascending: true });
-
-  // Destinos posibles para mudar el ciclo de espacio.
-  const { data: spaces } = await supabase.from('spaces').select('id, name, type').order('name', { ascending: true });
-
-  // Consultas de datos ambientales (igual que antes)...
-  const { data: lastMeasurement } = await supabase.from('measurements').select('*').eq('cycle_id', id).order('date', { ascending: false }).limit(1).single();
-  const { data: history } = await supabase.from('measurements').select('*').eq('cycle_id', id).order('date', { ascending: true }).limit(20);
-
-  // Fetch Cycle Images (Gallery)
-  const { data: cycleImages } = await supabase
-    .from('cycle_images')
-    .select('*')
-    .eq('cycle_id', id)
-    .order('taken_at', { ascending: false });
+  const lastMeasurement = recentMeasurements?.[0] ?? null;
+  const history = [...(recentMeasurements ?? [])].reverse();
 
   const days = daysSince(cycle.start_date);
 
@@ -47,7 +53,7 @@ export default async function CycleDetailPage({ params }: { params: Promise<{ id
         title={cycle.name}
         backHref="/cycles"
         backLabel="Ciclos"
-        subtitle={`Arrancó el ${new Date(cycle.start_date).toLocaleDateString('es-AR')}`}
+        subtitle={cycle.start_date ? `Arrancó el ${formatDay(cycle.start_date)}` : undefined}
       />
 
       {/* Resumen del ciclo. El nombre ya está en la cabecera, así que acá sólo
