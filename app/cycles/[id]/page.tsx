@@ -21,7 +21,7 @@ export default async function CycleDetailPage({ params }: { params: Promise<{ id
 
   if (error || !cycle) return notFound();
 
-  const { data: plants } = await supabase.from('plants').select('*, current_age_days, days_in_stage').eq('cycle_id', id).order('id', { ascending: true });
+  const { data: plants } = await supabase.from('plants').select('*').eq('cycle_id', id).order('id', { ascending: true });
 
   // Destinos posibles para mudar el ciclo de espacio.
   const { data: spaces } = await supabase.from('spaces').select('id, name, type').order('name', { ascending: true });

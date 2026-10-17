@@ -624,14 +624,6 @@ export type Database = {
         Args: { p_tasks: Json; p_cycle_ids: number[]; p_plant_ids: number[] }
         Returns: number[]
       }
-      current_age_days: {
-        Args: { plant_row: Database["public"]["Tables"]["plants"]["Row"] }
-        Returns: number
-      }
-      days_in_stage: {
-        Args: { plant_row: Database["public"]["Tables"]["plants"]["Row"] }
-        Returns: number
-      }
       email_for_username: { Args: { p_username: string }; Returns: string }
       save_fertilizer_combo: {
         Args: {

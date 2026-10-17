@@ -37,7 +37,7 @@ export default async function CalendarPage() {
       .order('due_date', { ascending: true }),
     supabase
       .from('cycles')
-      .select(`*, spaces (id, name, type), plants (*, current_age_days, days_in_stage)`)
+      .select(`*, spaces (id, name, type), plants (*)`)
       .eq('is_active', true)
       .order('created_at', { ascending: true }),
     supabase

@@ -5,6 +5,8 @@ import { supabase } from "@/app/lib/supabase";
 import { useRouter } from "next/navigation";
 import { Plant, Cycle } from "@/app/lib/types";
 import { Loader2, Sprout } from "lucide-react";
+import { createPlants } from "@/app/actions/plants";
+import { todayForInput } from "@/app/lib/utils";
 import Modal from "@/components/ui/Modal";
 import { useToast } from "@/app/context/ToastContext";
 
@@ -26,7 +28,7 @@ export default function AddPlantModal() {
     mother_id: "" as string | number,
     stage: "Germinación",
     cycle_id: "" as string | number,
-    planted_at: new Date().toISOString().split("T")[0],
+    planted_at: todayForInput(),
     quantity: 1
   });
 
@@ -37,15 +39,18 @@ export default function AddPlantModal() {
       const fetchData = async () => {
         const { data: cyclesData } = await supabase
           .from('cycles')
-          .select('*')
+          .select('id, name, start_date, is_active, space_id')
           .eq('is_active', true)
           .order('created_at', { ascending: false });
 
         if (cyclesData) setActiveCycles(cyclesData as unknown as Cycle[]);
 
+        // Sólo lo que hace falta para elegir madre: una archivada (muerta o
+        // cosechada) no puede dar esquejes.
         const { data: plantsData } = await supabase
           .from('plants')
-          .select('*')
+          .select('id, name, strain, breeder')
+          .eq('is_archived', false)
           .order('name', { ascending: true });
 
         if (plantsData) setPotentialMothers(plantsData as unknown as Plant[]);
@@ -97,41 +102,30 @@ export default function AddPlantModal() {
     setLoading(true);
 
     try {
-      const plantsToInsert = [];
-      const quantity = Math.max(1, Number(formData.quantity));
+      // El servidor valida todo y anota la fecha de la etapa inicial: antes
+      // las plantas nuevas quedaban en "0 días en etapa" para siempre.
+      const result = await createPlants({
+        strain: formData.strain,
+        name: formData.name,
+        breeder: formData.breeder,
+        source_type: formData.source_type,
+        mother_id: formData.mother_id || null,
+        stage: formData.stage,
+        cycle_id: formData.cycle_id,
+        planted_at: formData.planted_at,
+        quantity: formData.quantity,
+      });
 
-      for (let i = 0; i < quantity; i++) {
-        let finalName = formData.name;
-        if (quantity > 1) {
-          finalName = `${formData.name} #${i + 1}`;
-        }
-
-        plantsToInsert.push({
-          strain: formData.strain,
-          name: finalName,
-          breeder: formData.breeder || null,
-          source_type: formData.source_type,
-          mother_id: formData.source_type === 'Esqueje' && formData.mother_id ? Number(formData.mother_id) : null,
-          stage: formData.stage,
-          planted_at: formData.planted_at,
-          cycle_id: Number(formData.cycle_id),
-          last_water: 'Nunca'
-        });
+      if (!result.success) {
+        showToast(result.error || "No se pudieron crear las plantas", "error");
+        return;
       }
 
-      const { error } = await supabase
-        .from('plants')
-        .insert(plantsToInsert);
-
-      if (error) throw error;
-
+      const created = result.count ?? 1;
       setIsOpen(false);
       resetForm();
-      showToast(quantity > 1 ? `${quantity} plantas creadas` : "Planta creada");
+      showToast(created > 1 ? `${created} plantas creadas` : "Planta creada");
       router.refresh();
-
-    } catch (error) {
-      showToast(error instanceof Error ? error.message : "No se pudieron crear las plantas", "error");
     } finally {
       setLoading(false);
     }
@@ -146,7 +140,7 @@ export default function AddPlantModal() {
       mother_id: "",
       stage: "Germinación",
       cycle_id: "",
-      planted_at: new Date().toISOString().split("T")[0],
+      planted_at: todayForInput(),
       quantity: 1
     });
     setIsNameManuallyEdited(false);

@@ -66,13 +66,16 @@ Lo que te toca hacer a vos está en `docs/PENDIENTES.md`.
   elegido y el servidor la recalcula para cada fecha de la serie.
 
 ### Etapa 3 · Etapas y fechas de las plantas
-- [x] Una sola fórmula para "días en etapa" y "edad" (`app/lib/plant-metrics.ts`), en días de Argentina. *(Adelantado en la Etapa 2.)*
-- [ ] Una sola acción para cambiar de etapa (`stage`, fecha de la etapa y `stage_updated_at`).
-- [ ] Al crear plantas se anota la fecha de la etapa inicial; esquejes en Enraizamiento.
-- [ ] Base: completar las 7 plantas sin fechas de etapa; `mother_id` a bigint; madre borrada → esquejes sin madre.
-- [ ] `last_water` de texto a fecha; no más "Nunca" ni "Hoy".
-- [ ] Escrituras de plantas desde el navegador → Server Actions.
-- [ ] Edición de planta: ciclo actual aunque esté cerrado y opción "Sin ciclo".
+- [x] Una sola fórmula para "días en etapa" y "edad" (`app/lib/plant-metrics.ts`), en días de Argentina.
+- [x] Un solo camino para cambiar de etapa (`bulkChangeStage`, que escribe etapa, fecha y `stage_updated_at`):
+  lo usan el lote, el sugeridor y las tareas; la edición deduce la etapa de la línea de tiempo.
+- [x] Al crear plantas se anota la fecha de la etapa inicial; los esquejes del onboarding arrancan en Enraizamiento.
+- [x] Base: completar las 7 plantas sin fechas de etapa; `mother_id` a bigint; madre borrada → esquejes sin madre.
+- [x] `last_water` de texto a fecha (cierre); el código ya no escribe "Nunca" ni "Hoy".
+- [x] Fuera `current_age_days` y `days_in_stage` de las consultas (y de la base, en el cierre).
+- [x] Alta, edición, borrado, riego rápido y sugerencia de etapa por Server Actions.
+- [x] Edición de planta: ciclo actual aunque esté cerrado y opción "Sin ciclo".
+- [x] Borrar una planta borra también sus fotos del bucket.
 
 ### Etapa 4 · Bitácora, tareas y borrados
 - [ ] Base: unificar los tipos de registro y limitar los valores válidos.
@@ -91,7 +94,7 @@ Lo que te toca hacer a vos está en `docs/PENDIENTES.md`.
 - [x] Crear tareas con sus relaciones en una sola transacción (`create_tasks`). *(Adelantado en la Etapa 2.)*
 - [ ] Tareas sin efectos duplicados ni operaciones a medias.
 - [ ] Confirmación y "Deshacer" en "Declarar muerta" y "Cambiar ambiente".
-- [ ] Sugeridor de etapa: recuerda "Ahora no" e ignora archivadas.
+- [x] Sugeridor de etapa: recuerda "Ahora no" una semana e ignora archivadas. *(Adelantado en la Etapa 3.)*
 - [ ] Onboarding sólo sin espacios; "Omitir" se recuerda.
 - [ ] Los links `/plants?search=` filtran.
 

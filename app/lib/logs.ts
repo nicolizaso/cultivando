@@ -12,10 +12,19 @@
  * que leer siempre normaliza en vez de comparar de forma exacta.
  */
 
-/** Los valores con los que se escribe, en minúscula como el resto de la taxonomía. */
+/**
+ * Los valores con los que se escribe, en minúscula como el resto de la
+ * taxonomía: los que no son foto o nota son los mismos ids que los tipos de
+ * tarea, así el icono y el color salen de `getTaskType`.
+ */
 export const LOG_TYPE = {
   photo: 'foto',
   note: 'nota',
+  water: 'riego',
+  stage: 'cambio_etapa',
+  ambiente: 'ambiente',
+  harvest: 'cosecha',
+  other: 'otro',
 } as const;
 
 /**

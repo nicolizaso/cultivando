@@ -28,6 +28,7 @@ Supabase (pegar el archivo entero y ejecutar) o con `supabase db push`:
 1. `20261017140000_seguridad.sql`
 2. `20261017150000_nutricion.sql`
 3. `20261017160000_tareas.sql`
+4. `20261017170000_plantas.sql`
 
 ---
 
@@ -46,6 +47,11 @@ Checklist para el preview del PR, una vez hechos los pasos de arriba:
 - [ ] Agendar un fertilizante con un combo: la receta aparece en los detalles con la semana de la etapa.
 - [ ] Agendar una serie semanal de fertilizante: cada tarea tiene la dosis de su semana.
 - [ ] Agendar una serie mensual que empiece un 31: cae el último día de los meses cortos.
+- [ ] Crear una planta nueva: al día siguiente dice "1 día" en su etapa (antes quedaba en 0).
+- [ ] Crear un esqueje con madre; después borrar la madre: el esqueje sigue, sin madre.
+- [ ] Editar una planta de un ciclo finalizado: el desplegable muestra su ciclo; probar "Sin ciclo".
+- [ ] Regar desde el menú de la tarjeta: aparece en la bitácora.
+- [ ] Aceptar una sugerencia de etapa del panel; descartar otra con "Ahora no" y recargar: no vuelve.
 
 ---
 
@@ -56,6 +62,7 @@ Cierran cosas que la versión vieja todavía usaba, por eso van **después** de
 que el código nuevo esté en producción. Mismo método que en 1.2, en orden:
 
 1. `20261017140000_seguridad_cierre.sql`
+2. `20261017170000_plantas_cierre.sql`
 
 Después de aplicarlas, se pueden mover a `supabase/migrations/` para que el
 historial quede en un solo lugar.

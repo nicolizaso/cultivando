@@ -21,9 +21,6 @@ export default async function PlantsPage() {
       .from('plants')
       .select(`
         *,
-        current_age_days,
-        days_in_stage,
-        is_archived,
         cycles ( id, name, space_id )
       `)
       .order('created_at', { ascending: false }),

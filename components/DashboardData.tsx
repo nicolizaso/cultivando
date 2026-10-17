@@ -50,7 +50,7 @@ export default async function DashboardData({ user }: { user: { id: string } }) 
     // Active cycles with plants and spaces info
     supabase
       .from('cycles')
-      .select(`*, spaces (id, name, type), plants (*, current_age_days, days_in_stage), cycle_images(public_url)`)
+      .select(`*, spaces (id, name, type), plants (*), cycle_images(public_url)`)
       .eq('is_active', true)
       .order('created_at', { ascending: true })
       .order('taken_at', { foreignTable: 'cycle_images', ascending: false })

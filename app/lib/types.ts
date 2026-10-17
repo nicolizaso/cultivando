@@ -13,12 +13,10 @@ export interface Plant {
   id: number;
   name: string;
   stage: string;
-  days?: number; // Deprecated: Use current_age_days instead
   planted_at?: string; // ISO timestamp
   stage_updated_at?: string; // ISO timestamp
-  current_age_days?: number; // Computed field
-  days_in_stage?: number; // Computed field
-  last_water: string;
+  /** Día del último riego ("YYYY-MM-DD"), o null si nunca se regó. */
+  last_water: string | null;
   cycle_id: number | null;
   image_url?: string;
   strain?: string;

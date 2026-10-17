@@ -18,7 +18,7 @@ export default async function PlantDetailPage({ params }: { params: Promise<{ id
 
   const { data: plant, error } = await supabase
     .from('plants')
-    .select(`*, current_age_days, days_in_stage, cycles ( id, name )`)
+    .select(`*, cycles ( id, name )`)
     .eq('id', id)
     .single();
 

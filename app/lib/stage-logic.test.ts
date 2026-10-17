@@ -8,76 +8,77 @@ import {
 } from './stage-logic.ts';
 import type { Plant } from './types.ts';
 
-// Mock Plant factory
+const now = new Date('2026-10-17T15:00:00Z');
+
+/** `planted_at` de una planta que tiene `days` días de edad respecto de `now`. */
+function ageOf(days: number) {
+  return { planted_at: new Date(now.getTime() - days * 24 * 60 * 60 * 1000).toISOString() };
+}
+
 function createPlant(overrides: Partial<Plant> = {}): Plant {
   return {
     id: 1,
     name: 'Test Plant',
     stage: 'Germinación',
-    last_water: new Date().toISOString(),
+    last_water: null,
     cycle_id: 1,
-    ...overrides
+    ...overrides,
   } as Plant;
 }
 
-test('getStageSuggestion - suggests next stage when threshold is met (Germinación)', () => {
-  const plant = createPlant({ stage: 'Germinación', current_age_days: 7 });
-  const result = getStageSuggestion(plant);
-  assert.strictEqual(result, 'Plántula');
+test('getStageSuggestion - sugiere la siguiente al cumplir el umbral (Germinación)', () => {
+  assert.strictEqual(getStageSuggestion(createPlant({ stage: 'Germinación', ...ageOf(7) }), now), 'Plántula');
 });
 
-test('getStageSuggestion - suggests next stage when threshold is met (Enraizamiento)', () => {
-  const plant = createPlant({ stage: 'Enraizamiento', current_age_days: 12 });
-  const result = getStageSuggestion(plant);
-  assert.strictEqual(result, 'Vegetativo');
+test('getStageSuggestion - sugiere la siguiente al cumplir el umbral (Enraizamiento)', () => {
+  assert.strictEqual(getStageSuggestion(createPlant({ stage: 'Enraizamiento', ...ageOf(12) }), now), 'Vegetativo');
 });
 
-test('getStageSuggestion - suggests next stage when threshold is exceeded', () => {
-  const plant = createPlant({ stage: 'Plántula', current_age_days: 25 });
-  const result = getStageSuggestion(plant);
-  assert.strictEqual(result, 'Vegetativo');
+test('getStageSuggestion - también cuando se pasó del umbral', () => {
+  assert.strictEqual(getStageSuggestion(createPlant({ stage: 'Plántula', ...ageOf(25) }), now), 'Vegetativo');
 });
 
-test('getStageSuggestion - no suggestion when below threshold', () => {
-  const plant = createPlant({ stage: 'Plántula', current_age_days: 20 });
-  const result = getStageSuggestion(plant);
-  assert.strictEqual(result, null);
+test('getStageSuggestion - nada por debajo del umbral', () => {
+  assert.strictEqual(getStageSuggestion(createPlant({ stage: 'Plántula', ...ageOf(20) }), now), null);
 });
 
-test('getStageSuggestion - handles planted_at calculation', () => {
-  const now = new Date('2024-01-10T12:00:00Z');
-  const planted_at = new Date('2024-01-01T12:00:00Z').toISOString(); // 9 days ago
-  const plant = createPlant({ stage: 'Germinación', planted_at });
-
-  const result = getStageSuggestion(plant, now);
-  assert.strictEqual(result, 'Plántula'); // 9 days >= 7 days
+test('getStageSuggestion - la etapa sale de la línea de tiempo, no de la columna stage', () => {
+  // Si ya tiene fecha de Vegetativo, no se le sugiere salir de Plántula.
+  const plant = createPlant({ stage: 'Plántula', ...ageOf(30), date_vegetativo: ageOf(5).planted_at });
+  assert.strictEqual(getStageSuggestion(plant, now), null);
 });
 
-test('getStageSuggestion - no suggestion for unknown stage', () => {
-  const plant = createPlant({ stage: 'Curado', current_age_days: 100 });
-  const result = getStageSuggestion(plant);
-  assert.strictEqual(result, null);
+test('getStageSuggestion - nada para etapas sin umbral', () => {
+  assert.strictEqual(getStageSuggestion(createPlant({ stage: 'Curado', ...ageOf(100) }), now), null);
 });
 
-test('getFirstSuggestion - returns first matching plant', () => {
+test('getStageSuggestion - nunca para una planta archivada', () => {
+  assert.strictEqual(getStageSuggestion(createPlant({ stage: 'Germinación', ...ageOf(30), is_archived: true }), now), null);
+});
+
+test('getFirstSuggestion - devuelve la primera que corresponde', () => {
   const plants = [
-    createPlant({ id: 1, name: 'P1', stage: 'Germinación', current_age_days: 1 }), // No
-    createPlant({ id: 2, name: 'P2', stage: 'Plántula', current_age_days: 21 }), // Yes
-    createPlant({ id: 3, name: 'P3', stage: 'Vegetativo', current_age_days: 60 }), // Yes
+    createPlant({ id: 1, name: 'P1', stage: 'Germinación', ...ageOf(1) }),
+    createPlant({ id: 2, name: 'P2', stage: 'Plántula', ...ageOf(21) }),
+    createPlant({ id: 3, name: 'P3', stage: 'Vegetativo', ...ageOf(60) }),
   ];
 
-  const result = getFirstSuggestion(plants);
-  assert.notStrictEqual(result, null);
+  const result = getFirstSuggestion(plants, now);
   assert.strictEqual(result?.plant.id, 2);
   assert.strictEqual(result?.nextStage, 'Vegetativo');
 });
 
-test('getFirstSuggestion - returns null if no matches', () => {
+test('getFirstSuggestion - saltea las sugerencias descartadas', () => {
   const plants = [
-    createPlant({ id: 1, stage: 'Germinación', current_age_days: 1 }),
+    createPlant({ id: 2, stage: 'Plántula', ...ageOf(21) }),
+    createPlant({ id: 3, stage: 'Vegetativo', ...ageOf(60) }),
   ];
-  const result = getFirstSuggestion(plants);
-  assert.strictEqual(result, null);
+  const result = getFirstSuggestion(plants, now, (id, next) => id === 2 && next === 'Vegetativo');
+  assert.strictEqual(result?.plant.id, 3);
+});
+
+test('getFirstSuggestion - null si ninguna corresponde', () => {
+  assert.strictEqual(getFirstSuggestion([createPlant({ id: 1, stage: 'Germinación', ...ageOf(1) })], now), null);
 });
 
 test('getStageDateColumn - devuelve la columna de cada etapa', () => {

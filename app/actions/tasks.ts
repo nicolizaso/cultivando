@@ -4,7 +4,7 @@ import { createClient } from "@/app/lib/supabase-server"
 import { requireUser } from "@/app/lib/auth"
 import type { ServerSupabase } from "@/app/lib/auth"
 import { TASK_TYPES, getTaskType } from "@/app/lib/constants"
-import { daysBetweenKeys, todayKey } from "@/app/lib/dates"
+import { dateKey, daysBetweenKeys, todayKey } from "@/app/lib/dates"
 import { averageDays, buildRecipe, recipeItems, weekInStage, withRecipe } from "@/app/lib/nutrition"
 import type { ComboInfo, FertilizerDoseInfo, NutritionSelection } from "@/app/lib/nutrition"
 import { getPlantMetrics } from "@/app/lib/plant-metrics"
@@ -599,7 +599,8 @@ async function applyTaskCompletionEffect(
 ): Promise<TaskCompletionEffects | null> {
   if (effect.kind === 'water') {
     const ids = plants.map((plant) => plant.id)
-    const { error } = await supabase.from('plants').update({ last_water: effectDate }).in('id', ids)
+    // `last_water` guarda el día de calendario, como el riego en lote.
+    const { error } = await supabase.from('plants').update({ last_water: dateKey(effectDate) }).in('id', ids)
     if (error) {
       console.error('Error updating last_water:', error)
       return null
