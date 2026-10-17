@@ -2,9 +2,9 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 
 /**
- * Presupuesto máximo para hablar con Supabase Auth desde el middleware.
- * Vercel corta la invocación a los 25s (MIDDLEWARE_INVOCATION_TIMEOUT), así que
- * cortamos nosotros mucho antes y dejamos pasar la request.
+ * Presupuesto máximo para hablar con Supabase Auth desde el proxy.
+ * Si Supabase tarda, cortamos nosotros mucho antes que la plataforma y dejamos
+ * pasar la request: los Server Components y la RLS vuelven a validar la sesión.
  */
 const AUTH_TIMEOUT_MS = 3000;
 
@@ -37,10 +37,11 @@ function hasAuthCookie(request: NextRequest) {
 const fetchWithTimeout: typeof fetch = (input, init) =>
   fetch(input, { ...init, signal: AbortSignal.timeout(AUTH_TIMEOUT_MS) });
 
-export async function middleware(request: NextRequest) {
+// Next 16 renombró `middleware` a `proxy`: mismo comportamiento, otro nombre.
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Sin configuración de Supabase el middleware no puede decidir nada:
+  // Sin configuración de Supabase el proxy no puede decidir nada:
   // dejamos pasar en vez de colgarnos contra una URL indefinida.
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
     return NextResponse.next();

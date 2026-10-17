@@ -19,7 +19,7 @@ export async function createClient() {
             );
           } catch {
             // El método setAll fue llamado desde un Server Component.
-            // Esto se puede ignorar si tienes un middleware refrescando la sesión.
+            // Se puede ignorar: el proxy (proxy.ts) es el que refresca la sesión.
           }
         },
       },
