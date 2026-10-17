@@ -1,27 +1,26 @@
 {
   "name": "mi-cultivo",
   "version": "0.1.0",
-  "homepage": "https://tu-usuario.github.io/tu-repo",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "export": "next export"
+    "typecheck": "tsc --noEmit",
+    "test": "node --test \"app/**/*.test.ts\""
   },
   "dependencies": {
     "@supabase/ssr": "^0.8.0",
     "@supabase/supabase-js": "^2.90.1",
     "browser-image-compression": "^2.0.2",
     "date-fns": "^4.1.0",
-    "dotenv": "^17.2.3",
     "framer-motion": "^12.23.26",
     "lucide-react": "^0.562.0",
-    "next": "16.0.7",
+    "next": "16.4.2",
     "next-themes": "^0.4.6",
-    "react": "19.2.0",
-    "react-dom": "19.2.0"
+    "react": "19.3.1",
+    "react-dom": "19.3.1"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
@@ -29,8 +28,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
-    "eslint-config-next": "16.0.7",
-    "gh-pages": "^6.3.0",
+    "eslint-config-next": "16.4.2",
     "tailwindcss": "^4",
     "typescript": "^5.9.3"
   }
