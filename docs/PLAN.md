@@ -169,6 +169,10 @@ Lo que te toca hacer a vos está en `docs/PENDIENTES.md`.
   floración, pasa a Secado. En el ciclo: seco total, por planta, por m² y por watt, y una
   planilla para pesar todas juntas. Cosecha estimada en ciclos en floración (días de
   floración de la genética o 63). "Seco por planta" en Genéticas.
-- [ ] Etapa 15 · Plan de cultivo automático
+- [x] Etapa 15 · Plan de cultivo automático — "Plan de cultivo" en la ficha del ciclo:
+  días de vegetativo y floración (sugeridos por la genética), riego cada N días, 1 de
+  cada N con el fertilizante de la etapa (con la receta de su semana), lavado de raíces,
+  cambios de etapa y cosecha. Vista previa por semana con cada tarea destildable; se crean
+  con `create_tasks` y se pueden borrar juntas (las pendientes).
 - [ ] Etapa 16 · Exportar o compartir un ciclo
 - [ ] Etapa 17 · Notificaciones push

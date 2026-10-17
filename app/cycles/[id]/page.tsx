@@ -9,10 +9,12 @@ import PageHeader from "@/components/layout/PageHeader";
 import { daysSince } from "@/app/lib/utils";
 import { Space } from "@/app/lib/types";
 import { parseId } from "@/app/lib/sanitize";
-import { formatDay, todayKey } from "@/app/lib/dates";
+import { dateKey, formatDay, todayKey } from "@/app/lib/dates";
 import { dominantStage, stagePeriods } from "@/app/lib/climate";
-import { dominantStrain, estimateHarvest } from "@/app/lib/harvest";
-import { STRAIN_PLANT_COLUMNS, strainDurationIndex, strainStats } from "@/app/lib/strain-stats";
+import { DEFAULT_FLOWER_DAYS, dominantStrain, estimateHarvest } from "@/app/lib/harvest";
+import { DEFAULT_VEG_DAYS } from "@/app/lib/grow-plan";
+import { MIN_SAMPLES, STRAIN_PLANT_COLUMNS, strainDurationIndex, strainKey, strainStats } from "@/app/lib/strain-stats";
+import GrowPlanModal from "@/components/GrowPlanModal";
 import CycleHarvestSection from "@/components/CycleHarvestSection";
 
 /** Cuántas mediciones se traen para el historial de clima (unos tres meses). */
@@ -38,6 +40,7 @@ export default async function CycleDetailPage({ params }: { params: Promise<{ id
     { data: cyclePhotoLogs },
     { data: harvests },
     { data: strainPlants },
+    { count: pendingPlanTasks },
   ] = await Promise.all([
     supabase.from('cycles').select(`*, spaces ( name, type, area_m2, width, length, light_watts )`).eq('id', id).single(),
     supabase.from('plants').select('*').eq('cycle_id', id).order('id', { ascending: true }),
@@ -66,6 +69,12 @@ export default async function CycleDetailPage({ params }: { params: Promise<{ id
     supabase.from('harvests').select('plant_id, cycle_id, harvested_on, dried_on, wet_g, dry_g, rating, notes').eq('cycle_id', id),
     // Para estimar la cosecha con los días de floración de la genética.
     supabase.from('plants').select(STRAIN_PLANT_COLUMNS),
+    // Tareas pendientes de un plan de cultivo de este ciclo.
+    supabase
+      .from('tasks')
+      .select('id', { count: 'exact', head: true })
+      .eq('status', 'pending')
+      .eq('metadata->>plan_cycle_id', String(id)),
   ]);
 
   if (error || !cycle) return notFound();
@@ -77,14 +86,25 @@ export default async function CycleDetailPage({ params }: { params: Promise<{ id
 
   const activePlants = (plants ?? []).filter(p => !p.is_archived);
 
+  const cycleStage = dominantStage(activePlants);
+  const stageStart = stagePeriods(activePlants).find((period) => period.stage === cycleStage)?.from
+    ?? activePlants
+      .filter((plant) => plant.stage === cycleStage)
+      .map((plant) => dateKey(plant.stage_updated_at))
+      .filter((day): day is string => Boolean(day))
+      .sort()[0]
+    ?? null;
+  const strain = dominantStrain(activePlants);
+  const durations = strainDurationIndex(strainStats(strainPlants ?? []));
+  const strainDurationsOfCycle = strainKey(strain) ? durations[strainKey(strain)!] : undefined;
+  const averageDaysOf = (stage: 'Vegetativo' | 'Floración', fallback: number) => {
+    const average = strainDurationsOfCycle?.[stage];
+    return average && average.n >= MIN_SAMPLES ? average.avg : fallback;
+  };
+
   // Cosecha estimada: sólo si el ciclo está en floración.
-  const estimate = cycle.is_active && dominantStage(activePlants) === 'Floración'
-    ? estimateHarvest({
-        flowerStart: stagePeriods(activePlants).find((period) => period.stage === 'Floración')?.from,
-        strain: dominantStrain(activePlants),
-        durations: strainDurationIndex(strainStats(strainPlants ?? [])),
-        today: todayKey(),
-      })
+  const estimate = cycle.is_active && cycleStage === 'Floración'
+    ? estimateHarvest({ flowerStart: stageStart, strain, durations, today: todayKey() })
     : null;
 
   return (
@@ -119,6 +139,17 @@ export default async function CycleDetailPage({ params }: { params: Promise<{ id
               Cosecha estimada {formatDay(estimate.day)}
               {estimate.daysLeft > 0 ? ` · en ${estimate.daysLeft} días` : estimate.daysLeft === 0 ? ' · hoy' : ` · hace ${-estimate.daysLeft} días`}
             </span>
+          )}
+
+          {cycle.is_active && activePlants.length > 0 && (
+            <GrowPlanModal
+              cycleId={cycle.id}
+              stage={cycleStage}
+              stageStart={stageStart}
+              defaultVegDays={averageDaysOf('Vegetativo', DEFAULT_VEG_DAYS)}
+              defaultFlowerDays={averageDaysOf('Floración', DEFAULT_FLOWER_DAYS)}
+              pendingPlanTasks={pendingPlanTasks ?? 0}
+            />
           )}
 
           <MoveCycleSpaceModal

@@ -93,6 +93,7 @@ Checklist para el preview del PR, una vez hechos los pasos de arriba:
 - [ ] Riego con la calculadora y "Descontar del stock": el producto baja; si queda menos del aviso, sale "Queda poco" en el aviso, en Nutrición y en el panel.
 - [ ] Ciclo en floración: aparece "Cosecha estimada" con la fecha; en "Cosecha", "Cargar pesos" para varias plantas (pasan a Secado).
 - [ ] Ficha de una planta cosechada: "Editar" la cosecha y cargar el peso seco; en el ciclo se actualizan g/planta, g/m² y g/W (si el espacio tiene medidas y potencia).
+- [ ] Ciclo en vegetativo → "Plan de cultivo": elegir productos, destildar un par de tareas y crear; aparecen en la agenda con la receta de su semana. Después, el tachito al lado borra las pendientes del plan.
 - [ ] En Supabase → Advisors → Performance: ya no aparecen los avisos "Auth RLS Initialization Plan" ni los de claves foráneas sin índice de las tablas de Cultivando.
 
 ---
