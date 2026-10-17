@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { ClipboardList, Trash2, Pencil, Loader2, CheckCircle2 } from 'lucide-react'
 import { getAllPendingTasks, deleteTasks } from '@/app/actions/tasks'
 import { Task } from '@/app/lib/types'
@@ -31,15 +31,6 @@ export default function TaskManagerModal() {
   const { showToast } = useToast()
   const router = useRouter()
 
-  useEffect(() => {
-    if (isOpen) {
-      fetchData()
-    } else {
-      setSelectedTasks(new Set())
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen])
-
   const fetchData = async () => {
     setIsLoading(true)
     const res = await getAllPendingTasks()
@@ -52,6 +43,18 @@ export default function TaskManagerModal() {
 
     if (res.tasks) setTasks(res.tasks)
     if (res.cycles) setCycles(res.cycles)
+  }
+
+  // Se carga al abrir y se limpia la selección al cerrar, en el mismo
+  // momento del clic (antes lo hacía un efecto que miraba `isOpen`).
+  const open = () => {
+    setIsOpen(true)
+    fetchData()
+  }
+
+  const close = () => {
+    setIsOpen(false)
+    setSelectedTasks(new Set())
   }
 
   const handleToggleSelect = (taskId: string | number) => {
@@ -91,7 +94,9 @@ export default function TaskManagerModal() {
   }
 
   const filteredTasks = tasks.filter(task => {
-    if (filterCycle && String(task.cycleId) !== String(filterCycle)) return false
+    // Una tarea puede ser de varios ciclos: antes se comparaba `cycleId`, que
+    // las tareas no tienen, y el filtro dejaba la lista vacía.
+    if (filterCycle && !(task.cycleIds ?? []).includes(Number(filterCycle))) return false
     if (filterType && task.type !== filterType) return false
     return true
   })
@@ -103,7 +108,7 @@ export default function TaskManagerModal() {
     <>
       <button
         type="button"
-        onClick={() => setIsOpen(true)}
+        onClick={open}
         className="btn-icon"
         aria-label="Abrir gestor de tareas"
         title="Gestor de tareas"
@@ -113,7 +118,7 @@ export default function TaskManagerModal() {
 
       <Modal
         isOpen={isOpen}
-        onClose={() => setIsOpen(false)}
+        onClose={close}
         title="Gestión de tareas"
         description={`${tasks.length} tareas pendientes`}
         size="xl"
@@ -221,9 +226,9 @@ export default function TaskManagerModal() {
                           {formatInAppTz(task.due_date, { day: '2-digit', month: 'short', year: 'numeric' })}
                         </time>
                         <span className="chip chip-neutral">{task.type}</span>
-                        {task.cycleName && (
+                        {task.cycleNames && (
                           <span className="chip chip-brand">
-                            {task.cycleName}
+                            {task.cycleNames}
                           </span>
                         )}
                       </p>
@@ -256,6 +261,7 @@ export default function TaskManagerModal() {
 
       {editingTask && (
         <EditTaskModal
+           key={editingTask.id}
            isOpen={!!editingTask}
            onClose={() => {
               setEditingTask(null)

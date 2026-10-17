@@ -1,8 +1,9 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { AlertCircle, Loader2, Plus, Trash2 } from 'lucide-react'
 import { Fertilizer } from '@/app/lib/types'
+import type { FertilizerStage } from '@/app/lib/nutrition'
 import Modal from '@/components/ui/Modal'
 
 interface AddFertilizerModalProps {
@@ -13,36 +14,22 @@ interface AddFertilizerModalProps {
 }
 
 export default function AddFertilizerModal({ isOpen, onClose, onSave, initialData }: AddFertilizerModalProps) {
-  const [name, setName] = useState('')
-  const [brand, setBrand] = useState('')
-  const [stage, setStage] = useState<'enraizamiento' | 'vegetativo' | 'floracion' | 'lavado' | 'todo'>('todo')
-  const [doseType, setDoseType] = useState<'fija' | 'semanal'>('fija')
-  const [doseFixed, setDoseFixed] = useState('')
-  const [doseWeekly, setDoseWeekly] = useState<{ week: number; dose: number }[]>([{ week: 1, dose: 1 }])
+  // El formulario arranca con los datos del producto (o en blanco). Quien lo
+  // abre le cambia la `key` en cada apertura, así que no hace falta un efecto
+  // que copie props al estado. Se leen las columnas reales: antes se leían
+  // `stage`, `dose_type` y `dose_fixed`, que no existen.
+  const [name, setName] = useState(initialData?.name ?? '')
+  const [brand, setBrand] = useState(initialData?.brand ?? '')
+  const [stage, setStage] = useState<FertilizerStage>(initialData?.stage_category ?? 'todo')
+  const [doseType, setDoseType] = useState<'fija' | 'semanal'>(initialData?.dosage_type ?? 'fija')
+  const [doseFixed, setDoseFixed] = useState(
+    initialData?.fixed_dosage != null ? String(initialData.fixed_dosage).replace('.', ',') : ''
+  )
+  const [doseWeekly, setDoseWeekly] = useState<{ week: number; dose: number }[]>(
+    initialData?.weekly_dosages?.length ? initialData.weekly_dosages : [{ week: 1, dose: 1 }]
+  )
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    if (initialData) {
-      // Se leen las columnas reales: antes este bloque leía `stage`,
-      // `dose_type` y `dose_fixed`, que no existen, y al editar un producto
-      // el formulario abría en blanco.
-      setName(initialData.name)
-      setBrand(initialData.brand ?? '')
-      setStage(initialData.stage_category ?? 'todo')
-      setDoseType(initialData.dosage_type ?? 'fija')
-      setDoseFixed(initialData.fixed_dosage !== null ? String(initialData.fixed_dosage).replace('.', ',') : '')
-      setDoseWeekly(initialData.weekly_dosages?.length ? initialData.weekly_dosages : [{ week: 1, dose: 1 }])
-    } else {
-      setName('')
-      setBrand('')
-      setStage('todo')
-      setDoseType('fija')
-      setDoseFixed('')
-      setDoseWeekly([{ week: 1, dose: 1 }])
-    }
-    setError(null)
-  }, [initialData, isOpen])
 
   const handleAddWeek = () => {
     setDoseWeekly([...doseWeekly, { week: doseWeekly.length + 1, dose: 1 }])
@@ -156,7 +143,7 @@ export default function AddFertilizerModal({ isOpen, onClose, onSave, initialDat
           <select
             id="fert-stage"
             value={stage}
-            onChange={(e) => setStage(e.target.value as any)}
+            onChange={(e) => setStage(e.target.value as FertilizerStage)}
             className="field-input"
           >
             <option value="todo">Todo el ciclo</option>

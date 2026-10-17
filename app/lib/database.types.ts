@@ -617,14 +617,7 @@ export type Database = {
       }
     }
     Enums: {
-      grow_stage:
-        | "Germinación"
-        | "Esqueje"
-        | "Vegetación"
-        | "Floración"
-        | "Secado"
-        | "Curado"
-      space_type: "Indoor" | "Outdoor" | "Mixto"
+      [_ in never]: never
     }
     CompositeTypes: {
       [_ in never]: never
@@ -751,16 +744,6 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {
-      grow_stage: [
-        "Germinación",
-        "Esqueje",
-        "Vegetación",
-        "Floración",
-        "Secado",
-        "Curado",
-      ],
-      space_type: ["Indoor", "Outdoor", "Mixto"],
-    },
+    Enums: {},
   },
 } as const

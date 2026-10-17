@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { supabase } from "@/app/lib/supabase";
+import { useState } from "react";
+import { createCycleWithSpace } from "@/app/cycles/actions";
 import { useRouter } from "next/navigation";
 import { Space } from "@/app/lib/types";
 import { Loader2, Plus, Warehouse } from "lucide-react";
@@ -11,12 +11,16 @@ import Modal from "@/components/ui/Modal";
 import { useToast } from "@/app/context/ToastContext";
 import { todayForInput } from "@/app/lib/dates";
 
-export default function AddCycleModal() {
+interface AddCycleModalProps {
+  /** Los espacios del usuario: los trae la página, no el navegador. */
+  spaces: Pick<Space, 'id' | 'name' | 'type'>[];
+}
+
+export default function AddCycleModal({ spaces }: AddCycleModalProps) {
   const router = useRouter();
   const { showToast } = useToast();
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [spaces, setSpaces] = useState<Space[]>([]);
   const [showInlineSpaceModal, setShowInlineSpaceModal] = useState(false);
 
   const [formData, setFormData] = useState({
@@ -25,21 +29,15 @@ export default function AddCycleModal() {
     spaceId: "",
   });
 
-  const fetchSpaces = async () => {
-    const { data } = await supabase.from('spaces').select('*');
-    if (data) setSpaces(data as Space[]);
-  };
-
-  useEffect(() => {
-    fetchSpaces();
-  }, []);
-
-  const handleSpaceCreated = async (newSpaceId: number) => {
-    await fetchSpaces();
+  const handleSpaceCreated = (newSpaceId: number) => {
     setFormData(prev => ({ ...prev, spaceId: newSpaceId.toString() }));
     setShowInlineSpaceModal(false);
+    // El espacio nuevo llega en las props con el refresh del servidor.
+    router.refresh();
   };
 
+  // Se crea por la Server Action, que valida y pone el dueño: antes se
+  // insertaba desde el navegador con el user_id que mandaba el cliente.
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -49,31 +47,18 @@ export default function AddCycleModal() {
     }
 
     setLoading(true);
+    const res = await createCycleWithSpace(formData.name, formData.startDate, Number(formData.spaceId));
+    setLoading(false);
 
-    try {
-      const { error } = await supabase
-        .from('cycles')
-        .insert([
-          {
-            name: formData.name,
-            start_date: formData.startDate,
-            space_id: Number(formData.spaceId),
-            is_active: true,
-            user_id: (await supabase.auth.getUser()).data.user?.id,
-          },
-        ]);
-
-      if (error) throw error;
-
-      setIsOpen(false);
-      setFormData({ name: "", startDate: todayForInput(), spaceId: "" });
-      showToast("Ciclo creado");
-      router.refresh();
-    } catch (error) {
-      showToast(error instanceof Error ? error.message : "No se pudo crear el ciclo", "error");
-    } finally {
-      setLoading(false);
+    if (!res.success) {
+      showToast(res.error || "No se pudo crear el ciclo", "error");
+      return;
     }
+
+    setIsOpen(false);
+    setFormData({ name: "", startDate: todayForInput(), spaceId: "" });
+    showToast("Ciclo creado");
+    router.refresh();
   };
 
   return (

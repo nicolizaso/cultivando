@@ -108,13 +108,16 @@ Lo que te toca hacer a vos está en `docs/PENDIENTES.md`.
 - [x] Menos consultas al crear o editar series de tareas. *(Hecho en las Etapas 2 y 5.)*
 
 ### Etapa 7 · Limpieza
-- [ ] Lint sin errores; los `any` reemplazados por tipos generados. Con Next 16.4
-  aparecieron más avisos de `react-hooks/set-state-in-effect` (19) y uno de
-  `react-hooks/immutability`.
-- [ ] Base: borrar los enums sin uso `grow_stage` y `space_type`.
-- [ ] Escrituras restantes desde el navegador → Server Actions.
-- [ ] Código muerto fuera (`completeTask`, campos obsoletos).
-- [ ] GitHub Actions con lint, tipos, tests y build en cada PR.
+- [x] Lint sin errores: fuera los `any`, los efectos que copiaban props al estado
+  (formularios con `key` y valores iniciales) y el patrón "mounted"
+  (`useIsClient` con `useSyncExternalStore`).
+- [x] Base: borrar los enums sin uso `grow_stage` y `space_type` (`20261017200000_limpieza.sql`).
+- [x] Escrituras restantes desde el navegador → Server Actions (alta de ciclo,
+  de espacio y lecturas del alta de planta). Ya no queda el cliente de
+  Supabase del navegador.
+- [x] Código muerto fuera (campos obsoletos de `Task`). De paso: el filtro por
+  ciclo de "Gestionar tareas" nunca encontraba nada.
+- [x] GitHub Actions con lint, tipos, tests y build en cada PR (`.github/workflows/ci.yml`).
 
 ---
 

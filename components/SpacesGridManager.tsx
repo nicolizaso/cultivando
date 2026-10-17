@@ -44,6 +44,7 @@ export default function SpacesGridManager({ initialSpaces, usage }: SpacesGridMa
       )}
 
       <SpaceConfigModal
+        key={selectedSpace?.id ?? 'ninguno'}
         isOpen={!!selectedSpace}
         onClose={() => setSelectedSpace(null)}
         space={selectedSpace}

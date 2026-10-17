@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { Loader2, Repeat, Trash2, AlertTriangle } from 'lucide-react'
 import { updateTask, deleteTask, deleteTaskSeries } from '@/app/actions/tasks'
 import { Task } from '@/app/lib/types'
@@ -17,6 +17,10 @@ interface EditTaskModalProps {
   task: Task
 }
 
+/**
+ * Se monta con la tarea a editar (y `key={task.id}`): el formulario arranca
+ * con sus datos, sin un efecto que los copie al abrir.
+ */
 export default function EditTaskModal({ isOpen, onClose, task }: EditTaskModalProps) {
   const { showToast } = useToast()
   const router = useRouter()
@@ -34,18 +38,6 @@ export default function EditTaskModal({ isOpen, onClose, task }: EditTaskModalPr
   const [showDeleteOptions, setShowDeleteOptions] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
 
-  useEffect(() => {
-    if (isOpen && task) {
-       setTitle(task.title)
-       setDescription(task.description || '')
-       setApplicationType(task.application_type || 'Riego')
-       setTargetStage(task.target_stage || 'Vegetativo')
-       setDate(dateKey(task.due_date) ?? todayKey())
-       setScope('single')
-       setShowDeleteOptions(false)
-       setShowDeleteConfirm(false)
-    }
-  }, [isOpen, task])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

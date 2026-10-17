@@ -47,7 +47,7 @@ export default async function CyclesPage() {
       <PageHeader
         title="Ciclos"
         subtitle="Cada tanda de cultivo, desde el día uno hasta el curado"
-        actions={<AddCycleModal />}
+        actions={<AddCycleModal spaces={(spaces ?? []) as Pick<Space, 'id' | 'name' | 'type'>[]} />}
       />
 
       <CyclesGrid

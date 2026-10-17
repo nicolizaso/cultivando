@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useIsClient } from "@/app/hooks/useIsClient";
 import { getPlantMetrics } from "@/app/lib/utils";
 import { Plant } from "@/app/lib/types";
 
@@ -10,11 +10,8 @@ interface PlantMetricsDisplayProps {
 }
 
 export default function PlantMetricsDisplay({ plant, type }: PlantMetricsDisplayProps) {
-  const [isMounted, setIsMounted] = useState(false);
-
-  useEffect(() => {
-    setIsMounted(true);
-  }, []);
+  // Los días dependen de "hoy": se muestran recién en el navegador.
+  const isMounted = useIsClient();
 
   const metrics = getPlantMetrics(plant);
   const value = type === 'totalAge' ? metrics.totalAge : metrics.daysInCurrentStage;

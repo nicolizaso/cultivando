@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useRef } from "react";
+import { useIsClient } from "@/app/hooks/useIsClient";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -54,12 +55,8 @@ export default function CycleDetailView({ cycle, plants, lastMeasurement, cycleI
   const [isStageModalOpen, setIsStageModalOpen] = useState(false);
   const [isWaterModalOpen, setIsWaterModalOpen] = useState(false);
   const [isMeasureModalOpen, setIsMeasureModalOpen] = useState(false);
-  const [isMounted, setIsMounted] = useState(false);
+  const isMounted = useIsClient();
   const [showDeleteImagesConfirm, setShowDeleteImagesConfirm] = useState(false);
-
-  useEffect(() => {
-    setIsMounted(true);
-  }, []);
 
   const activePlants = plants.filter(p => !p.is_archived);
 
@@ -394,8 +391,8 @@ export default function CycleDetailView({ cycle, plants, lastMeasurement, cycleI
                     </span>
 
                     <span className={`relative block aspect-square ${stageInfo.bgColor}`}>
-                      {(plant as any).image_url ? (
-                        <Image src={(plant as any).image_url} alt="" fill sizes="220px" className="object-cover" />
+                      {plant.image_url ? (
+                        <Image src={plant.image_url} alt="" fill sizes="220px" className="object-cover" />
                       ) : (
                         <span className={`flex h-full items-center justify-center text-3xl ${stageInfo.textColor}`}>
                           {stageInfo.icon}

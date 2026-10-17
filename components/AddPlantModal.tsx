@@ -1,7 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { supabase } from "@/app/lib/supabase";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Plant, Cycle } from "@/app/lib/types";
 import { Loader2, Sprout } from "lucide-react";
@@ -12,13 +11,21 @@ import { useToast } from "@/app/context/ToastContext";
 
 const SEED_STAGES = ['Germinación', 'Plántula', 'Vegetativo', 'Floración'];
 
-export default function AddPlantModal() {
+type CycleOption = Pick<Cycle, 'id' | 'name'>;
+type MotherOption = Pick<Plant, 'id' | 'name' | 'strain' | 'breeder'>;
+
+interface AddPlantModalProps {
+  /** Ciclos activos, para elegir dónde va la planta. Los trae la página. */
+  activeCycles: CycleOption[];
+  /** Plantas que pueden dar esquejes: las no archivadas. */
+  potentialMothers: MotherOption[];
+}
+
+export default function AddPlantModal({ activeCycles, potentialMothers }: AddPlantModalProps) {
   const router = useRouter();
   const { showToast } = useToast();
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [activeCycles, setActiveCycles] = useState<Cycle[]>([]);
-  const [potentialMothers, setPotentialMothers] = useState<Plant[]>([]);
 
   const [formData, setFormData] = useState({
     strain: "",
@@ -34,63 +41,34 @@ export default function AddPlantModal() {
 
   const [isNameManuallyEdited, setIsNameManuallyEdited] = useState(false);
 
-  useEffect(() => {
-    if (isOpen) {
-      const fetchData = async () => {
-        const { data: cyclesData } = await supabase
-          .from('cycles')
-          .select('id, name, start_date, is_active, space_id')
-          .eq('is_active', true)
-          .order('created_at', { ascending: false });
+  // Lo que antes hacían tres efectos (copiar estado después de renderizar) se
+  // resuelve en el momento del cambio.
 
-        if (cyclesData) setActiveCycles(cyclesData as unknown as Cycle[]);
+  /** El nombre sugerido sigue a la genética hasta que el usuario lo edite. */
+  const changeStrain = (strain: string) => {
+    setFormData((prev) => ({ ...prev, strain, ...(isNameManuallyEdited ? {} : { name: strain }) }));
+  };
 
-        // Sólo lo que hace falta para elegir madre: una archivada (muerta o
-        // cosechada) no puede dar esquejes.
-        const { data: plantsData } = await supabase
-          .from('plants')
-          .select('id, name, strain, breeder')
-          .eq('is_archived', false)
-          .order('name', { ascending: true });
+  /** Al elegir madre, el esqueje hereda su genética, su banco y su nombre. */
+  const changeMother = (motherId: string) => {
+    const mother = potentialMothers.find((plant) => String(plant.id) === motherId);
+    setFormData((prev) => ({
+      ...prev,
+      mother_id: motherId,
+      ...(mother ? { strain: mother.strain || '', breeder: mother.breeder || '', name: mother.name || '' } : {}),
+    }));
+    if (mother) setIsNameManuallyEdited(true);
+  };
 
-        if (plantsData) setPotentialMothers(plantsData as unknown as Plant[]);
-      };
-      fetchData();
-    }
-  }, [isOpen]);
-
-  // Nombre sugerido a partir de la genética, hasta que el usuario lo edite.
-  useEffect(() => {
-    if (!isNameManuallyEdited && formData.strain) {
-      setFormData(prev => ({ ...prev, name: prev.strain }));
-    }
-  }, [formData.strain, isNameManuallyEdited]);
-
-  // Al elegir madre, se heredan sus datos.
-  useEffect(() => {
-    if (formData.source_type === 'Esqueje' && formData.mother_id) {
-      const mother = potentialMothers.find(p => p.id.toString() === formData.mother_id.toString());
-
-      if (mother) {
-        setFormData(prev => ({
-          ...prev,
-          strain: mother.strain || '',
-          breeder: mother.breeder || '',
-          name: mother.name || '',
-        }));
-        setIsNameManuallyEdited(true);
-      }
-    }
-  }, [formData.mother_id, formData.source_type, potentialMothers]);
-
-  useEffect(() => {
-    if (formData.source_type === 'Esqueje') {
-      setFormData(prev => ({ ...prev, stage: 'Enraizamiento' }));
-    } else if (!SEED_STAGES.includes(formData.stage) && formData.stage !== 'Germinación') {
-      setFormData(prev => ({ ...prev, stage: 'Germinación' }));
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [formData.source_type]);
+  /** Un esqueje arranca en Enraizamiento; una semilla, en una etapa de semilla. */
+  const changeSource = (source: "Semilla" | "Esqueje") => {
+    setFormData((prev) => ({
+      ...prev,
+      source_type: source,
+      ...(source === "Semilla" ? { mother_id: "" } : {}),
+      stage: source === "Esqueje" ? "Enraizamiento" : SEED_STAGES.includes(prev.stage) ? prev.stage : "Germinación",
+    }));
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -219,13 +197,7 @@ export default function AddPlantModal() {
                         name="source_type"
                         value={option}
                         checked={checked}
-                        onChange={() =>
-                          setFormData({
-                            ...formData,
-                            source_type: option,
-                            ...(option === "Semilla" ? { mother_id: "" } : {}),
-                          })
-                        }
+                        onChange={() => changeSource(option)}
                         className="sr-only"
                       />
                       {option}
@@ -243,7 +215,7 @@ export default function AddPlantModal() {
                 id="plant-mother"
                 className="field-input"
                 value={formData.mother_id}
-                onChange={(e) => setFormData({...formData, mother_id: e.target.value})}
+                onChange={(e) => changeMother(e.target.value)}
               >
                 <option value="">Sin madre asignada</option>
                 {potentialMothers.map(plant => (
@@ -266,7 +238,7 @@ export default function AddPlantModal() {
                 placeholder="Ej: Lemon Haze"
                 className="field-input"
                 value={formData.strain}
-                onChange={(e) => setFormData({...formData, strain: e.target.value})}
+                onChange={(e) => changeStrain(e.target.value)}
               />
             </div>
             <div className="field">

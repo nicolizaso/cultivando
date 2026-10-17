@@ -32,7 +32,7 @@ export default async function PlantsPage({
       .order('created_at', { ascending: false }),
     supabase
       .from('cycles')
-      .select('id, name, space_id')
+      .select('id, name, space_id, is_active')
       .order('start_date', { ascending: false }),
     supabase
       .from('spaces')
@@ -45,7 +45,12 @@ export default async function PlantsPage({
       <PageHeader
         title="Plantas"
         subtitle="Todos tus ejemplares, con su etapa y su edad al día"
-        actions={<AddPlantModal />}
+        actions={
+          <AddPlantModal
+            activeCycles={(cycles ?? []).filter((cycle) => cycle.is_active)}
+            potentialMothers={(plants ?? []).filter((plant) => !plant.is_archived).sort((a, b) => a.name.localeCompare(b.name, 'es'))}
+          />
+        }
       />
 
       <PlantsGridManager

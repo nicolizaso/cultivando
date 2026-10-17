@@ -284,6 +284,7 @@ export default function AgendaList({ tasks, groupByStatus = false, emptyLabel = 
 
       {editingTask && (
         <EditTaskModal
+           key={editingTask.id}
            isOpen={!!editingTask}
            onClose={() => setEditingTask(null)}
            task={editingTask}

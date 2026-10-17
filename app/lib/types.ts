@@ -35,13 +35,13 @@ export type Measurement = Tables<'measurements'>;
 export interface Task {
   id: number | string;
   title: string;
-  due_date: string; // ISO string YYYY-MM-DD
-  completed?: boolean;
+  /** Instante ISO; el día se lee con `dateKey`, en hora argentina. */
+  due_date: string;
   status?: 'pending' | 'completed';
   completed_at?: string;
-  cycleId?: string;
+  /** Ciclos de la tarea, aplanados desde `task_cycles` para filtrar. */
   cycleIds?: number[];
-  cycleName?: string; // Deprecated
+  /** Sus nombres, para mostrar ("Ciclo A, Ciclo B"). */
   cycleNames?: string;
   type: string; // 'riego', 'poda', etc.
   application_type?: string;
@@ -62,7 +62,6 @@ export interface Task {
   task_cycles?: {
     cycles?: { id: number; name: string; };
   }[];
-  plants?: any;
 }
 
 /**

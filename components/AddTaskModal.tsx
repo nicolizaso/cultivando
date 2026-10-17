@@ -83,26 +83,32 @@ export default function AddTaskModal({ isOpen, onClose, plants, spaces, cycles =
     return () => document.removeEventListener("mousedown", handleClickOutside)
   }, [isTargetOpen])
 
-  // Carga de nutrición sólo cuando el tipo es fertilizante
-  useEffect(() => {
-    if (selectedTaskType?.id === 'fertilizante') {
-      const loadNutrition = async () => {
-        setIsNutritionLoading(true)
-        try {
-          const [fertRes, combosRes] = await Promise.all([getFertilizers(), getFertilizerCombos()])
-          if (fertRes.data) setFertilizers(fertRes.data)
-          if (combosRes.data) setCombos(combosRes.data)
-        } catch (error) {
-          console.error("Failed to load nutrition data", error)
-        } finally {
-          setIsNutritionLoading(false)
-        }
-      }
-      loadNutrition()
-    } else {
-      setSelectedNutrition(null)
+  // Los productos y combos se piden la primera vez que se elige
+  // "Fertilizante", en el momento del cambio (antes, un efecto que miraba el
+  // tipo los volvía a pedir cada vez).
+  const nutritionLoaded = useRef(false)
+
+  const loadNutrition = async () => {
+    if (nutritionLoaded.current) return
+    nutritionLoaded.current = true
+    setIsNutritionLoading(true)
+    try {
+      const [fertRes, combosRes] = await Promise.all([getFertilizers(), getFertilizerCombos()])
+      if (fertRes.data) setFertilizers(fertRes.data)
+      if (combosRes.data) setCombos(combosRes.data)
+    } catch (error) {
+      nutritionLoaded.current = false
+      console.error("Failed to load nutrition data", error)
+    } finally {
+      setIsNutritionLoading(false)
     }
-  }, [selectedTaskType])
+  }
+
+  const changeTaskType = (taskType: typeof TASK_TYPES[0] | null) => {
+    setSelectedTaskType(taskType)
+    if (taskType?.id === 'fertilizante') loadNutrition()
+    else setSelectedNutrition(null)
+  }
 
   /**
    * Escribe la receta en los detalles con la semana de la etapa del primer
@@ -185,7 +191,7 @@ export default function AddTaskModal({ isOpen, onClose, plants, spaces, cycles =
       router.refresh()
 
       setSelectedTargets([])
-      setSelectedTaskType(null)
+      changeTaskType(null)
       setDescription('')
       setOtherText('')
       setIsRecurring(false)
@@ -325,8 +331,7 @@ export default function AddTaskModal({ isOpen, onClose, plants, spaces, cycles =
               data-autofocus
               value={selectedTaskType?.id ?? ''}
               onChange={(e) => {
-                const found = TASK_TYPES.find(t => t.id === e.target.value) ?? null
-                setSelectedTaskType(found)
+                changeTaskType(TASK_TYPES.find(t => t.id === e.target.value) ?? null)
               }}
               className="field-input pl-10"
             >

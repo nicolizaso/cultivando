@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { supabase } from "@/app/lib/supabase";
+import { createSpaceInline } from "@/app/actions/spaces";
+import type { SpaceType } from "@/app/lib/types";
 import { useRouter } from "next/navigation";
 import { Loader2, Plus } from "lucide-react";
 import Modal from "@/components/ui/Modal";
@@ -13,35 +14,27 @@ export default function AddSpaceModal() {
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<{ name: string; type: SpaceType }>({
     name: "",
     type: "Indoor",
   });
 
+  // Por la Server Action, que valida el nombre y el tipo y pone el dueño.
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    const res = await createSpaceInline(formData.name, formData.type);
+    setLoading(false);
 
-    try {
-      const { error } = await supabase
-        .from('spaces')
-        .insert([{
-            name: formData.name,
-            type: formData.type
-        }]);
-
-      if (error) throw error;
-
-      setIsOpen(false);
-      setFormData({ name: "", type: "Indoor" });
-      showToast(`Espacio "${formData.name}" creado`);
-      router.refresh();
-
-    } catch (error) {
-      showToast(error instanceof Error ? error.message : "No se pudo crear el espacio", "error");
-    } finally {
-      setLoading(false);
+    if (!res.success) {
+      showToast(res.error || "No se pudo crear el espacio", "error");
+      return;
     }
+
+    setIsOpen(false);
+    setFormData({ name: "", type: "Indoor" });
+    showToast(`Espacio "${formData.name.trim()}" creado`);
+    router.refresh();
   };
 
   return (
@@ -91,7 +84,7 @@ export default function AddSpaceModal() {
               id="space-type"
               className="field-input"
               value={formData.type}
-              onChange={(e) => setFormData({...formData, type: e.target.value})}
+              onChange={(e) => setFormData({...formData, type: e.target.value as SpaceType})}
             >
               <option value="Indoor">Indoor</option>
               <option value="Outdoor">Outdoor (exterior)</option>

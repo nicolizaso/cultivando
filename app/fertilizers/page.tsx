@@ -35,8 +35,13 @@ export default function FertilizersPage() {
   const [editingCombo, setEditingCombo] = useState<FertilizerCombo | null>(null)
   const [pendingDeletion, setPendingDeletion] = useState<PendingDeletion | null>(null)
 
+  // Cada apertura de un modal le da una `key` nueva: el formulario se arma de
+  // cero con los datos del producto o combo elegido, sin copiar props al
+  // estado en un efecto.
+  const [productFormKey, setProductFormKey] = useState(0)
+  const [comboFormKey, setComboFormKey] = useState(0)
+
   const loadData = async () => {
-    setIsLoading(true)
     const [fertRes, comboRes] = await Promise.all([
       getFertilizers(),
       getFertilizerCombos()
@@ -47,7 +52,14 @@ export default function FertilizersPage() {
   }
 
   useEffect(() => {
-    loadData()
+    let cancelled = false
+    Promise.all([getFertilizers(), getFertilizerCombos()]).then(([fertRes, comboRes]) => {
+      if (cancelled) return
+      if (fertRes.data) setFertilizers(fertRes.data)
+      if (comboRes.data) setCombos(comboRes.data)
+      setIsLoading(false)
+    })
+    return () => { cancelled = true }
   }, [])
 
   const handleSaveProduct = async (data: Partial<Fertilizer>) => {
@@ -79,8 +91,18 @@ export default function FertilizersPage() {
     await loadData()
   }
 
-  const openProductModal = () => { setEditingProduct(null); setIsProductModalOpen(true) }
-  const openComboModal = () => { setEditingCombo(null); setIsComboModalOpen(true) }
+  const editProduct = (product: Fertilizer | null) => {
+    setEditingProduct(product)
+    setProductFormKey((key) => key + 1)
+    setIsProductModalOpen(true)
+  }
+  const editCombo = (combo: FertilizerCombo | null) => {
+    setEditingCombo(combo)
+    setComboFormKey((key) => key + 1)
+    setIsComboModalOpen(true)
+  }
+  const openProductModal = () => editProduct(null)
+  const openComboModal = () => editCombo(null)
 
   return (
     // La navegación la pone el layout: renderizarla acá duplicaba las barras.
@@ -175,7 +197,7 @@ export default function FertilizersPage() {
                   <div className="mt-auto flex justify-end gap-1 border-t border-line pt-3">
                     <button
                       type="button"
-                      onClick={() => { setEditingProduct(fert); setIsProductModalOpen(true); }}
+                      onClick={() => editProduct(fert)}
                       className="btn-icon btn-icon-sm"
                       aria-label={`Editar ${fert.name}`}
                     >
@@ -241,7 +263,7 @@ export default function FertilizersPage() {
                   <div className="mt-auto flex justify-end gap-1 border-t border-line pt-3">
                     <button
                       type="button"
-                      onClick={() => { setEditingCombo(combo); setIsComboModalOpen(true); }}
+                      onClick={() => editCombo(combo)}
                       className="btn-icon btn-icon-sm"
                       aria-label={`Editar ${combo.name}`}
                     >
@@ -264,6 +286,7 @@ export default function FertilizersPage() {
       )}
 
       <AddFertilizerModal
+        key={productFormKey}
         isOpen={isProductModalOpen}
         onClose={() => setIsProductModalOpen(false)}
         onSave={handleSaveProduct}
@@ -271,6 +294,7 @@ export default function FertilizersPage() {
       />
 
       <AddFertilizerComboModal
+        key={comboFormKey}
         isOpen={isComboModalOpen}
         onClose={() => setIsComboModalOpen(false)}
         onSave={handleSaveCombo}

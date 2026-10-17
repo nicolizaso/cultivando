@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { useIsClient } from "@/app/hooks/useIsClient";
 import { deletePlant, waterPlant } from "@/app/actions/plants";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
@@ -43,13 +44,9 @@ export default function PlantCard({
   const [isDeleting, setIsDeleting] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
-  const [isMounted, setIsMounted] = useState(false);
+  const isMounted = useIsClient();
   const menuRef = useRef<HTMLDivElement>(null);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
-
-  useEffect(() => {
-    setIsMounted(true);
-  }, []);
 
   // Cierre del menú contextual por clic fuera o Escape.
   useEffect(() => {

@@ -31,6 +31,7 @@ Supabase (pegar el archivo entero y ejecutar) o con `supabase db push`:
 4. `20261017170000_plantas.sql`
 5. `20261017180000_bitacora_y_borrados.sql`
 6. `20261017190000_rendimiento.sql`
+7. `20261017200000_limpieza.sql`
 
 ---
 
@@ -72,6 +73,10 @@ Checklist para el preview del PR, una vez hechos los pasos de arriba:
 - [ ] En una cuenta sin espacios, "Omitir por ahora" en la bienvenida y recargar: no vuelve a aparecer.
 - [ ] En un ciclo con plantas numeradas ("X #1-6"), tocar el grupo: la lista de plantas abre filtrada.
 - [ ] Después de aplicar `rendimiento.sql`: entrar, ver plantas, ciclos, espacios, nutrición y agenda; crear y borrar algo en cada una (las reglas de acceso se reescribieron).
+- [ ] Crear un ciclo desde "Ciclos" (y un espacio nuevo desde ahí mismo); crear un espacio desde "Espacios".
+- [ ] Agregar una planta: el desplegable de ciclos y el de madres se cargan; elegir una madre completa genética y nombre.
+- [ ] "Gestionar tareas" en el panel: filtrar por ciclo muestra las tareas de ese ciclo.
+- [ ] Editar un producto y un combo de nutrición, cerrar y abrir otro: cada uno abre con sus datos.
 - [ ] En Supabase → Advisors → Performance: ya no aparecen los avisos "Auth RLS Initialization Plan" ni los de claves foráneas sin índice de las tablas de Cultivando.
 
 ---
