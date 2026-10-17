@@ -83,6 +83,8 @@ Checklist para el preview del PR, una vez hechos los pasos de arriba:
 - [ ] Ficha de un ciclo con fotos (galería o bitácora de sus plantas): "Timelapse" las pasa en orden con el día y la etapa; probar el filtro por planta.
 - [ ] Ficha de una planta que dio esquejes: aparece "Linaje" con sus esquejes; en la ficha de un esqueje, "Viene de" con su madre.
 - [ ] Editar una planta y marcar "Planta madre": en Plantas aparece el filtro "Madres" y al crear un esqueje sale primera.
+- [ ] Plantas → "Genéticas": aparecen tus genéticas con sus días por etapa; tocar una abre la lista filtrada.
+- [ ] Con dos plantas de una genética que ya terminaron la floración, una tercera en floración recibe el aviso "pasaron a secado a los N días".
 - [ ] En Supabase → Advisors → Performance: ya no aparecen los avisos "Auth RLS Initialization Plan" ni los de claves foráneas sin índice de las tablas de Cultivando.
 
 ---

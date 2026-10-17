@@ -1,7 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert';
 import {
-  getFirstSuggestion,
   getStageDateColumn,
   getStageSuggestion,
   STAGE_NAMES,
@@ -54,31 +53,6 @@ test('getStageSuggestion - nada para etapas sin umbral', () => {
 
 test('getStageSuggestion - nunca para una planta archivada', () => {
   assert.strictEqual(getStageSuggestion(createPlant({ stage: 'Germinación', ...ageOf(30), is_archived: true }), now), null);
-});
-
-test('getFirstSuggestion - devuelve la primera que corresponde', () => {
-  const plants = [
-    createPlant({ id: 1, name: 'P1', stage: 'Germinación', ...ageOf(1) }),
-    createPlant({ id: 2, name: 'P2', stage: 'Plántula', ...ageOf(21) }),
-    createPlant({ id: 3, name: 'P3', stage: 'Vegetativo', ...ageOf(60) }),
-  ];
-
-  const result = getFirstSuggestion(plants, now);
-  assert.strictEqual(result?.plant.id, 2);
-  assert.strictEqual(result?.nextStage, 'Vegetativo');
-});
-
-test('getFirstSuggestion - saltea las sugerencias descartadas', () => {
-  const plants = [
-    createPlant({ id: 2, stage: 'Plántula', ...ageOf(21) }),
-    createPlant({ id: 3, stage: 'Vegetativo', ...ageOf(60) }),
-  ];
-  const result = getFirstSuggestion(plants, now, (id, next) => id === 2 && next === 'Vegetativo');
-  assert.strictEqual(result?.plant.id, 3);
-});
-
-test('getFirstSuggestion - null si ninguna corresponde', () => {
-  assert.strictEqual(getFirstSuggestion([createPlant({ id: 1, stage: 'Germinación', ...ageOf(1) })], now), null);
 });
 
 test('getStageDateColumn - devuelve la columna de cada etapa', () => {

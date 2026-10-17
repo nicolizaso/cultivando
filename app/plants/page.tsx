@@ -1,3 +1,5 @@
+import Link from "next/link";
+import { Dna } from "lucide-react";
 import { createClient } from "@/app/lib/supabase-server";
 import PageShell from "@/components/layout/PageShell";
 import PageHeader from "@/components/layout/PageHeader";
@@ -47,10 +49,16 @@ export default async function PlantsPage({
         title="Plantas"
         subtitle="Todos tus ejemplares, con su etapa y su edad al día"
         actions={
-          <AddPlantModal
-            activeCycles={(cycles ?? []).filter((cycle) => cycle.is_active)}
-            potentialMothers={sortMotherOptions((plants ?? []).filter((plant) => !plant.is_archived))}
-          />
+          <>
+            <Link href="/strains" className="btn btn-secondary">
+              <Dna size={16} aria-hidden="true" />
+              Genéticas
+            </Link>
+            <AddPlantModal
+              activeCycles={(cycles ?? []).filter((cycle) => cycle.is_active)}
+              potentialMothers={sortMotherOptions((plants ?? []).filter((plant) => !plant.is_archived))}
+            />
+          </>
         }
       />
 

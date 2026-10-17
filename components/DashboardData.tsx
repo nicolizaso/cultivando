@@ -16,6 +16,7 @@ import { Plant, Task } from "@/app/lib/types";
 import { daysSince, mapTaskCycles } from "@/app/lib/utils";
 import { dayRange, formatInAppTz, todayKey } from "@/app/lib/dates";
 import { ONBOARDING_SKIPPED_COOKIE } from "@/app/lib/onboarding";
+import { STRAIN_PLANT_COLUMNS, strainDurationIndex, strainStats } from "@/app/lib/strain-stats";
 import { buildTaskTargetOptions } from "@/app/lib/task-targets";
 
 interface SpaceInfo { id: number; name: string; type: string; }
@@ -48,7 +49,8 @@ export default async function DashboardData({ user }: { user: { id: string } }) 
     { data: cyclesData },
     { data: todayData },
     { data: overdueData },
-    { data: allSpaces }
+    { data: allSpaces },
+    { data: strainPlants },
   ] = await Promise.all([
     supabase
       .from('profiles')
@@ -84,7 +86,12 @@ export default async function DashboardData({ user }: { user: { id: string } }) 
       .limit(OVERDUE_LIMIT),
     supabase
       .from('spaces')
-      .select('id, name')
+      .select('id, name'),
+    // Todas las plantas, con lo justo para saber cuánto dura cada etapa en
+    // cada genética (el sugeridor usa esos promedios).
+    supabase
+      .from('plants')
+      .select(STRAIN_PLANT_COLUMNS),
   ]);
 
   const username = profile?.username;
@@ -106,6 +113,7 @@ export default async function DashboardData({ user }: { user: { id: string } }) 
   const taskTargets = buildTaskTargetOptions(activeCycles);
 
   const flatPlantsList: Plant[] = activeCycles.flatMap(c => c.plants || []);
+  const strainDurations = strainDurationIndex(strainStats(strainPlants ?? []));
 
   const pendingToday = todaysTasks.filter(t => t.status === 'pending').length;
   const doneToday = todaysTasks.length - pendingToday;
@@ -120,7 +128,7 @@ export default async function DashboardData({ user }: { user: { id: string } }) 
     <>
       {showOnboarding && <OnboardingWizard />}
 
-      <StageSuggester plants={flatPlantsList} />
+      <StageSuggester plants={flatPlantsList} durations={strainDurations} />
 
       <PageHeader
         title={username ? `Hola, ${username}` : 'Tu cultivo hoy'}

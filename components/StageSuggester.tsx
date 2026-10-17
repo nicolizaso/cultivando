@@ -6,12 +6,15 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { Sprout } from "lucide-react";
 import { useToast } from "@/app/context/ToastContext";
 import { useRouter } from "next/navigation";
-import { getFirstSuggestion } from "@/app/lib/stage-logic";
+import { firstStageSuggestion } from "@/app/lib/strain-stats";
+import type { StageSuggestion, StrainDurations } from "@/app/lib/strain-stats";
 import { getPlantMetrics } from "@/app/lib/plant-metrics";
 import { changePlantStage } from "@/app/actions/plants";
 
 interface StageSuggesterProps {
   plants: Plant[];
+  /** Cuánto duró cada etapa en cada genética, para sugerir con datos propios. */
+  durations?: StrainDurations;
 }
 
 /** "Ahora no" se recuerda una semana por planta y etapa sugerida. */
@@ -42,8 +45,8 @@ function saveDismissal(plantId: number, nextStage: string) {
   }
 }
 
-export default function StageSuggester({ plants }: StageSuggesterProps) {
-  const [suggestion, setSuggestion] = useState<{ plant: Plant; nextStage: string } | null>(null);
+export default function StageSuggester({ plants, durations }: StageSuggesterProps) {
+  const [suggestion, setSuggestion] = useState<StageSuggestion | null>(null);
   const [saving, setSaving] = useState(false);
   const router = useRouter();
   const { showToast } = useToast();
@@ -55,10 +58,10 @@ export default function StageSuggester({ plants }: StageSuggesterProps) {
     // Un segundo de demora para que no aparezca encima de la carga.
     const timer = setTimeout(() => {
       const dismissals = readDismissals();
-      setSuggestion(getFirstSuggestion(plants, new Date(), (id, next) => Boolean(dismissals[`${id}:${next}`])));
+      setSuggestion(firstStageSuggestion(plants, new Date(), durations, (id, next) => Boolean(dismissals[`${id}:${next}`])));
     }, 1000);
     return () => clearTimeout(timer);
-  }, [plants]);
+  }, [plants, durations]);
 
   const handleDismiss = () => {
     if (suggestion) saveDismissal(suggestion.plant.id, suggestion.nextStage);
@@ -111,8 +114,19 @@ export default function StageSuggester({ plants }: StageSuggesterProps) {
             <div className="min-w-0">
               <h3 className="text-sm font-semibold text-fg">Sugerencia de cultivo</h3>
               <p className="mt-1 text-sm leading-snug text-fg-muted">
-                <span className="font-semibold text-fg">{suggestion.plant.name}</span> cumplió{' '}
-                {age} días. ¿La pasamos a {suggestion.nextStage}?
+                {suggestion.basis === 'strain' && suggestion.average ? (
+                  <>
+                    <span className="font-semibold text-fg">{suggestion.plant.name}</span> lleva{' '}
+                    {suggestion.daysInStage} días en {getPlantMetrics(suggestion.plant).currentStage.toLowerCase()}. Tus{' '}
+                    {suggestion.plant.strain} pasaron a {suggestion.nextStage.toLowerCase()} a los {suggestion.average.avg} días
+                    en promedio ({suggestion.average.n} plantas). ¿La pasamos a {suggestion.nextStage}?
+                  </>
+                ) : (
+                  <>
+                    <span className="font-semibold text-fg">{suggestion.plant.name}</span> cumplió{' '}
+                    {age} días. ¿La pasamos a {suggestion.nextStage}?
+                  </>
+                )}
               </p>
             </div>
           </div>

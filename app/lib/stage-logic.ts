@@ -30,24 +30,6 @@ export function getStageSuggestion(plant: Plant, now: Date = new Date()): string
 }
 
 /**
- * La primera planta con una sugerencia, salteando las que el usuario ya
- * descartó (`isDismissed`).
- */
-export function getFirstSuggestion(
-  plants: Plant[],
-  now: Date = new Date(),
-  isDismissed: (plantId: number, nextStage: string) => boolean = () => false
-): { plant: Plant; nextStage: string } | null {
-  for (const plant of plants) {
-    const nextStage = getStageSuggestion(plant, now);
-    if (nextStage && !isDismissed(plant.id, nextStage)) {
-      return { plant, nextStage };
-    }
-  }
-  return null;
-}
-
-/**
  * Las siete etapas que la app deja elegir, en el orden en que ocurren, y la
  * columna donde cada una anota su fecha.
  *

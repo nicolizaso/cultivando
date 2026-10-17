@@ -149,7 +149,10 @@ Lo que te toca hacer a vos está en `docs/PENDIENTES.md`.
   esquejes quedan marcadas; un esqueje nuevo marca a su madre). Ficha de la planta con
   "Linaje": de quién viene y el árbol de sus esquejes con generaciones y activos. Marca
   "Planta madre" al editar, filtro "Madres" en Plantas y madres primero al elegir madre.
-- [ ] Etapa 11 · Estadísticas por genética
+- [x] Etapa 11 · Estadísticas por genética — página "Genéticas" (desde Plantas): plantas,
+  ciclos, días promedio de vegetativo y floración, días hasta cosecha, cosechadas y
+  pérdidas. El sugeridor del panel usa el promedio de la genética (con 2 plantas o más)
+  y, con datos, también sugiere pasar a secado.
 - [ ] Etapa 12 · Riego con datos
 - [ ] Etapa 13 · Stock de fertilizantes
 - [ ] Etapa 14 · Cosecha y rendimiento
