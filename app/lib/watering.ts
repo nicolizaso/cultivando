@@ -109,6 +109,7 @@ export function describeWatering(data: WateringData): string {
 }
 
 export interface DoseLine {
+  fertilizerId: number;
   name: string;
   /** ml/L, o null si el producto no tiene dosis cargada. */
   perLiter: number | null;
@@ -120,6 +121,7 @@ export interface DoseLine {
 export function doseForLiters(items: RecipeItem[], liters: number): DoseLine[] {
   const valid = Number.isFinite(liters) && liters > 0;
   return items.map((item) => ({
+    fertilizerId: item.fertilizerId,
     name: item.name,
     perLiter: item.dose,
     total: item.dose === null || !valid ? null : Math.round(item.dose * liters * 100) / 100,

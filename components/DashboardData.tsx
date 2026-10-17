@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { cookies } from "next/headers";
-import { CalendarCheck, LayoutGrid, RefreshCw, Sprout, Warehouse } from "lucide-react";
+import { AlertTriangle, CalendarCheck, LayoutGrid, RefreshCw, Sprout, Warehouse } from "lucide-react";
 
 import OnboardingWizard from "./OnboardingWizard";
 import { createClient } from "@/app/lib/supabase-server";
@@ -51,6 +51,7 @@ export default async function DashboardData({ user }: { user: { id: string } }) 
     { data: overdueData },
     { data: allSpaces },
     { data: strainPlants },
+    { data: stockRows },
   ] = await Promise.all([
     supabase
       .from('profiles')
@@ -92,6 +93,12 @@ export default async function DashboardData({ user }: { user: { id: string } }) 
     supabase
       .from('plants')
       .select(STRAIN_PLANT_COLUMNS),
+    // Productos con stock cargado, para avisar si queda poco.
+    supabase
+      .from('fertilizers')
+      .select('id, name, stock_ml, low_stock_ml')
+      .not('stock_ml', 'is', null)
+      .not('low_stock_ml', 'is', null),
   ]);
 
   const username = profile?.username;
@@ -114,6 +121,8 @@ export default async function DashboardData({ user }: { user: { id: string } }) 
 
   const flatPlantsList: Plant[] = activeCycles.flatMap(c => c.plants || []);
   const strainDurations = strainDurationIndex(strainStats(strainPlants ?? []));
+
+  const lowStock = (stockRows ?? []).filter((row) => Number(row.stock_ml) <= Number(row.low_stock_ml));
 
   const pendingToday = todaysTasks.filter(t => t.status === 'pending').length;
   const doneToday = todaysTasks.length - pendingToday;
@@ -189,6 +198,20 @@ export default async function DashboardData({ user }: { user: { id: string } }) 
           />
         </div>
       </div>
+
+      {lowStock.length > 0 && (
+        <Link
+          href="/fertilizers"
+          className="surface mb-6 flex items-start gap-3 rounded-[var(--radius-lg)] p-4 transition-colors hover:bg-surface-2"
+        >
+          <AlertTriangle size={18} className="mt-0.5 shrink-0 text-[color:var(--warning)]" aria-hidden="true" />
+          <span className="text-sm text-fg">
+            <span className="font-semibold">Queda poco stock: </span>
+            {lowStock.map((row) => `${row.name} (${Number(row.stock_ml).toLocaleString('es-AR')} ml)`).join(', ')}.
+            <span className="ml-1 font-semibold text-[color:var(--brand-text)]">Ver nutrición</span>
+          </span>
+        </Link>
+      )}
 
       {/* --- FEED PRINCIPAL --- */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3 lg:gap-8">

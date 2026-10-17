@@ -404,8 +404,8 @@ export async function bulkChangeStage(
 export async function bulkWaterPlants(
   plantIds: number[],
   date: string,
-  details: { nutrients?: string; watering?: unknown } = {}
-): Promise<BulkResult> {
+  details: { nutrients?: string; watering?: unknown; usage?: unknown } = {}
+): Promise<BulkResult & { lowStock?: { name: string; stock_ml: number | null }[] }> {
   const timestamp = toTimestamp(date);
   const day = dateKey(date);
   if (!timestamp || !day) return { success: false, error: 'La fecha no es válida.' };
@@ -452,8 +452,32 @@ export async function bulkWaterPlants(
     timestamp
   );
 
+  // Lo que salió de cada producto (la calculadora del modal), del stock.
+  const usage = parseUsage(details?.usage);
+  let lowStock: { name: string; stock_ml: number | null }[] = [];
+  if (usage.length > 0) {
+    const { data: moved, error: stockError } = await supabase.rpc('move_fertilizer_stock', {
+      p_changes: usage.map((item) => ({ fertilizer_id: item.fertilizer_id, delta_ml: -item.ml })),
+      p_reason: 'uso',
+      p_note: 'Riego',
+    });
+    if (stockError) console.error('No se pudo descontar el stock del riego:', stockError);
+    lowStock = (moved ?? []).filter((row) => row.low).map((row) => ({ name: row.name, stock_ml: row.stock_ml }));
+    revalidatePath('/fertilizers');
+  }
+
   revalidatePlantViews();
-  return { success: true, count: plants.length };
+  return { success: true, count: plants.length, lowStock };
+}
+
+/** [{ fertilizer_id, ml }] del cliente, depurado: ids válidos y ml positivos. */
+function parseUsage(value: unknown): { fertilizer_id: number; ml: number }[] {
+  if (!Array.isArray(value)) return [];
+  return value.slice(0, 20).flatMap((item) => {
+    const id = parseId((item as { fertilizer_id?: unknown })?.fertilizer_id);
+    const ml = Number((item as { ml?: unknown })?.ml);
+    return id && Number.isFinite(ml) && ml > 0 && ml <= 100000 ? [{ fertilizer_id: id, ml: Math.round(ml * 100) / 100 }] : [];
+  });
 }
 
 /**

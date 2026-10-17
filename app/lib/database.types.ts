@@ -152,37 +152,84 @@ export type Database = {
         }
         Relationships: []
       }
+      fertilizer_movements: {
+        Row: {
+          created_at: string
+          delta_ml: number
+          fertilizer_id: number
+          id: number
+          note: string | null
+          reason: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          delta_ml: number
+          fertilizer_id: number
+          id?: never
+          note?: string | null
+          reason: string
+          user_id?: string
+        }
+        Update: {
+          created_at?: string
+          delta_ml?: number
+          fertilizer_id?: number
+          id?: never
+          note?: string | null
+          reason?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fertilizer_movements_fertilizer_id_fkey"
+            columns: ["fertilizer_id"]
+            isOneToOne: false
+            referencedRelation: "fertilizers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       fertilizers: {
         Row: {
           brand: string | null
+          container_ml: number | null
           created_at: string | null
           dosage_type: string | null
           fixed_dosage: number | null
           id: number
+          low_stock_ml: number | null
           name: string
           stage_category: string | null
+          stock_ml: number | null
           user_id: string | null
           weekly_dosages: Json | null
         }
         Insert: {
           brand?: string | null
+          container_ml?: number | null
           created_at?: string | null
           dosage_type?: string | null
           fixed_dosage?: number | null
           id?: number
+          low_stock_ml?: number | null
           name: string
           stage_category?: string | null
+          stock_ml?: number | null
           user_id?: string | null
           weekly_dosages?: Json | null
         }
         Update: {
           brand?: string | null
+          container_ml?: number | null
           created_at?: string | null
           dosage_type?: string | null
           fixed_dosage?: number | null
           id?: number
+          low_stock_ml?: number | null
           name?: string
           stage_category?: string | null
+          stock_ml?: number | null
           user_id?: string | null
           weekly_dosages?: Json | null
         }
@@ -606,6 +653,15 @@ export type Database = {
           p_fertilizer_ids: number[]
         }
         Returns: number
+      }
+      move_fertilizer_stock: {
+        Args: { p_changes: Json; p_reason: string; p_note?: string | null }
+        Returns: {
+          fertilizer_id: number
+          name: string
+          stock_ml: number | null
+          low: boolean
+        }[]
       }
       update_task_series: {
         Args: {

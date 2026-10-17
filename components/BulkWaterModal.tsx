@@ -45,6 +45,7 @@ export default function BulkWaterModal({ isOpen, onClose, selectedIds, onSuccess
   const [selection, setSelection] = useState<string>("");
   // null = la semana que propone quien abre el modal (cambia con la selección).
   const [weekInput, setWeekInput] = useState<string | null>(null);
+  const [deductStock, setDeductStock] = useState(true);
   const week = weekInput ?? String(defaultWeek);
   const loaded = useRef(false);
 
@@ -76,12 +77,21 @@ export default function BulkWaterModal({ isOpen, onClose, selectedIds, onSuccess
     e.preventDefault();
     setLoading(true);
 
-    const res = await bulkWaterPlants(selectedIds, date, { nutrients, watering: values });
+    // Lo que dice la calculadora sale del stock, si se pidió.
+    const usage = showCalculator && deductStock && liters > 0
+      ? doses.filter((line) => line.total !== null).map((line) => ({ fertilizer_id: line.fertilizerId, ml: line.total }))
+      : [];
+
+    const res = await bulkWaterPlants(selectedIds, date, { nutrients, watering: values, usage });
 
     setLoading(false);
 
     if (res.success) {
-      showToast(`Riego registrado en ${plantCountLabel(res.count ?? selectedIds.length)}`);
+      const low = 'lowStock' in res ? res.lowStock ?? [] : [];
+      showToast(
+        `Riego registrado en ${plantCountLabel(res.count ?? selectedIds.length)}` +
+          (low.length > 0 ? `. Queda poco: ${low.map((item) => `${item.name} (${item.stock_ml ?? 0} ml)`).join(', ')}.` : '')
+      );
       setValues(EMPTY);
       setNutrients("");
       setWeekInput(null);
@@ -220,6 +230,17 @@ export default function BulkWaterModal({ isOpen, onClose, selectedIds, onSuccess
                       </li>
                     ))}
                   </ul>
+                  {liters > 0 && doses.some((line) => line.total !== null) && (
+                    <label className="flex items-center gap-2 text-sm text-fg">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 accent-[color:var(--brand)]"
+                        checked={deductStock}
+                        onChange={(e) => setDeductStock(e.target.checked)}
+                      />
+                      Descontar del stock al registrar
+                    </label>
+                  )}
                   {liters > 0 && (
                     <button
                       type="button"

@@ -30,7 +30,7 @@ test('describeWatering - texto corto para la bitácora', () => {
 
 test('doseForLiters y describeDoses - ml de cada producto', () => {
   const lines = doseForLiters([{ fertilizerId: 1, name: 'Grow', dose: 2 }, { fertilizerId: 2, name: 'Raíz', dose: null }], 10);
-  assert.deepEqual(lines, [{ name: 'Grow', perLiter: 2, total: 20 }, { name: 'Raíz', perLiter: null, total: null }]);
+  assert.deepEqual(lines, [{ fertilizerId: 1, name: 'Grow', perLiter: 2, total: 20 }, { fertilizerId: 2, name: 'Raíz', perLiter: null, total: null }]);
   assert.equal(describeDoses(lines, 10, 3), 'Grow: 20 ml + Raíz: ? (10 L, semana 3)');
   assert.equal(doseForLiters([{ fertilizerId: 1, name: 'Grow', dose: 2 }], 0)[0].total, null);
 });

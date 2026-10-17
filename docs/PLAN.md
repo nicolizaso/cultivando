@@ -158,7 +158,12 @@ Lo que te toca hacer a vos está en `docs/PENDIENTES.md`.
   en `logs.data.watering`, validados. Calculadora de nutrientes: ml de cada producto o
   combo para esos litros y la semana de la etapa, que se anota en la nota. La ficha muestra
   los datos del último riego.
-- [ ] Etapa 13 · Stock de fertilizantes
+- [x] Etapa 13 · Stock de fertilizantes — cada producto puede llevar cuánto queda, el
+  tamaño del envase y desde cuánto avisar. "Compré" suma un envase (o lo que se diga), el
+  riego con la calculadora descuenta lo usado, y cada cambio queda en
+  `fertilizer_movements` (`move_fertilizer_stock`, atómica). Aviso de stock bajo en el
+  panel, en Nutrición y al registrar el riego. Las tareas de fertilizante no descuentan
+  (no saben los litros).
 - [ ] Etapa 14 · Cosecha y rendimiento
 - [ ] Etapa 15 · Plan de cultivo automático
 - [ ] Etapa 16 · Exportar o compartir un ciclo

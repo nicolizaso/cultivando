@@ -100,6 +100,12 @@ export interface Fertilizer {
   fixed_dosage: number | null;
   /** Tabla por semana de la etapa, cuando la dosis es semanal. */
   weekly_dosages: WeeklyDose[] | null;
+  /** Lo que queda, en ml. Null = no se lleva la cuenta. */
+  stock_ml: number | null;
+  /** Tamaño del envase, para sumar "una botella" al comprar. */
+  container_ml: number | null;
+  /** Con menos que esto, se avisa. */
+  low_stock_ml: number | null;
   created_at: string | null;
 }
 

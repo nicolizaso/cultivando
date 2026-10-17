@@ -9,7 +9,8 @@ import Modal from '@/components/ui/Modal'
 interface AddFertilizerModalProps {
   isOpen: boolean
   onClose: () => void
-  onSave: (data: Partial<Fertilizer>) => Promise<{ error?: string | null }>
+  /** Lo que escribió el usuario; el servidor valida y convierte los números. */
+  onSave: (data: Record<string, unknown>) => Promise<{ error?: string | null }>
   initialData?: Fertilizer | null
 }
 
@@ -28,6 +29,11 @@ export default function AddFertilizerModal({ isOpen, onClose, onSave, initialDat
   const [doseWeekly, setDoseWeekly] = useState<{ week: number; dose: number }[]>(
     initialData?.weekly_dosages?.length ? initialData.weekly_dosages : [{ week: 1, dose: 1 }]
   )
+  // Stock (opcional): cuánto queda, tamaño del envase y desde cuánto avisar.
+  const toText = (value: number | null | undefined) => (value == null ? '' : String(value).replace('.', ','))
+  const [stock, setStock] = useState(toText(initialData?.stock_ml))
+  const [container, setContainer] = useState(toText(initialData?.container_ml))
+  const [lowStock, setLowStock] = useState(toText(initialData?.low_stock_ml))
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -62,13 +68,17 @@ export default function AddFertilizerModal({ isOpen, onClose, onSave, initialDat
     setError(null)
 
     // Los nombres de campo son los de las columnas reales de la base.
-    const formData: Partial<Fertilizer> = {
+    const formData: Record<string, unknown> = {
       name: name.trim(),
       brand: brand.trim() || null,
       stage_category: stage,
       dosage_type: doseType,
       fixed_dosage: doseType === 'fija' ? Number(doseFixed.replace(',', '.')) : null,
       weekly_dosages: doseType === 'semanal' ? doseWeekly : null,
+      // Vacío = no llevar la cuenta. El servidor valida los números.
+      stock_ml: stock.trim() || null,
+      container_ml: container.trim() || null,
+      low_stock_ml: lowStock.trim() || null,
     }
 
     const res = await onSave(formData)
@@ -235,6 +245,25 @@ export default function AddFertilizerModal({ isOpen, onClose, onSave, initialDat
               </button>
             </div>
           )}
+        </fieldset>
+
+        <fieldset className="space-y-3">
+          <legend className="field-label">Stock <span className="font-normal text-fg-muted">(opcional)</span></legend>
+          <div className="grid grid-cols-3 gap-3">
+            <div className="field">
+              <label htmlFor="fert-stock" className="field-label">Queda (ml)</label>
+              <input id="fert-stock" type="text" inputMode="decimal" className="field-input" value={stock} onChange={(e) => setStock(e.target.value)} placeholder="500" />
+            </div>
+            <div className="field">
+              <label htmlFor="fert-container" className="field-label">Envase (ml)</label>
+              <input id="fert-container" type="text" inputMode="decimal" className="field-input" value={container} onChange={(e) => setContainer(e.target.value)} placeholder="1000" />
+            </div>
+            <div className="field">
+              <label htmlFor="fert-low" className="field-label">Avisar con</label>
+              <input id="fert-low" type="text" inputMode="decimal" className="field-input" value={lowStock} onChange={(e) => setLowStock(e.target.value)} placeholder="100" />
+            </div>
+          </div>
+          <p className="field-hint">Al registrar un riego con la calculadora se descuenta solo. Vacío: no se lleva la cuenta.</p>
         </fieldset>
       </form>
     </Modal>

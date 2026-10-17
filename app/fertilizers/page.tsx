@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { FlaskConical, Layers, Pencil, Plus, Trash2 } from 'lucide-react'
+import { AlertTriangle, FlaskConical, Layers, Loader2, Pencil, Plus, ShoppingCart, Trash2 } from 'lucide-react'
+import Modal from '@/components/ui/Modal'
 
 import AddFertilizerModal from '@/components/AddFertilizerModal'
 import AddFertilizerComboModal from '@/components/AddFertilizerComboModal'
@@ -12,7 +13,7 @@ import PageHeader from '@/components/layout/PageHeader'
 import SegmentedControl from '@/components/ui/SegmentedControl'
 import {
   getFertilizers, getFertilizerCombos, createFertilizer, updateFertilizer, deleteFertilizer,
-  createFertilizerCombo, deleteFertilizerCombo, updateFertilizerCombo
+  createFertilizerCombo, deleteFertilizerCombo, updateFertilizerCombo, restockFertilizer
 } from '@/app/actions/fertilizers'
 import { Fertilizer, FertilizerCombo } from '@/app/lib/types'
 import { FERTILIZER_STAGE_LABELS, formatDose } from '@/app/lib/nutrition'
@@ -34,6 +35,7 @@ export default function FertilizersPage() {
   const [editingProduct, setEditingProduct] = useState<Fertilizer | null>(null)
   const [editingCombo, setEditingCombo] = useState<FertilizerCombo | null>(null)
   const [pendingDeletion, setPendingDeletion] = useState<PendingDeletion | null>(null)
+  const [restocking, setRestocking] = useState<Fertilizer | null>(null)
 
   // Cada apertura de un modal le da una `key` nueva: el formulario se arma de
   // cero con los datos del producto o combo elegido, sin copiar props al
@@ -62,7 +64,7 @@ export default function FertilizersPage() {
     return () => { cancelled = true }
   }, [])
 
-  const handleSaveProduct = async (data: Partial<Fertilizer>) => {
+  const handleSaveProduct = async (data: Record<string, unknown>) => {
     const res = editingProduct
       ? await updateFertilizer(editingProduct.id, data)
       : await createFertilizer(data)
@@ -194,7 +196,17 @@ export default function FertilizersPage() {
                     </div>
                   </dl>
 
+                  {fert.stock_ml !== null && <StockMeter fertilizer={fert} />}
+
                   <div className="mt-auto flex justify-end gap-1 border-t border-line pt-3">
+                    <button
+                      type="button"
+                      onClick={() => setRestocking(fert)}
+                      className="btn btn-sm btn-ghost mr-auto"
+                    >
+                      <ShoppingCart size={15} aria-hidden="true" />
+                      Compré
+                    </button>
                     <button
                       type="button"
                       onClick={() => editProduct(fert)}
@@ -285,6 +297,18 @@ export default function FertilizersPage() {
         </section>
       )}
 
+      {restocking && (
+        <RestockDialog
+          key={restocking.id}
+          fertilizer={restocking}
+          onClose={() => setRestocking(null)}
+          onDone={async () => {
+            setRestocking(null)
+            await loadData()
+          }}
+        />
+      )}
+
       <AddFertilizerModal
         key={productFormKey}
         isOpen={isProductModalOpen}
@@ -311,5 +335,90 @@ export default function FertilizersPage() {
         confirmLabel="Eliminar"
       />
     </PageShell>
+  )
+}
+
+/** Cuánto queda: número, barra contra el envase y aviso si está bajo. */
+function StockMeter({ fertilizer }: { fertilizer: Fertilizer }) {
+  const stock = fertilizer.stock_ml ?? 0
+  const low = fertilizer.low_stock_ml !== null && stock <= fertilizer.low_stock_ml
+  const capacity = Math.max(fertilizer.container_ml ?? 0, stock)
+  const ratio = capacity > 0 ? Math.min(1, stock / capacity) : null
+
+  return (
+    <div className="mb-4">
+      <p className="text-sm text-fg-muted">
+        Quedan <span className="mono font-semibold text-fg">{formatDose(stock)} ml</span>
+        {fertilizer.container_ml !== null && <> de un envase de {formatDose(fertilizer.container_ml)} ml</>}
+      </p>
+      {ratio !== null && (
+        <div
+          className="mt-2 h-1.5 overflow-hidden rounded-full bg-[color:var(--chart-band)]"
+          role="meter"
+          aria-valuemin={0}
+          aria-valuemax={capacity}
+          aria-valuenow={stock}
+          aria-label={`Stock de ${fertilizer.name}`}
+        >
+          <div
+            className="h-full rounded-full"
+            style={{ width: `${Math.round(ratio * 100)}%`, backgroundColor: low ? 'var(--warning)' : 'var(--chart-line)' }}
+          />
+        </div>
+      )}
+      {low && (
+        <p className="mt-1.5 flex items-center gap-1 text-xs font-medium text-[color:var(--warning)]">
+          <AlertTriangle size={13} aria-hidden="true" />
+          Queda poco
+        </p>
+      )}
+    </div>
+  )
+}
+
+/** "Compré": suma un envase o la cantidad que se diga. */
+function RestockDialog({ fertilizer, onClose, onDone }: { fertilizer: Fertilizer; onClose: () => void; onDone: () => Promise<void> }) {
+  const [ml, setMl] = useState(fertilizer.container_ml !== null ? String(fertilizer.container_ml) : '')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const save = async (event: React.FormEvent) => {
+    event.preventDefault()
+    setSaving(true)
+    setError(null)
+    const res = await restockFertilizer(fertilizer.id, ml)
+    setSaving(false)
+    if (res.error) {
+      setError(res.error)
+      return
+    }
+    await onDone()
+  }
+
+  return (
+    <Modal
+      isOpen
+      onClose={onClose}
+      title={`Compré ${fertilizer.name}`}
+      description={fertilizer.stock_ml === null ? 'Desde ahora se lleva la cuenta de este producto.' : `Hoy quedan ${formatDose(fertilizer.stock_ml)} ml.`}
+      size="sm"
+      footer={
+        <>
+          <button type="button" className="btn btn-ghost" onClick={onClose}>Cancelar</button>
+          <button type="submit" form="restock-form" className="btn btn-primary" disabled={saving}>
+            {saving && <Loader2 size={16} className="animate-spin" aria-hidden="true" />}
+            Sumar al stock
+          </button>
+        </>
+      }
+    >
+      <form id="restock-form" onSubmit={save} className="space-y-3">
+        <div className="field">
+          <label htmlFor="restock-ml" className="field-label">Cantidad (ml)</label>
+          <input id="restock-ml" data-autofocus type="text" inputMode="decimal" className="field-input" value={ml} onChange={(e) => setMl(e.target.value)} placeholder="1000" />
+        </div>
+        {error && <p className="field-error" role="alert">{error}</p>}
+      </form>
+    </Modal>
   )
 }
