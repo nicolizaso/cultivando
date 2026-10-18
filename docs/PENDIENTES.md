@@ -38,8 +38,21 @@ El aviso diario corre con el cron de `vercel.json` a las 8:00 de Argentina
 
 ### 1.2 · Migraciones compatibles (`supabase/migrations/`)
 Se pueden aplicar con la versión actual publicada: no rompen nada de lo que
-hoy está en producción. Aplicalas en este orden, desde el SQL Editor de
-Supabase (pegar el archivo entero y ejecutar) o con `supabase db push`:
+hoy está en producción.
+
+**Estado:** la primera mitad de `seguridad` ya está aplicada (índice de
+usuario único, límites del bucket, reglas nuevas de fotos y `search_path`). El
+resto no se pudo aplicar desde el conector: todo lo que tiene `drop` o
+`revoke` pide una aprobación que sólo podés dar vos.
+
+Aplicalas en este orden, desde el SQL Editor de Supabase (pegar el archivo
+entero y ejecutar) o con `supabase db push`. La 1 se puede volver a correr
+entera sin problema: lo ya aplicado no se duplica.
+
+Atajo: en el chat te pasé `aplicar-migraciones.sql`, un solo archivo con todo
+lo que falta (resto de la 1 y de la 2 a la 12), que corre todo o nada y deja
+el historial de migraciones igual a estos archivos. Se pega una vez en el SQL
+Editor y listo.
 
 1. `20261017140000_seguridad.sql`
 2. `20261017150000_nutricion.sql`
