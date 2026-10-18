@@ -3,8 +3,10 @@
 Todo lo que no puedo hacer desde el código, en el orden en que conviene
 hacerlo. Lo voy completando a medida que avanzan las etapas.
 
-> Si preferís, cualquiera de los pasos de base de datos (migraciones, tipos)
-> lo puedo hacer yo: pedímelo y lo aplico.
+> Las migraciones que tienen `drop` o `revoke` (todas las de cierre) las tenés
+> que pegar vos en el SQL Editor: el conector de Supabase pide una aprobación
+> que no se puede dar desde el chat. Yo te armo un solo archivo, lo pruebo antes
+> y reviso la base después.
 
 ---
 
@@ -36,36 +38,16 @@ El aviso diario corre con el cron de `vercel.json` a las 8:00 de Argentina
 (11:00 UTC) y **sólo en Production**: en el preview se prueba con el botón
 "Mandar uno ahora".
 
-### 1.2 · Migraciones compatibles (`supabase/migrations/`)
-Se pueden aplicar con la versión actual publicada: no rompen nada de lo que
-hoy está en producción.
+### 1.2 · Migraciones compatibles (`supabase/migrations/`) — ✅ hecho
+Aplicadas el 18/10, las 12 (de `20261017140000_seguridad` a
+`20261017250000_notificaciones`). Revisado después:
 
-**Estado:** la primera mitad de `seguridad` ya está aplicada (índice de
-usuario único, límites del bucket, reglas nuevas de fotos y `search_path`). El
-resto no se pudo aplicar desde el conector: todo lo que tiene `drop` o
-`revoke` pide una aprobación que sólo podés dar vos.
-
-Aplicalas en este orden, desde el SQL Editor de Supabase (pegar el archivo
-entero y ejecutar) o con `supabase db push`. La 1 se puede volver a correr
-entera sin problema: lo ya aplicado no se duplica.
-
-Atajo: en el chat te pasé `aplicar-migraciones.sql`, un solo archivo con todo
-lo que falta (resto de la 1 y de la 2 a la 12), que corre todo o nada y deja
-el historial de migraciones igual a estos archivos. Se pega una vez en el SQL
-Editor y listo.
-
-1. `20261017140000_seguridad.sql`
-2. `20261017150000_nutricion.sql`
-3. `20261017160000_tareas.sql`
-4. `20261017170000_plantas.sql`
-5. `20261017180000_bitacora_y_borrados.sql`
-6. `20261017190000_rendimiento.sql`
-7. `20261017200000_limpieza.sql`
-8. `20261017210000_linaje.sql`
-9. `20261017220000_stock.sql`
-10. `20261017230000_cosechas.sql`
-11. `20261017240000_compartir.sql`
-12. `20261017250000_notificaciones.sql`
+- No se perdió ninguna fila; están las tablas, columnas y funciones nuevas.
+- El historial de migraciones de Supabase quedó igual a estos archivos, así que
+  `supabase db push` no las vuelve a correr.
+- Los tipos que genera Supabase coinciden con `app/lib/database.types.ts`. Las
+  únicas diferencias son las columnas viejas de `tasks` y dos funciones que se
+  van con las migraciones de cierre (3.1).
 
 ---
 
@@ -129,7 +111,7 @@ Checklist para el preview del PR, una vez hechos los pasos de arriba:
 - [ ] Ciclo → "Compartir": copiar el enlace y abrirlo en una ventana privada (sin sesión): se ve el ciclo y no la bitácora. "Cortar enlace" y recargar: ya no abre.
 - [ ] Menú de la cuenta (en el celular: "Más") → "Notificaciones" → "Activar en este dispositivo" y "Mandar uno ahora": llega el resumen del día. En iPhone, primero agregá la app a la pantalla de inicio.
 - [ ] Tocar la notificación abre la app.
-- [ ] En Supabase → Advisors → Performance: ya no aparecen los avisos "Auth RLS Initialization Plan" ni los de claves foráneas sin índice de las tablas de Cultivando.
+- [x] En Supabase → Advisors → Performance: ya no aparece "Auth RLS Initialization Plan" ni "Multiple Permissive Policies" en las tablas de Cultivando (revisado el 18/10). Quedan dos de claves foráneas sin índice en `tasks` (`plant_id`, `space_id`): se van con las migraciones de cierre, que borran esas columnas. Los de "Unused Index" son normales: los índices son nuevos y todavía no tuvieron uso.
 
 ---
 
@@ -163,6 +145,8 @@ NEXT_PUBLIC_SUPABASE_URL=… SUPABASE_SERVICE_ROLE_KEY=… node scripts/limpiar-
   y poder llamarse sin sesión. Es a propósito: es lo que abre un ciclo compartido, y
   sólo devuelve ese ciclo (sin bitácora ni datos de usuario) si el enlace existe y no
   se cortó. No hace falta tocar nada.
+- También marca `email_for_username` (el login viejo por nombre de usuario).
+  Ese aviso se va con la migración de cierre `seguridad_cierre` (3.1).
 
 
 - [ ] **Authentication → Passwords:** activar la protección contra contraseñas
