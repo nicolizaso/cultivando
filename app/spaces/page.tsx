@@ -24,7 +24,7 @@ export default async function SpacesPage() {
   });
 
   const usage: Record<number, SpaceUsage> = {};
-  (cycles ?? []).forEach((cycle: { id: number; space_id: number | null; is_active: boolean }) => {
+  (cycles ?? []).forEach((cycle) => {
     if (cycle.space_id == null || !cycle.is_active) return;
     const entry = usage[cycle.space_id] ?? { activeCycles: 0, plants: 0 };
     entry.activeCycles += 1;

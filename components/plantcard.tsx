@@ -1,14 +1,15 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { supabase } from "@/app/lib/supabase";
+import { useIsClient } from "@/app/hooks/useIsClient";
+import { deletePlant, waterPlant } from "@/app/actions/plants";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { Check, MoreVertical, Trash2, Droplet, ArrowUpRight } from "lucide-react";
 import { Plant } from "@/app/lib/types";
-import { getStageColor, getPlantMetrics, getWaterStatus } from "@/app/lib/utils";
+import { getStageColor, getPlantMetrics, getWaterStatus, todayForInput } from "@/app/lib/utils";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { useToast } from "@/app/context/ToastContext";
 
@@ -43,13 +44,9 @@ export default function PlantCard({
   const [isDeleting, setIsDeleting] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
-  const [isMounted, setIsMounted] = useState(false);
+  const isMounted = useIsClient();
   const menuRef = useRef<HTMLDivElement>(null);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
-
-  useEffect(() => {
-    setIsMounted(true);
-  }, []);
 
   // Cierre del menú contextual por clic fuera o Escape.
   useEffect(() => {
@@ -80,40 +77,31 @@ export default function PlantCard({
     setLoading(true);
     setShowMenu(false);
 
-    // Se guarda la fecha, no la palabra "Hoy": ese valor heredado se quedaba
-    // congelado y la ficha de la planta no podía calcular los días de atraso.
-    const today = new Date().toLocaleDateString('en-CA');
-
     try {
-      const { error } = await supabase
-        .from('plants')
-        .update({ last_water: today })
-        .eq('id', id);
-      if (error) throw error;
-      setLastWater(today);
+      // Se guarda el día (no la palabra "Hoy", que se quedaba congelada) y
+      // queda en la bitácora, igual que el riego en lote.
+      const result = await waterPlant(id);
+      if (!result.success) {
+        showToast(result.error || "No se pudo registrar el riego", "error");
+        return;
+      }
+      setLastWater(todayForInput());
       showToast(`Riego registrado en ${name}`);
       router.refresh();
-    } catch (error) {
-      showToast(error instanceof Error ? error.message : "No se pudo registrar el riego", "error");
     } finally {
       setLoading(false);
     }
   };
 
   const handleDelete = async () => {
-    try {
-      const { error } = await supabase
-        .from('plants')
-        .delete()
-        .eq('id', id);
-
-      if (error) throw error;
-      setIsDeleting(true);
-      showToast(`${name} eliminada`);
-      router.refresh();
-    } catch (error) {
-      showToast(error instanceof Error ? error.message : "No se pudo eliminar la planta", "error");
+    const result = await deletePlant(id);
+    if (!result.success) {
+      showToast(result.error || "No se pudo eliminar la planta", "error");
+      return;
     }
+    setIsDeleting(true);
+    showToast(`${name} eliminada`);
+    router.refresh();
   };
 
   if (isDeleting) return null;
@@ -135,10 +123,13 @@ export default function PlantCard({
         </p>
       </div>
 
-      <span className={`chip mt-2.5 w-fit ${stageInfo.bgColor} ${stageInfo.textColor} ${stageInfo.borderColor}`}>
-        {stageInfo.icon}
-        {displayStage}
-      </span>
+      <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+        <span className={`chip w-fit ${stageInfo.bgColor} ${stageInfo.textColor} ${stageInfo.borderColor}`}>
+          {stageInfo.icon}
+          {displayStage}
+        </span>
+        {plant.is_mother && <span className="chip chip-brand">Madre</span>}
+      </div>
 
       <div className="mt-auto flex flex-wrap items-center gap-x-2.5 gap-y-1 pt-2.5 text-[11px]">
         {/* Las edades se calculan con la fecha del cliente: hasta montar se

@@ -3,33 +3,68 @@
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/app/lib/supabase-server'
+import { createAdminClient } from '@/app/lib/supabase-admin'
+
+/** Mínimo de la contraseña al registrarse. */
+const MIN_PASSWORD_LENGTH = 8
+
+/** Letras, números, punto, guion y guion bajo; entre 3 y 30 caracteres. */
+const USERNAME_PATTERN = /^[A-Za-z0-9._-]{3,30}$/
+
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+/**
+ * Cuando el usuario no existe se intenta igual con un email que nunca va a
+ * coincidir: así la respuesta tarda lo mismo y no delata qué usuarios hay.
+ */
+const UNKNOWN_EMAIL = 'non-existent-user@example.com'
+
+function readText(formData: FormData, key: string): string {
+  const value = formData.get(key)
+  return typeof value === 'string' ? value.trim() : ''
+}
+
+/**
+ * Usuario → email, del lado del servidor.
+ *
+ * La función de la base que lo resuelve ya no se puede llamar sin sesión:
+ * abierta al público, cualquiera con la clave anónima podía averiguar el
+ * email de cualquier usuario. Ahora la llama sólo el servidor, con la clave
+ * de servicio.
+ *
+ * Devuelve `undefined` si el servidor no tiene la clave configurada.
+ */
+async function emailForUsername(username: string): Promise<string | null | undefined> {
+  const admin = createAdminClient()
+  if (!admin) return undefined
+
+  const { data, error } = await admin.rpc('email_for_username', { p_username: username })
+  if (error) {
+    console.error('No se pudo resolver el usuario:', error)
+    return null
+  }
+  return data ?? null
+}
 
 export async function login(formData: FormData) {
-  const supabase = await createClient()
-  
-  const loginInput = formData.get('email') as string
-  const password = formData.get('password') as string
+  const loginInput = readText(formData, 'email')
+  const password = String(formData.get('password') ?? '')
+
+  if (!loginInput || !password) return { error: 'Completá tu usuario o email y la contraseña.' }
 
   let email = loginInput
 
-  // 1. Detectar si es un Usuario (si no tiene @)
   if (!loginInput.includes('@')) {
-    // Resolvemos usuario -> email con una función de la base en vez de leer
-    // 'profiles': esa tabla ya no es legible sin sesión, y acá todavía no la hay.
-    // La función compara sin distinguir mayúsculas y devuelve un solo email.
-    const { data: resolvedEmail } = await supabase
-      .rpc('email_for_username', { p_username: loginInput })
-
-    // Si no existe el perfil, usamos un email ficticio para continuar el flujo
-    // y evitar ataques de tiempo o enumeración simple.
-    email = resolvedEmail || 'non-existent-user@example.com'
+    const resolved = await emailForUsername(loginInput)
+    if (resolved === undefined) {
+      console.error('Falta SUPABASE_SERVICE_ROLE_KEY: el ingreso con usuario está deshabilitado.')
+      return { error: 'Por ahora ingresá con tu email en vez del usuario.' }
+    }
+    email = resolved || UNKNOWN_EMAIL
   }
 
-  // 2. Login con el email (el ingresado o el que encontramos por usuario)
-  const { error } = await supabase.auth.signInWithPassword({
-    email,
-    password,
-  })
+  const supabase = await createClient()
+  const { error } = await supabase.auth.signInWithPassword({ email, password })
 
   if (error) {
     return { error: 'Credenciales inválidas.' }
@@ -40,37 +75,44 @@ export async function login(formData: FormData) {
 }
 
 export async function signup(formData: FormData) {
-  const supabase = await createClient()
+  const email = readText(formData, 'email').toLowerCase()
+  const username = readText(formData, 'username')
+  const password = String(formData.get('password') ?? '')
+  const confirmPassword = String(formData.get('confirmPassword') ?? '')
 
-  const email = formData.get('email') as string
-  const password = formData.get('password') as string
-  const confirmPassword = formData.get('confirmPassword') as string
-  const username = formData.get('username') as string
-
-  // Validaciones
   if (!email || !password || !username) return { error: 'Todos los campos son obligatorios.' }
+  if (!EMAIL_PATTERN.test(email)) return { error: 'Ese email no parece válido.' }
+  if (!USERNAME_PATTERN.test(username)) {
+    return { error: 'El usuario tiene que tener entre 3 y 30 caracteres: letras, números, punto, guion o guion bajo.' }
+  }
+  if (password.length < MIN_PASSWORD_LENGTH) {
+    return { error: `La contraseña tiene que tener al menos ${MIN_PASSWORD_LENGTH} caracteres.` }
+  }
   if (password !== confirmPassword) return { error: 'Las contraseñas no coinciden.' }
-  if (password.length < 6) return { error: 'Mínimo 6 caracteres para la contraseña.' }
 
-  // Crear usuario
+  // El nombre de usuario es único (sin distinguir mayúsculas). Si el servidor
+  // no tiene la clave para consultarlo, lo frena igual el índice de la base.
+  const taken = await emailForUsername(username)
+  if (taken) return { error: 'Ese nombre de usuario ya está en uso.' }
+
+  const supabase = await createClient()
   const { error, data } = await supabase.auth.signUp({
     email,
     password,
     options: {
-      data: { username }, // Guardamos en metadata para el trigger
+      data: { username }, // El trigger de la base lo copia al perfil.
     },
   })
 
   if (error) {
-    return { error: 'No se pudo completar el registro. Por favor, verifica tus datos.' }
+    console.error('Error en el registro:', error)
+    return { error: 'No se pudo completar el registro. Revisá los datos o probá con otro usuario.' }
   }
 
-  // Auto-Login post registro
-  if (data.user) {
-    await supabase.auth.signInWithPassword({
-      email,
-      password,
-    })
+  // Si el proyecto pide confirmar el email, signUp no abre sesión: hay que
+  // avisarlo en vez de mandar a un panel que va a rebotar al login.
+  if (!data.session) {
+    return { success: true, needsConfirmation: true }
   }
 
   revalidatePath('/', 'layout')

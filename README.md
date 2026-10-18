@@ -126,6 +126,11 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=
 Otros comandos:
 
 ```bash
-npm run build   # build de producción
-npm run lint    # ESLint
+npm run build      # build de producción
+npm run lint       # ESLint
+npm run typecheck  # TypeScript sin emitir
+npm test           # pruebas de app/lib con el corredor de Node
 ```
+
+Los tipos de la base viven en `app/lib/database.types.ts` y se generan desde
+Supabase: cuando cambia el esquema, se regeneran en vez de editarlos a mano.

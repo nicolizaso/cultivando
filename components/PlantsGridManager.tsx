@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Archive, ArchiveRestore, ArrowRightCircle, ArrowRightLeft, CheckSquare, Droplets,
-  Filter, FilterX, Search, Sprout, Square, Trash2, X
+  Filter, FilterX, GitBranch, Search, Sprout, Square, Trash2, X
 } from "lucide-react";
 
 import PlantCard from "./plantcard";
@@ -19,6 +19,8 @@ import EmptyState from "@/components/EmptyState";
 import SegmentedControl from "@/components/ui/SegmentedControl";
 import SelectionBar from "@/components/ui/SelectionBar";
 import { useToast } from "@/app/context/ToastContext";
+import { averageDays, weekInStage } from "@/app/lib/nutrition";
+import { getPlantMetrics } from "@/app/lib/plant-metrics";
 
 interface Plant extends BasePlant {
   cycles?: { id: number; name: string; space_id: number } | null;
@@ -28,9 +30,12 @@ interface PlantsGridManagerProps {
   plants: Plant[];
   cycles: Pick<Cycle, 'id' | 'name' | 'space_id'>[];
   spaces: Pick<Space, 'id' | 'name'>[];
+  /** Búsqueda con la que abre la grilla (`/plants?search=…`). */
+  initialQuery?: string;
 }
 
-type Scope = 'active' | 'archived';
+/** Madres es un subconjunto de las activas: las que se guardan para esquejes. */
+type Scope = 'active' | 'mothers' | 'archived';
 
 /** Los modales que puede abrir la barra de selección; uno por vez. */
 type BulkModal = 'stage' | 'water' | 'cycle' | 'archive' | 'restore';
@@ -39,7 +44,7 @@ type BulkModal = 'stage' | 'water' | 'cycle' | 'archive' | 'restore';
 const normalize = (value: string) =>
   value.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
 
-export default function PlantsGridManager({ plants, cycles, spaces }: PlantsGridManagerProps) {
+export default function PlantsGridManager({ plants, cycles, spaces, initialQuery = "" }: PlantsGridManagerProps) {
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [isDeleting, setIsDeleting] = useState(false);
@@ -47,7 +52,9 @@ export default function PlantsGridManager({ plants, cycles, spaces }: PlantsGrid
   const [openModal, setOpenModal] = useState<BulkModal | null>(null);
 
   const [scope, setScope] = useState<Scope>('active');
-  const [query, setQuery] = useState("");
+  // Los grupos de los ciclos ("Gorilla #1-6") enlazan acá con la búsqueda
+  // puesta; antes el parámetro se ignoraba y se veían todas las plantas.
+  const [query, setQuery] = useState(initialQuery);
   const [showFilters, setShowFilters] = useState(false);
   const [selectedCycleId, setSelectedCycleId] = useState<string>("all");
   const [selectedSpaceId, setSelectedSpaceId] = useState<string>("all");
@@ -57,6 +64,7 @@ export default function PlantsGridManager({ plants, cycles, spaces }: PlantsGrid
 
   const activeCount = useMemo(() => plants.filter(p => !p.is_archived).length, [plants]);
   const archivedCount = plants.length - activeCount;
+  const motherCount = useMemo(() => plants.filter(p => !p.is_archived && p.is_mother).length, [plants]);
 
   const filteredPlants = useMemo(() => {
     const term = normalize(query);
@@ -64,6 +72,7 @@ export default function PlantsGridManager({ plants, cycles, spaces }: PlantsGrid
     return plants.filter(plant => {
       // Archivadas y activas son conjuntos excluyentes, nunca una mezcla.
       if (scope === 'archived' ? plant.is_archived !== true : Boolean(plant.is_archived)) return false;
+      if (scope === 'mothers' && !plant.is_mother) return false;
 
       if (selectedCycleId !== "all" && plant.cycle_id !== Number(selectedCycleId)) return false;
 
@@ -172,6 +181,7 @@ export default function PlantsGridManager({ plants, cycles, spaces }: PlantsGrid
             onChange={(next) => { setScope(next); exitSelectionMode(); }}
             options={[
               { value: 'active', label: 'Activas', count: activeCount },
+              ...(motherCount > 0 ? [{ value: 'mothers' as const, label: 'Madres', icon: GitBranch, count: motherCount }] : []),
               { value: 'archived', label: 'Archivadas', icon: Archive, count: archivedCount },
             ]}
           />
@@ -249,7 +259,7 @@ export default function PlantsGridManager({ plants, cycles, spaces }: PlantsGrid
         <p className="text-sm text-fg-muted" aria-live="polite">
           <span className="mono font-semibold text-fg">{filteredPlants.length}</span>{' '}
           {filteredPlants.length === 1 ? 'planta' : 'plantas'}
-          {isNarrowed && <span className="text-fg-subtle"> de {scope === 'archived' ? archivedCount : activeCount}</span>}
+          {isNarrowed && <span className="text-fg-subtle"> de {scope === 'archived' ? archivedCount : scope === 'mothers' ? motherCount : activeCount}</span>}
         </p>
 
         {isSelectionMode && (
@@ -379,6 +389,7 @@ export default function PlantsGridManager({ plants, cycles, spaces }: PlantsGrid
         onClose={() => setOpenModal(null)}
         selectedIds={targetIds}
         onSuccess={handleBulkSuccess}
+        defaultWeek={weekInStage(averageDays(plants.filter((p) => targetIds.includes(p.id)).map((p) => getPlantMetrics(p).daysInCurrentStage)))}
       />
 
       <BulkMoveCycleModal

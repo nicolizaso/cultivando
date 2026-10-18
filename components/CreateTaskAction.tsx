@@ -4,14 +4,16 @@ import { useState } from 'react'
 import { Plus } from 'lucide-react'
 import AddTaskModal from './AddTaskModal'
 
-interface Plant { id: string; name: string; space_id?: number }
+import type { CycleOption, PlantOption } from '@/app/lib/task-targets'
+
 interface Space { id: number; name: string }
 
 interface CreateTaskActionProps {
-  plants: Plant[]
+  plants: PlantOption[]
   spaces: Space[]
-  cycles?: { id: number; name: string; space_id?: number }[]
-  initialDate?: Date
+  cycles?: CycleOption[]
+  /** Día con el que abre el formulario ("YYYY-MM-DD"). */
+  initialDay?: string
 }
 
 /**
@@ -22,7 +24,7 @@ interface CreateTaskActionProps {
  * con un único estado y un único modal, así que no hay dos rutas distintas para
  * la misma acción ni dos etiquetas que mantener sincronizadas.
  */
-export default function CreateTaskAction({ plants, spaces, cycles, initialDate }: CreateTaskActionProps) {
+export default function CreateTaskAction({ plants, spaces, cycles, initialDay }: CreateTaskActionProps) {
   const [isModalOpen, setIsModalOpen] = useState(false)
 
   return (
@@ -52,12 +54,13 @@ export default function CreateTaskAction({ plants, spaces, cycles, initialDate }
       </button>
 
       <AddTaskModal
+        key={initialDay ?? 'hoy'}
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         plants={plants}
         spaces={spaces}
         cycles={cycles}
-        initialDate={initialDate}
+        initialDay={initialDay}
       />
     </>
   )

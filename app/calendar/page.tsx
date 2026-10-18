@@ -1,42 +1,74 @@
 import { createClient } from "@/app/lib/supabase-server";
 import CalendarView from "@/components/CalendarView";
 import PageShell from "@/components/layout/PageShell";
-import { Plant } from "../lib/types";
+import { Plant, Task } from "../lib/types";
 import { mapTaskCycles } from "../lib/utils";
+import { buildTaskTargetOptions } from "../lib/task-targets";
+import { addDaysToKey, todayKey } from "../lib/dates";
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: "Agenda" };
 
 interface CycleWithPlantsAndSpace {
-    id: number;
-    name: string;
-    start_date: string;
-    space_id: number;
-    plants: Plant[];
-    spaces: { id: number, name: string };
+  id: number;
+  name: string;
+  start_date: string;
+  space_id: number;
+  plants: Plant[];
+  spaces: { id: number, name: string };
 }
 
-export default async function CalendarPage() {
-  const supabase = await createClient();
+const MONTH_PARAM = /^\d{4}-\d{2}$/;
 
-  // Parallel fetch of all needed data
+const TASK_SELECT = `*, task_cycles(cycles(id, name)), task_plants(plants(id, name, cycle_id, cycles(id, name)))`;
+
+/** Primer y último día de la grilla de un mes ("YYYY-MM"), con una semana de margen. */
+function monthRange(month: string): { from: string; to: string } {
+  const [year, monthNumber] = month.split('-').map(Number);
+  const first = `${month}-01`;
+  const lastDay = new Date(Date.UTC(year, monthNumber, 0)).getUTCDate();
+  const last = `${month}-${String(lastDay).padStart(2, '0')}`;
+  return { from: addDaysToKey(first, -7), to: addDaysToKey(last, 8) };
+}
+
+export default async function CalendarPage({ searchParams }: { searchParams: Promise<{ mes?: string; dia?: string }> }) {
+  const supabase = await createClient();
+  const { mes, dia } = await searchParams;
+
+  // Se trae sólo el mes que se mira (con margen para los días de los meses
+  // vecinos que entran en la grilla). Antes se traía toda la historia: cada
+  // registro y cada tarea desde el primer día, en cada visita.
+  const month = mes && MONTH_PARAM.test(mes) ? mes : todayKey().slice(0, 7);
+  const { from, to } = monthRange(month);
+
   const [
     { data: logs },
-    { data: tasks },
+    { data: monthTasks },
+    { data: pendingTasks },
     { data: activeCycles },
     { data: allSpaces }
   ] = await Promise.all([
     supabase
       .from('logs')
       .select(`*, plants ( name )`)
+      .gte('created_at', `${from}T00:00:00-03:00`)
+      .lt('created_at', `${to}T00:00:00-03:00`)
       .order('created_at', { ascending: true }),
     supabase
       .from('tasks')
-      .select(`*, task_cycles(cycles(id, name)), task_plants(plants(id, name, cycle_id, cycles(id, name)))`)
+      .select(TASK_SELECT)
+      .gte('due_date', `${from}T00:00:00-03:00`)
+      .lt('due_date', `${to}T00:00:00-03:00`)
+      .order('due_date', { ascending: true }),
+    // Para "Todas las tareas": lo pendiente de cualquier fecha.
+    supabase
+      .from('tasks')
+      .select(TASK_SELECT)
+      .eq('status', 'pending')
       .order('due_date', { ascending: true }),
     supabase
       .from('cycles')
-      .select(`*, spaces (id, name, type), plants (*, current_age_days, days_in_stage)`)
+      .select(`*, spaces (id, name, type), plants (*)`)
       .eq('is_active', true)
       .order('created_at', { ascending: true }),
     supabase
@@ -44,37 +76,29 @@ export default async function CalendarPage() {
       .select('id, name')
   ]);
 
-  // Process plants for the create-task action (extracted from active cycles)
+  // Opciones del modal de tareas, con los días en etapa para la dosis semanal.
   const cycles = (activeCycles || []) as unknown as CycleWithPlantsAndSpace[];
-  const allPlantsMap = new Map<string, { id: string, name: string, space_id?: number }>();
-  cycles.forEach(cycle => {
-    cycle.plants?.forEach(p => {
-      if (!allPlantsMap.has(String(p.id))) {
-        allPlantsMap.set(String(p.id), { id: String(p.id), name: p.name, space_id: cycle.space_id });
-      }
-    });
-  });
-  const allPlants = Array.from(allPlantsMap.values());
+  const taskTargets = buildTaskTargetOptions(cycles);
 
-  const viewCycles = cycles.map(c => ({ id: c.id, name: c.name, space_id: c.space_id }));
-  const mappedTasks = (tasks || []).map((t: any) => {
-    const { cycleIds, cycleNames } = mapTaskCycles(t, viewCycles);
+  const withCycles = (t: Task) => ({ ...t, ...mapTaskCycles(t) });
 
-    return {
-      ...t,
-      cycleIds,
-      cycleNames
-    };
-  });
+  const tasksById = new Map<string, Task>();
+  for (const task of [...(monthTasks ?? []), ...(pendingTasks ?? [])] as Task[]) {
+    tasksById.set(String(task.id), withCycles(task));
+  }
 
   return (
     <PageShell>
+      {/* La key reinicia el día elegido al cambiar de mes. */}
       <CalendarView
+        key={month}
+        month={month}
+        initialSelectedDay={dia && /^\d{4}-\d{2}-\d{2}$/.test(dia) ? dia : undefined}
         logs={logs || []}
-        tasks={mappedTasks}
-        plants={allPlants}
+        tasks={Array.from(tasksById.values())}
+        plants={taskTargets.plants}
         spaces={allSpaces || []}
-        cycles={viewCycles}
+        cycles={taskTargets.cycles}
       />
     </PageShell>
   );

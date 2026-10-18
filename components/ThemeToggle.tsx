@@ -1,16 +1,12 @@
 "use client";
 
 import { useTheme } from "next-themes";
-import { useEffect, useState } from "react";
+import { useIsClient } from "@/app/hooks/useIsClient";
 import { Sun, Moon } from "lucide-react";
 
 export default function ThemeToggle() {
-  const [mounted, setMounted] = useState(false);
+  const mounted = useIsClient();
   const { setTheme, resolvedTheme } = useTheme();
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   // Antes de hidratar no se conoce el tema resuelto: se reserva el hueco
   // para no provocar salto de layout.

@@ -1,13 +1,12 @@
 "use client";
 
 import { useState, useRef } from "react";
-import { supabase } from "@/app/lib/supabase";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/app/context/ToastContext";
 import imageCompression from 'browser-image-compression';
 import { Camera, Check, ImagePlus, Loader2 } from "lucide-react";
 import Modal from "@/components/ui/Modal";
-import { LOG_TYPE } from "@/app/lib/logs";
+import { addPlantLog } from "@/app/actions/logs";
 
 interface Props {
   plantId: number;
@@ -32,75 +31,47 @@ export default function LogModal({ plantId, plantName }: Props) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!file && !note.trim()) {
+      showToast("Escribí una nota o elegí una foto", "error");
+      return;
+    }
     setLoading(true);
 
     try {
-        let publicUrl = null;
+      const formData = new FormData();
+      formData.append("note", note);
 
-        if (file) {
-          const options = {
+      if (file) {
+        // Se comprime acá para que viaje liviana; el servidor vuelve a validar
+        // el tipo y el tamaño antes de subirla.
+        try {
+          const compressed = await imageCompression(file, {
             maxSizeMB: 1,
             maxWidthOrHeight: 1920,
             useWebWorker: true,
-          };
-
-          try {
-            const compressedFile = await imageCompression(file, options);
-
-            const fileExt = file.name.split('.').pop();
-            const fileName = `plant_${plantId}_${Date.now()}.${fileExt}`;
-            const filePath = `${fileName}`;
-
-            const { error: uploadError } = await supabase.storage
-              .from('images')
-              .upload(filePath, compressedFile);
-
-            if (uploadError) throw uploadError;
-
-            const { data } = supabase.storage
-              .from('images')
-              .getPublicUrl(filePath);
-
-            publicUrl = data.publicUrl;
-
-          } catch (error) {
-            console.error("Error en compresión/subida:", error);
-            showToast("No se pudo procesar la imagen", "error");
-            setLoading(false);
-            return;
-          }
+          });
+          formData.append("file", compressed, file.name);
+        } catch (error) {
+          console.error("Error comprimiendo la foto:", error);
+          showToast("No se pudo procesar la imagen", "error");
+          return;
         }
+      }
 
-      const { error: dbError } = await supabase
-        .from('logs')
-        .insert([
-          {
-            plant_id: plantId,
-            title: file ? "Nueva foto" : "Nota de bitácora",
-            notes: note,
-            type: file ? LOG_TYPE.photo : LOG_TYPE.note,
-            media_url: publicUrl ? [publicUrl] : [],
-          }
-        ]);
-
-      if (dbError) throw dbError;
-
-      // Si subimos una foto, pasa a ser la portada de la planta.
-      if (publicUrl) {
-        await supabase
-          .from('plants')
-          .update({ image_url: publicUrl })
-          .eq('id', plantId);
+      const result = await addPlantLog(plantId, formData);
+      if (result?.error) {
+        showToast(result.error, "error");
+        return;
       }
 
       setIsOpen(false);
       setNote("");
       setFile(null);
-      showToast(publicUrl ? 'Foto agregada a la bitácora' : 'Nota agregada a la bitácora', 'success');
+      showToast(result?.photo ? 'Foto agregada a la bitácora' : 'Nota agregada a la bitácora', 'success');
       router.refresh();
-
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "No se pudo guardar el registro", "error");
+      console.error(error);
+      showToast("No se pudo guardar el registro", "error");
     } finally {
       setLoading(false);
     }

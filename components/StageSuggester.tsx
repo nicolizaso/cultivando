@@ -2,80 +2,95 @@
 
 import { useEffect, useState } from "react";
 import { Plant } from "@/app/lib/types";
-import { supabase } from "@/app/lib/supabase";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { Sprout } from "lucide-react";
 import { useToast } from "@/app/context/ToastContext";
 import { useRouter } from "next/navigation";
-import { getFirstSuggestion } from "@/app/lib/stage-logic";
+import { firstStageSuggestion } from "@/app/lib/strain-stats";
+import type { StageSuggestion, StrainDurations } from "@/app/lib/strain-stats";
+import { getPlantMetrics } from "@/app/lib/plant-metrics";
+import { changePlantStage } from "@/app/actions/plants";
 
 interface StageSuggesterProps {
   plants: Plant[];
+  /** Cuánto duró cada etapa en cada genética, para sugerir con datos propios. */
+  durations?: StrainDurations;
 }
 
-export default function StageSuggester({ plants }: StageSuggesterProps) {
-  const [suggestion, setSuggestion] = useState<{ plant: Plant; nextStage: string } | null>(null);
+/** "Ahora no" se recuerda una semana por planta y etapa sugerida. */
+const DISMISS_KEY = 'cultivando:sugerencias-descartadas';
+const DISMISS_DAYS = 7;
+
+type Dismissals = Record<string, number>;
+
+function readDismissals(): Dismissals {
+  try {
+    const raw = window.localStorage.getItem(DISMISS_KEY);
+    const parsed = raw ? (JSON.parse(raw) as Dismissals) : {};
+    const cutoff = Date.now() - DISMISS_DAYS * 24 * 60 * 60 * 1000;
+    // Se limpian las vencidas para que la lista no crezca para siempre.
+    return Object.fromEntries(Object.entries(parsed).filter(([, at]) => typeof at === 'number' && at > cutoff));
+  } catch {
+    return {};
+  }
+}
+
+function saveDismissal(plantId: number, nextStage: string) {
+  try {
+    const dismissals = readDismissals();
+    dismissals[`${plantId}:${nextStage}`] = Date.now();
+    window.localStorage.setItem(DISMISS_KEY, JSON.stringify(dismissals));
+  } catch {
+    // Sin almacenamiento (modo privado) la sugerencia vuelve a aparecer: no es grave.
+  }
+}
+
+export default function StageSuggester({ plants, durations }: StageSuggesterProps) {
+  const [suggestion, setSuggestion] = useState<StageSuggestion | null>(null);
+  const [saving, setSaving] = useState(false);
   const router = useRouter();
   const { showToast } = useToast();
   const reduceMotion = useReducedMotion();
 
   useEffect(() => {
-    // Check for suggestions
-    // We check one by one. If multiple match, we just show the first one found.
-    // In a real app we might want to queue them or show a list.
+    if (plants.length === 0) return;
 
-    const checkPlants = () => {
-        // Check local storage to see if we dismissed this recently (optional requirement)
-        // For now, I'll skip the "remembers not to ask again" part to keep it simple as per "optional".
-
-        const foundSuggestion = getFirstSuggestion(plants);
-        if (foundSuggestion) {
-            setSuggestion(foundSuggestion);
-        }
-    };
-
-    if (plants.length > 0) {
-        // Add a small delay so it doesn't pop up immediately on load
-        const timer = setTimeout(checkPlants, 1000);
-        return () => clearTimeout(timer);
-    }
-  }, [plants]);
+    // Un segundo de demora para que no aparezca encima de la carga.
+    const timer = setTimeout(() => {
+      const dismissals = readDismissals();
+      setSuggestion(firstStageSuggestion(plants, new Date(), durations, (id, next) => Boolean(dismissals[`${id}:${next}`])));
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [plants, durations]);
 
   const handleDismiss = () => {
+    if (suggestion) saveDismissal(suggestion.plant.id, suggestion.nextStage);
     setSuggestion(null);
-    // Here we could save to localStorage to ignore this plant for X days
   };
 
   const handleConfirm = async () => {
-    if (!suggestion) return;
+    if (!suggestion || saving) return;
+    setSaving(true);
 
-    try {
-      const { error } = await supabase
-        .from('plants')
-        .update({ stage: suggestion.nextStage })
-        .eq('id', suggestion.plant.id);
+    // El mismo camino que el cambio de etapa en lote: escribe la etapa, su
+    // fecha y `stage_updated_at`. Antes se cambiaba sólo `stage` y, en una
+    // planta con fechas cargadas, la tarjeta seguía mostrando la etapa vieja.
+    const result = await changePlantStage(suggestion.plant.id, suggestion.nextStage);
+    setSaving(false);
 
-      if (error) throw error;
-
-      // Ideally we should refresh the data.
-      // Since this is a client component, we can use router.refresh() if available,
-      // but passing a callback from parent would be better.
-      // However, for simplicity, we'll just close it. The parent should eventually re-fetch.
-      // Actually, updating Supabase directly won't update the UI until a refresh.
-
-      // Use router.refresh() to re-fetch server components without full page reload
-      router.refresh();
-      // Also close the modal
-      setSuggestion(null);
-
-    } catch (error) {
-      showToast(error instanceof Error ? error.message : "No se pudo actualizar la etapa", "error");
-    } finally {
-      setSuggestion(null);
+    if (!result.success) {
+      showToast(result.error || "No se pudo actualizar la etapa", "error");
+      return;
     }
+
+    showToast(`${suggestion.plant.name} pasó a ${suggestion.nextStage}`);
+    setSuggestion(null);
+    router.refresh();
   };
 
   if (!suggestion) return null;
+
+  const age = getPlantMetrics(suggestion.plant).totalAge;
 
   return (
     <AnimatePresence>
@@ -99,9 +114,19 @@ export default function StageSuggester({ plants }: StageSuggesterProps) {
             <div className="min-w-0">
               <h3 className="text-sm font-semibold text-fg">Sugerencia de cultivo</h3>
               <p className="mt-1 text-sm leading-snug text-fg-muted">
-                <span className="font-semibold text-fg">{suggestion.plant.name}</span> cumplió{' '}
-                {suggestion.plant.current_age_days ?? suggestion.plant.days ?? 0} días.
-                ¿La pasamos a {suggestion.nextStage}?
+                {suggestion.basis === 'strain' && suggestion.average ? (
+                  <>
+                    <span className="font-semibold text-fg">{suggestion.plant.name}</span> lleva{' '}
+                    {suggestion.daysInStage} días en {getPlantMetrics(suggestion.plant).currentStage.toLowerCase()}. Tus{' '}
+                    {suggestion.plant.strain} pasaron a {suggestion.nextStage.toLowerCase()} a los {suggestion.average.avg} días
+                    en promedio ({suggestion.average.n} plantas). ¿La pasamos a {suggestion.nextStage}?
+                  </>
+                ) : (
+                  <>
+                    <span className="font-semibold text-fg">{suggestion.plant.name}</span> cumplió{' '}
+                    {age} días. ¿La pasamos a {suggestion.nextStage}?
+                  </>
+                )}
               </p>
             </div>
           </div>
@@ -110,7 +135,7 @@ export default function StageSuggester({ plants }: StageSuggesterProps) {
             <button type="button" onClick={handleDismiss} className="btn btn-sm btn-ghost">
               Ahora no
             </button>
-            <button type="button" onClick={handleConfirm} className="btn btn-sm btn-primary">
+            <button type="button" onClick={handleConfirm} disabled={saving} className="btn btn-sm btn-primary">
               Sí, actualizar
             </button>
           </div>

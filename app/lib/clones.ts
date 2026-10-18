@@ -46,7 +46,7 @@ export interface CloneSeed {
   planted_at: string;
   date_enraizamiento: string;
   stage_updated_at: string;
-  last_water: string;
+  last_water: string | null;
 }
 
 /**
@@ -135,7 +135,8 @@ export function buildClonePlants(
         planted_at: timestamp,
         date_enraizamiento: timestamp,
         stage_updated_at: timestamp,
-        last_water: 'Nunca',
+        // Sin riego registrado todavía: null, no la palabra "Nunca".
+        last_water: null,
       });
     }
   }

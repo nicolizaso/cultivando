@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert';
-import { isPhotoLog, LOG_TYPE, normalizeLogType } from './logs.ts';
+import { canonicalLogType, isPhotoLog, LOG_TYPE, normalizeLogType } from './logs.ts';
 
 test('isPhotoLog - reconoce lo que escribe la bitácora hoy', () => {
   assert.strictEqual(isPhotoLog({ type: LOG_TYPE.photo }), true);
@@ -44,4 +44,13 @@ test('LOG_TYPE - los valores que se escriben ya son canónicos', () => {
   // encontrarlo el día que alguien compare de forma exacta.
   assert.strictEqual(normalizeLogType(LOG_TYPE.photo), LOG_TYPE.photo);
   assert.strictEqual(normalizeLogType(LOG_TYPE.note), LOG_TYPE.note);
+});
+
+test('canonicalLogType - unifica los tipos heredados', () => {
+  assert.strictEqual(canonicalLogType('Cambio de Etapa'), 'cambio_etapa');
+  assert.strictEqual(canonicalLogType('cambio_etapa'), 'cambio_etapa');
+  assert.strictEqual(canonicalLogType('Cambio de Ambiente'), 'ambiente');
+  assert.strictEqual(canonicalLogType(' Riego '), 'riego');
+  assert.strictEqual(canonicalLogType('Foto'), 'foto');
+  assert.strictEqual(canonicalLogType(null), '');
 });

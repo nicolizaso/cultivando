@@ -64,7 +64,7 @@ export default function AgendaModal({ isOpen, onClose, tasks, cycles }: AgendaMo
         <div aria-live="polite">
           <AgendaList
             tasks={filteredTasks}
-            disableDateFilter={true}
+            emptyLabel="No hay tareas con ese filtro"
             groupByStatus={true}
           />
         </div>

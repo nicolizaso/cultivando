@@ -52,6 +52,11 @@
     --brand-soft: rgba(11, 107, 69, 0.09);
     --brand-soft-strong: rgba(11, 107, 69, 0.16);
 
+    /* Gráficos: la línea de una serie y la franja del rango sano. Validados
+       (banda de luminosidad y contraste ≥3:1 sobre --surface) en cada tema. */
+    --chart-line: #0b6b45;
+    --chart-band: rgba(11, 107, 69, 0.1);
+
     /* Acentos de taxonomía (etapas de cultivo y tipos de tarea).
        Verificados ≥4.5:1 no sólo sobre --surface, sino sobre su propio tinte
        tenue compuesto encima: es el caso real de un chip, y el que se escapaba
@@ -194,6 +199,11 @@
     --shadow-md: 0 2px 10px rgba(0, 0, 0, 0.45);
     --shadow-lg: 0 14px 36px rgba(0, 0, 0, 0.5);
     --shadow-overlay: 0 24px 70px rgba(0, 0, 0, 0.62);
+
+    /* La marca del modo oscuro es muy clara para una línea fina: un paso
+       más oscuro de la misma rampa. */
+    --chart-line: #36ad76;
+    --chart-band: rgba(54, 173, 118, 0.12);
   }
 
   /* --- Alias heredados: mantienen compilando el código anterior --- */

@@ -1,10 +1,11 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { Loader2, Repeat, Trash2, AlertTriangle } from 'lucide-react'
 import { updateTask, deleteTask, deleteTaskSeries } from '@/app/actions/tasks'
 import { Task } from '@/app/lib/types'
 import { useToast } from '@/app/context/ToastContext'
+import { dateKey, todayKey } from '@/app/lib/dates'
 import DatePicker from './DatePicker'
 import { useRouter } from 'next/navigation'
 import Modal from '@/components/ui/Modal'
@@ -16,6 +17,10 @@ interface EditTaskModalProps {
   task: Task
 }
 
+/**
+ * Se monta con la tarea a editar (y `key={task.id}`): el formulario arranca
+ * con sus datos, sin un efecto que los copie al abrir.
+ */
 export default function EditTaskModal({ isOpen, onClose, task }: EditTaskModalProps) {
   const { showToast } = useToast()
   const router = useRouter()
@@ -24,9 +29,8 @@ export default function EditTaskModal({ isOpen, onClose, task }: EditTaskModalPr
   const [description, setDescription] = useState(task.description || '')
   const [applicationType, setApplicationType] = useState(task.application_type || 'Riego')
   const [targetStage, setTargetStage] = useState(task.target_stage || 'Vegetativo')
-  const [date, setDate] = useState(() => {
-    return new Date(task.due_date).toLocaleDateString('en-CA')
-  })
+  // El día de la tarea en Argentina, no en el huso del navegador.
+  const [date, setDate] = useState(() => dateKey(task.due_date) ?? todayKey())
 
   const [scope, setScope] = useState<'single' | 'all_future'>('single')
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -34,19 +38,6 @@ export default function EditTaskModal({ isOpen, onClose, task }: EditTaskModalPr
   const [showDeleteOptions, setShowDeleteOptions] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
 
-  useEffect(() => {
-    if (isOpen && task) {
-       setTitle(task.title)
-       setDescription(task.description || '')
-       setApplicationType(task.application_type || 'Riego')
-       setTargetStage(task.target_stage || 'Vegetativo')
-       const d = new Date(task.due_date)
-       setDate(d.toLocaleDateString('en-CA'))
-       setScope('single')
-       setShowDeleteOptions(false)
-       setShowDeleteConfirm(false)
-    }
-  }, [isOpen, task])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

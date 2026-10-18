@@ -1,8 +1,10 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LogOut } from "lucide-react";
+import { Bell, LogOut } from "lucide-react";
+import NotificationSettings from "@/components/NotificationSettings";
 import Modal from "@/components/ui/Modal";
 import ThemeToggle from "@/components/ThemeToggle";
 import { SECONDARY_NAV, isNavItemActive } from "@/app/lib/navigation";
@@ -25,8 +27,10 @@ interface MoreSheetProps {
  */
 export default function MoreSheet({ isOpen, onClose, email }: MoreSheetProps) {
   const pathname = usePathname();
+  const [showNotifications, setShowNotifications] = useState(false);
 
   return (
+    <>
     <Modal isOpen={isOpen} onClose={onClose} title="Más" description="Configuración del cultivo y de tu cuenta">
       <div className="space-y-7">
         <section className="space-y-2">
@@ -90,6 +94,17 @@ export default function MoreSheet({ isOpen, onClose, email }: MoreSheetProps) {
               </p>
             </div>
 
+            <button
+              type="button"
+              onClick={() => {
+                onClose();
+                setShowNotifications(true);
+              }}
+              className="btn btn-secondary mb-2 w-full"
+            >
+              <Bell size={17} aria-hidden="true" />
+              Notificaciones
+            </button>
             <button type="button" onClick={() => signout()} className="btn btn-danger w-full">
               <LogOut size={17} aria-hidden="true" />
               Cerrar sesión
@@ -98,5 +113,7 @@ export default function MoreSheet({ isOpen, onClose, email }: MoreSheetProps) {
         </section>
       </div>
     </Modal>
+    <NotificationSettings isOpen={showNotifications} onClose={() => setShowNotifications(false)} />
+    </>
   );
 }

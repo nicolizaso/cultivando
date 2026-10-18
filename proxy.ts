@@ -2,17 +2,27 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 
 /**
- * Presupuesto máximo para hablar con Supabase Auth desde el middleware.
- * Vercel corta la invocación a los 25s (MIDDLEWARE_INVOCATION_TIMEOUT), así que
- * cortamos nosotros mucho antes y dejamos pasar la request.
+ * Presupuesto máximo para hablar con Supabase Auth desde el proxy.
+ * Si Supabase tarda, cortamos nosotros mucho antes que la plataforma y dejamos
+ * pasar la request: los Server Components y la RLS vuelven a validar la sesión.
  */
 const AUTH_TIMEOUT_MS = 3000;
 
 /** Rutas accesibles sin sesión. */
 const PUBLIC_PATHS = ['/login'];
 
+/**
+ * Rutas abiertas a cualquiera, con o sin sesión: los ciclos compartidos por
+ * enlace. A diferencia de /login, quien tiene sesión no se redirige al panel.
+ */
+const OPEN_PATHS = ['/compartido'];
+
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+function isOpenPath(pathname: string) {
+  return OPEN_PATHS.some((path) => pathname === path || pathname.startsWith(`${path}/`));
+}
 
 function isPublicPath(pathname: string) {
   return PUBLIC_PATHS.some(
@@ -37,12 +47,18 @@ function hasAuthCookie(request: NextRequest) {
 const fetchWithTimeout: typeof fetch = (input, init) =>
   fetch(input, { ...init, signal: AbortSignal.timeout(AUTH_TIMEOUT_MS) });
 
-export async function middleware(request: NextRequest) {
+// Next 16 renombró `middleware` a `proxy`: mismo comportamiento, otro nombre.
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Sin configuración de Supabase el middleware no puede decidir nada:
+  // Sin configuración de Supabase el proxy no puede decidir nada:
   // dejamos pasar en vez de colgarnos contra una URL indefinida.
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+    return NextResponse.next();
+  }
+
+  // Un ciclo compartido no necesita sesión ni la refresca.
+  if (isOpenPath(pathname)) {
     return NextResponse.next();
   }
 

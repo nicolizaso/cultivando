@@ -1,44 +1,48 @@
 'use client'
 
-import React, { createContext, useContext, useState, ReactNode } from 'react'
-import Toast, { ToastType } from '@/components/Toast'
+import React, { createContext, useCallback, useContext, useMemo, useRef, useState, ReactNode } from 'react'
+import Toast from '@/components/Toast'
+import type { ToastAction, ToastState, ToastType } from '@/components/Toast'
+
+interface ToastOptions {
+  /** Un botón en el aviso, por ejemplo "Deshacer". */
+  action?: ToastAction
+  /** Milisegundos en pantalla. Con botón, más tiempo para alcanzar a tocarlo. */
+  duration?: number
+}
 
 interface ToastContextType {
-  showToast: (message: string, type?: ToastType) => void
+  showToast: (message: string, type?: ToastType, options?: ToastOptions) => void
 }
 
 const ToastContext = createContext<ToastContextType | undefined>(undefined)
 
 export function ToastProvider({ children }: { children: ReactNode }) {
-  const [toast, setToast] = useState<{ message: string; type: ToastType; isVisible: boolean }>({
-    message: '',
-    type: 'success',
-    isVisible: false,
-  })
+  const [toast, setToast] = useState<ToastState | null>(null)
+  const nextId = useRef(1)
 
-  const showToast = (message: string, type: ToastType = 'success') => {
-    setToast({ message, type, isVisible: true })
-  }
+  const showToast = useCallback((message: string, type: ToastType = 'success', options: ToastOptions = {}) => {
+    setToast({
+      id: nextId.current++,
+      message,
+      type,
+      action: options.action,
+      duration: options.duration ?? (options.action ? 8000 : 5000),
+    })
+  }, [])
 
-  const closeToast = () => {
-    setToast((prev) => ({ ...prev, isVisible: false }))
-  }
+  const closeToast = useCallback(() => setToast(null), [])
+  const value = useMemo(() => ({ showToast }), [showToast])
 
   return (
-    <ToastContext.Provider value={{ showToast }}>
+    <ToastContext.Provider value={value}>
       {children}
-      {/* El Toast vive aquí, flotando sobre toda la app */}
-      <Toast 
-        message={toast.message} 
-        type={toast.type} 
-        isVisible={toast.isVisible} 
-        onClose={closeToast} 
-      />
+      {/* El aviso vive acá, flotando sobre toda la app. */}
+      <Toast toast={toast} onClose={closeToast} />
     </ToastContext.Provider>
   )
 }
 
-// Hook personalizado para usarlo fácil
 export function useToast() {
   const context = useContext(ToastContext)
   if (context === undefined) {

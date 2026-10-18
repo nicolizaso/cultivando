@@ -6,6 +6,7 @@ import { addMeasurement } from "@/app/cycles/actions";
 import { Loader2 } from "lucide-react";
 import Modal from "@/components/ui/Modal";
 import { useToast } from "@/app/context/ToastContext";
+import { todayForInput } from "@/app/lib/dates";
 
 interface MeasurementModalProps {
   isOpen: boolean;
@@ -19,7 +20,7 @@ export default function MeasurementModal({ isOpen, onClose, cycleId }: Measureme
   const [loading, setLoading] = useState(false);
   const [temp, setTemp] = useState("");
   const [hum, setHum] = useState("");
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [date, setDate] = useState(() => todayForInput());
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

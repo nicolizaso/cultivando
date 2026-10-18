@@ -1,24 +1,15 @@
-import { Plant } from './types';
-import { getDaysSinceWater } from './dates';
+import { daysSinceDate, formatInAppTz, getDaysSinceWater } from './dates';
 import { Dna, Droplets, Flower2, Leaf, Package, Sprout, Wind, HelpCircle } from 'lucide-react';
 
-// Las cuentas de fechas viven en `dates.ts`, que sí se puede testear; se
-// reexportan para no cambiar los sitios que ya las importaban de acá.
+// Las cuentas de fechas y de métricas viven en archivos sin JSX, que sí se
+// pueden testear; se reexportan para no cambiar los sitios que las importan.
 export { getDaysSinceWater, todayForInput } from './dates';
+export { getPlantMetrics } from './plant-metrics';
 
+/** "17/10/26": un día corto, en el huso de la app. Si no se entiende, el texto tal cual. */
 export function formatDateShort(dateString: string): string {
   if (!dateString) return '';
-  const date = new Date(dateString);
-
-  // Check for invalid date
-  if (isNaN(date.getTime())) return dateString;
-
-  // Use es-ES locale for dd/mm/yy format
-  return date.toLocaleDateString('es-ES', {
-    day: '2-digit',
-    month: '2-digit',
-    year: '2-digit'
-  });
+  return formatInAppTz(dateString, { day: '2-digit', month: '2-digit', year: '2-digit' }) || dateString;
 }
 
 /**
@@ -85,7 +76,7 @@ const STAGE_STYLES = {
   },
 } as const;
 
-export function getStageColor(stage?: string) {
+export function getStageColor(stage?: string | null) {
   const s = stage?.toLowerCase() || '';
 
   if (s === 'floración' || s === 'floracion') {
@@ -119,118 +110,30 @@ export function getStageColor(stage?: string) {
   return { ...STAGE_STYLES.none, icon: <HelpCircle {...stageIconProps} /> };
 }
 
-export function getPlantMetrics(plant: Plant) {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+interface TaskCycleLinks {
+  task_cycles?: { cycles?: { id: number; name: string } | null }[] | null;
+  task_plants?: { plants?: { cycles?: { id: number; name: string } | null } | null }[] | null;
+}
 
-  // Order matters: prioritize later stages
-  const stages = [
-    { key: 'date_curado', label: 'Curado' },
-    { key: 'date_secado', label: 'Secado' },
-    { key: 'date_floracion', label: 'Floración' },
-    { key: 'date_vegetativo', label: 'Vegetativo' },
-    { key: 'date_enraizamiento', label: 'Enraizamiento' },
-    { key: 'date_plantula', label: 'Plántula' },
-    { key: 'date_germinacion', label: 'Germinación' }
-  ];
+/**
+ * Los ciclos de una tarea, para filtrar la agenda y mostrar su nombre: los
+ * enlazados directamente y los de sus plantas.
+ */
+export function mapTaskCycles(t: TaskCycleLinks): { cycleIds: number[], cycleNames: string } {
+  const cycles = new Map<number, string>();
 
-  let currentStage = plant.stage; // Default to existing stage if no dates found
-  let stageDate: Date | null = null;
-
-  // 1. Determine Current Stage based on highest date set
-  for (const stage of stages) {
-    // @ts-ignore
-    const dateStr = plant[stage.key];
-    if (dateStr) {
-      currentStage = stage.label;
-      stageDate = new Date(dateStr);
-      break;
-    }
+  for (const link of t.task_cycles ?? []) {
+    if (link.cycles) cycles.set(link.cycles.id, link.cycles.name);
   }
-
-  // If no stage date found but planted_at exists, maybe fallback logic?
-  // For now, if no date found, we stick with plant.stage but have no start date.
-
-  // 2. Calculate Days in Current Stage
-  let daysInCurrentStage = 0;
-  if (stageDate) {
-      // normalize
-      const d = new Date(stageDate);
-      d.setHours(0,0,0,0);
-      const diffTime = today.getTime() - d.getTime();
-      daysInCurrentStage = Math.max(0, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
-  }
-
-  // 3. Calculate Total Age (from earliest date available)
-  let earliestDate: Date | null = null;
-  const allDates = [
-      plant.date_germinacion,
-      plant.date_plantula,
-      plant.date_enraizamiento,
-      plant.date_vegetativo,
-      plant.date_floracion,
-      plant.date_secado,
-      plant.date_curado,
-      plant.planted_at
-  ].filter(d => d).map(d => new Date(d as string));
-
-  if (allDates.length > 0) {
-      allDates.sort((a, b) => a.getTime() - b.getTime());
-      earliestDate = allDates[0];
-  }
-
-  let totalAge = 0;
-  if (earliestDate) {
-      const e = new Date(earliestDate);
-      e.setHours(0,0,0,0);
-      const diffTime = today.getTime() - e.getTime();
-      totalAge = Math.max(0, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
+  for (const link of t.task_plants ?? []) {
+    const cycle = link.plants?.cycles;
+    if (cycle) cycles.set(cycle.id, cycle.name);
   }
 
   return {
-      currentStage,
-      daysInCurrentStage,
-      totalAge
+    cycleIds: Array.from(cycles.keys()),
+    cycleNames: Array.from(new Set(cycles.values())).join(', '),
   };
-}
-
-export function mapTaskCycles(t: any, allCycles?: { id: number; name: string }[]): { cycleIds: number[], cycleNames: string } {
-    const cycleIdsSet = new Set<number>();
-    const cycleNamesSet = new Set<string>();
-
-    if (t.task_cycles && t.task_cycles.length > 0) {
-        t.task_cycles.forEach((tc: any) => {
-            if (tc.cycles) {
-                cycleIdsSet.add(tc.cycles.id);
-                cycleNamesSet.add(tc.cycles.name);
-            }
-        });
-    }
-
-    if (t.task_plants && t.task_plants.length > 0) {
-        t.task_plants.forEach((tp: any) => {
-            if (tp.plants?.cycles) {
-                cycleIdsSet.add(tp.plants.cycles.id);
-                cycleNamesSet.add(tp.plants.cycles.name);
-            }
-        });
-    }
-
-    // Legacy fallback
-    if (t.cycle_id) {
-        cycleIdsSet.add(t.cycle_id);
-        if (allCycles) {
-            const matchingCycle = allCycles.find((c: any) => c.id === t.cycle_id);
-            if (matchingCycle) cycleNamesSet.add(matchingCycle.name);
-        } else if (t.cycles && typeof t.cycles === 'object') {
-            cycleNamesSet.add(t.cycles.name);
-        }
-    }
-
-    return {
-      cycleIds: Array.from(cycleIdsSet),
-      cycleNames: Array.from(cycleNamesSet).join(', ')
-    };
 }
 
 /**
@@ -259,12 +162,7 @@ export function getWaterStatus(lastWater?: string | null) {
  * de día el HTML del servidor y el del navegador dirían números distintos.
  */
 export function daysSince(dateString?: string | null): number {
-  if (!dateString) return 0;
-
-  const start = new Date(dateString);
-  if (isNaN(start.getTime())) return 0;
-
-  return Math.max(0, Math.floor((new Date().getTime() - start.getTime()) / (1000 * 60 * 60 * 24)));
+  return daysSinceDate(dateString) ?? 0;
 }
 
 /**

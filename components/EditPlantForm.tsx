@@ -2,11 +2,11 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { supabase } from "@/app/lib/supabase";
+import { deletePlant, updatePlant } from "@/app/actions/plants";
 import { Plant, Cycle } from "@/app/lib/types";
 import { getStageColor, todayForInput } from "@/app/lib/utils";
+import { dateKey as dayKeyOf } from "@/app/lib/dates";
 import { STAGE_DATE_COLUMNS, STAGE_NAMES, StageName } from "@/app/lib/stage-logic";
-import { parseCultivationDate } from "@/app/lib/dates";
 import { Sprout, Leaf, Flower, Wind, Thermometer, Calendar, Save, ArrowLeft, Trash2, Dna, Loader2, LucideIcon } from "lucide-react";
 import Link from "next/link";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
@@ -58,6 +58,7 @@ export default function EditPlantForm({ plant, cycles }: EditPlantFormProps) {
     breeder: plant.breeder || '',
     source_type: plant.source_type || 'Semilla',
     cycle_id: plant.cycle_id,
+    is_mother: Boolean(plant.is_mother),
   });
 
   // Dates State
@@ -65,7 +66,7 @@ export default function EditPlantForm({ plant, cycles }: EditPlantFormProps) {
     Object.fromEntries(STAGE_CONFIG.map((stage) => [stage.key, plant[stage.key] || '']))
   );
 
-  const handleBasicChange = (field: string, value: any) => {
+  const handleBasicChange = (field: string, value: string | number | boolean | null) => {
     setBasicInfo(prev => ({ ...prev, [field]: value }));
   };
 
@@ -87,56 +88,26 @@ export default function EditPlantForm({ plant, cycles }: EditPlantFormProps) {
     setLoading(true);
 
     try {
-      // La etapa la manda la línea de tiempo: es la última con fecha, y
-      // STAGE_CONFIG viene en orden de cultivo.
-      let currentStage = plant.stage;
-      for (const config of STAGE_CONFIG) {
-          if (dates[config.key]) {
-              currentStage = config.value;
-          }
-      }
-
-      // Also update planted_at if germinacion is set
-      const plantedAt = dates.date_germinacion || plant.planted_at;
-
-      // Las siete columnas de fecha salen de la misma lista que dibuja la
-      // línea de tiempo, así que no puede volver a faltar ninguna.
-      //
-      // Se anclan al mediodía igual que el cambio de etapa en lote: el input
-      // devuelve un "YYYY-MM-DD" pelado, que la base guarda como medianoche
-      // UTC, y al oeste de Greenwich la etapa arrancaba el día anterior. Una
-      // fecha que el usuario no tocó llega con su hora original y no se mueve.
-      const stageDates = Object.fromEntries(
-        STAGE_CONFIG.map((stage) => {
-          const value = dates[stage.key];
-          return [stage.key, value ? parseCultivationDate(value)?.toISOString() ?? null : null];
-        })
-      );
-
-      const updates = {
+      // La etapa, `stage_updated_at` y `planted_at` los deduce el servidor de
+      // la línea de tiempo, con la misma regla que el resto de la app.
+      const result = await updatePlant(plant.id, {
         name: basicInfo.name,
         strain: basicInfo.strain,
         breeder: basicInfo.breeder,
         source_type: basicInfo.source_type,
         cycle_id: basicInfo.cycle_id,
-        ...stageDates,
-        // Computed/Logic
-        planted_at: plantedAt,
-        stage: currentStage
-      };
+        is_mother: basicInfo.is_mother,
+        dates,
+      });
 
-      const { error } = await supabase
-        .from('plants')
-        .update(updates)
-        .eq('id', plant.id);
-
-      if (error) throw error;
+      if (!result.success) {
+        showToast(result.error || "No se pudieron guardar los cambios", "error");
+        return;
+      }
 
       showToast("Cambios guardados");
       router.push(`/plants/${plant.id}`);
       router.refresh();
-    } catch (error) {
-      showToast(error instanceof Error ? error.message : "No se pudieron guardar los cambios", "error");
     } finally {
       setLoading(false);
     }
@@ -145,20 +116,17 @@ export default function EditPlantForm({ plant, cycles }: EditPlantFormProps) {
   const handleDelete = async () => {
     setLoading(true);
     try {
-        const { error } = await supabase
-            .from('plants')
-            .delete()
-            .eq('id', plant.id);
+      const result = await deletePlant(plant.id);
+      if (!result.success) {
+        showToast(result.error || "No se pudo eliminar la planta", "error");
+        return;
+      }
 
-        if (error) throw error;
-
-        showToast(`${plant.name} eliminada`);
-        router.push('/plants');
-        router.refresh();
-    } catch (error) {
-        showToast(error instanceof Error ? error.message : "No se pudo eliminar la planta", "error");
+      showToast(`${plant.name} eliminada`);
+      router.push('/plants');
+      router.refresh();
     } finally {
-        setLoading(false);
+      setLoading(false);
     }
   };
 
@@ -233,17 +201,39 @@ export default function EditPlantForm({ plant, cycles }: EditPlantFormProps) {
 
             <div className="field md:col-span-2">
               <label htmlFor="edit-plant-cycle" className="field-label">Ciclo</label>
+              {/* El ciclo actual aparece aunque esté cerrado: antes sólo se
+                  listaban los activos y una planta de un ciclo finalizado
+                  mostraba otro ciclo en el desplegable. */}
               <select
                 id="edit-plant-cycle"
                 className="field-input"
-                value={basicInfo.cycle_id || ''}
-                onChange={(e) => handleBasicChange('cycle_id', Number(e.target.value))}
+                value={basicInfo.cycle_id ?? ''}
+                onChange={(e) => handleBasicChange('cycle_id', e.target.value ? Number(e.target.value) : null)}
               >
+                <option value="">Sin ciclo</option>
                 {cycles.map(cycle => (
-                  <option key={cycle.id} value={cycle.id}>{cycle.name}</option>
+                  <option key={cycle.id} value={cycle.id}>
+                    {cycle.name}{cycle.is_active ? '' : ' (finalizado)'}
+                  </option>
                 ))}
               </select>
             </div>
+
+            <label htmlFor="edit-plant-mother" className="flex cursor-pointer items-start gap-3 rounded-[var(--radius-md)] border border-line p-3 md:col-span-2">
+              <input
+                id="edit-plant-mother"
+                type="checkbox"
+                className="mt-0.5 h-4 w-4 accent-[color:var(--brand)]"
+                checked={basicInfo.is_mother}
+                onChange={(e) => handleBasicChange('is_mother', e.target.checked)}
+              />
+              <span>
+                <span className="block text-sm font-semibold text-fg">Planta madre</span>
+                <span className="block text-xs text-fg-muted">
+                  La guardás para sacar esquejes. Aparece primera al elegir madre y en el filtro de madres.
+                </span>
+              </span>
+            </label>
           </div>
         </section>
 
@@ -315,7 +305,7 @@ export default function EditPlantForm({ plant, cycles }: EditPlantFormProps) {
                         id={`stage-${stage.key}`}
                         type="date"
                         className="field-input w-40"
-                        value={dateValue ? dateValue.split('T')[0] : ''}
+                        value={dayKeyOf(dateValue) ?? ''}
                         onChange={(e) => handleDateChange(dateKey, e.target.value)}
                       />
                     </>

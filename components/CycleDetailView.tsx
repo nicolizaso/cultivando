@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useMemo, useState, useRef } from "react";
+import { useIsClient } from "@/app/hooks/useIsClient";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -10,7 +11,14 @@ import {
   List as ListIcon, Loader2, Archive, Thermometer, Trash2, Gauge
 } from "lucide-react";
 
-import { Plant, CycleImage } from "@/app/lib/types";
+import { Plant, CycleImage, Measurement } from "@/app/lib/types";
+import { climateByStage, climateSeries, dominantStage, stageClimate, stagePeriods, vpd, vpdLevel, DEFAULT_VPD_RANGE } from "@/app/lib/climate";
+import ClimateHistory from "./ClimateHistory";
+import { averageDays, weekInStage } from "@/app/lib/nutrition";
+import CycleTimelapse from "./CycleTimelapse";
+import { buildTimelapseFrames, plantsWithFrames } from "@/app/lib/timelapse";
+import type { PhotoLog } from "@/app/lib/timelapse";
+import { dateKey, daysBetweenKeys, formatDay } from "@/app/lib/dates";
 import { getPlantMetrics, getStageColor } from "@/app/lib/utils";
 import BulkStageModal from "./BulkStageModal";
 import BulkArchiveModal from "./BulkArchiveModal";
@@ -24,16 +32,18 @@ import SelectionBar from "@/components/ui/SelectionBar";
 import { uploadCycleImage, deleteCycleImages, updateCycleImage } from "@/app/cycles/actions";
 
 interface CycleDetailViewProps {
-  cycle: { id: number; name: string; start_date: string; spaces: { name: string; type: string }; };
+  cycle: { id: number; name: string; start_date: string | null; spaces: { name: string; type: string | null } | null };
   plants: Plant[];
-  lastMeasurement?: { temperature: number; humidity: number; date: string } | null;
-  history: any[];
+  lastMeasurement?: Pick<Measurement, 'temperature' | 'humidity' | 'date'> | null;
+  history: Measurement[];
   cycleImages?: CycleImage[];
+  /** Registros de bitácora con fotos (de las plantas del ciclo o del ciclo). */
+  photoLogs?: PhotoLog[];
 }
 
 type ViewMode = 'table' | 'grid';
 
-export default function CycleDetailView({ cycle, plants, lastMeasurement, cycleImages = [] }: CycleDetailViewProps) {
+export default function CycleDetailView({ cycle, plants, lastMeasurement, history, cycleImages = [], photoLogs = [] }: CycleDetailViewProps) {
   const router = useRouter();
   const { showToast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -52,12 +62,8 @@ export default function CycleDetailView({ cycle, plants, lastMeasurement, cycleI
   const [isStageModalOpen, setIsStageModalOpen] = useState(false);
   const [isWaterModalOpen, setIsWaterModalOpen] = useState(false);
   const [isMeasureModalOpen, setIsMeasureModalOpen] = useState(false);
-  const [isMounted, setIsMounted] = useState(false);
+  const isMounted = useIsClient();
   const [showDeleteImagesConfirm, setShowDeleteImagesConfirm] = useState(false);
-
-  useEffect(() => {
-    setIsMounted(true);
-  }, []);
 
   const activePlants = plants.filter(p => !p.is_archived);
 
@@ -166,20 +172,41 @@ export default function CycleDetailView({ cycle, plants, lastMeasurement, cycleI
     }
   };
 
-  const vpdValue = lastMeasurement
-    ? (0.61078 * Math.exp((17.27 * lastMeasurement.temperature) / (lastMeasurement.temperature + 237.3))) *
-      (1 - lastMeasurement.humidity / 100)
-    : null;
+  const vpdValue = lastMeasurement ? vpd(lastMeasurement.temperature, lastMeasurement.humidity) : null;
 
-  // El rango sano se dice con palabras además de con color: quien no distingue
-  // el verde del rojo tiene que poder leer el diagnóstico igual.
-  const vpdStatus = vpdValue === null
+  // El rango sano depende de la etapa: un VPD de 1,4 es ideal en floración y
+  // demasiado alto para un esqueje. Antes el rango era fijo (0,4 a 1,6).
+  const cycleStage = dominantStage(plants);
+  const climate = stageClimate(cycleStage);
+  const vpdRange = climate?.vpd ?? DEFAULT_VPD_RANGE;
+  const level = vpdLevel(vpdValue, vpdRange);
+
+  // Se dice con palabras además de con color: quien no distingue el verde del
+  // rojo tiene que poder leer el diagnóstico igual.
+  const rangeText = `${vpdRange.min.toLocaleString('es-AR')}–${vpdRange.max.toLocaleString('es-AR')} kPa${cycleStage && climate ? ` en ${cycleStage}` : ''}`;
+  const vpdStatus = level === 'unknown'
     ? { label: 'Sin medición', tone: 'text-fg-muted' }
-    : vpdValue < 0.4
-      ? { label: 'Bajo, riesgo de hongos', tone: 'text-[color:var(--danger)]' }
-      : vpdValue > 1.6
-        ? { label: 'Alto, la planta transpira de más', tone: 'text-[color:var(--danger)]' }
-        : { label: 'En rango', tone: 'text-[color:var(--success)]' };
+    : level === 'low'
+      ? { label: `Bajo, riesgo de hongos (ideal ${rangeText})`, tone: 'text-[color:var(--danger)]' }
+      : level === 'high'
+        ? { label: `Alto, la planta transpira de más (ideal ${rangeText})`, tone: 'text-[color:var(--danger)]' }
+        : { label: `En rango (${rangeText})`, tone: 'text-[color:var(--success)]' };
+
+  const periods = useMemo(() => stagePeriods(plants), [plants]);
+  const climatePoints = useMemo(() => climateSeries(history), [history]);
+  const climateStages = useMemo(() => climateByStage(climatePoints, periods), [climatePoints, periods]);
+
+  const timelapseFrames = useMemo(() => buildTimelapseFrames({
+    cycleStart: cycle.start_date,
+    gallery: cycleImages,
+    logs: photoLogs,
+    periods,
+    plantNames: new Map(plants.map((plant) => [plant.id, plant.name])),
+  }), [cycle.start_date, cycleImages, photoLogs, periods, plants]);
+  const timelapsePlants = useMemo(() => {
+    const ids = new Set(plantsWithFrames(timelapseFrames));
+    return plants.filter((plant) => ids.has(plant.id)).map((plant) => ({ id: plant.id, name: plant.name }));
+  }, [timelapseFrames, plants]);
 
   const toggleSelectAll = () => {
     setSelectedPlants(
@@ -219,7 +246,7 @@ export default function CycleDetailView({ cycle, plants, lastMeasurement, cycleI
               Temperatura
             </p>
             <p className="metric mt-2 text-3xl text-fg">
-              {lastMeasurement ? `${lastMeasurement.temperature}°` : '--'}
+              {lastMeasurement?.temperature != null ? `${lastMeasurement.temperature}°` : '--'}
             </p>
             <p className="mt-1 text-xs text-fg-subtle">Celsius</p>
           </div>
@@ -230,7 +257,7 @@ export default function CycleDetailView({ cycle, plants, lastMeasurement, cycleI
               Humedad
             </p>
             <p className="metric mt-2 text-3xl text-fg">
-              {lastMeasurement ? `${lastMeasurement.humidity}%` : '--'}
+              {lastMeasurement?.humidity != null ? `${lastMeasurement.humidity}%` : '--'}
             </p>
             <p className="mt-1 text-xs text-fg-subtle">Relativa</p>
           </div>
@@ -247,6 +274,13 @@ export default function CycleDetailView({ cycle, plants, lastMeasurement, cycleI
             <p className={`mt-1 text-xs font-medium ${vpdStatus.tone}`}>{vpdStatus.label}</p>
           </div>
         </div>
+
+        <ClimateHistory
+          points={climatePoints}
+          stageLabel={cycleStage}
+          climate={climate}
+          byStage={climateStages}
+        />
       </section>
 
       {/* 2. Plantas del ciclo */}
@@ -395,8 +429,8 @@ export default function CycleDetailView({ cycle, plants, lastMeasurement, cycleI
                     </span>
 
                     <span className={`relative block aspect-square ${stageInfo.bgColor}`}>
-                      {(plant as any).image_url ? (
-                        <Image src={(plant as any).image_url} alt="" fill sizes="220px" className="object-cover" />
+                      {plant.image_url ? (
+                        <Image src={plant.image_url} alt="" fill sizes="220px" className="object-cover" />
                       ) : (
                         <span className={`flex h-full items-center justify-center text-3xl ${stageInfo.textColor}`}>
                           {stageInfo.icon}
@@ -425,34 +459,38 @@ export default function CycleDetailView({ cycle, plants, lastMeasurement, cycleI
       <section aria-labelledby="galeria" className="space-y-3">
         <div className="flex items-center justify-between gap-3">
           <h2 id="galeria" className="section-title">Seguimiento visual</h2>
-          <button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={isUploading}
-            className="btn btn-sm btn-secondary"
-          >
-            {isUploading
-              ? <Loader2 className="animate-spin" size={15} aria-hidden="true" />
-              : <Camera size={15} aria-hidden="true" />}
-            {isUploading ? 'Subiendo...' : 'Subir foto'}
-          </button>
-          <input
-            type="file"
-            ref={fileInputRef}
-            onChange={handleFileChange}
-            accept="image/*"
-            className="sr-only"
-            aria-label="Subir foto del ciclo"
-          />
+          <div className="flex items-center gap-2">
+            <CycleTimelapse frames={timelapseFrames} plants={timelapsePlants} />
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isUploading}
+              className="btn btn-sm btn-secondary"
+            >
+              {isUploading
+                ? <Loader2 className="animate-spin" size={15} aria-hidden="true" />
+                : <Camera size={15} aria-hidden="true" />}
+              {isUploading ? 'Subiendo...' : 'Subir foto'}
+            </button>
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleFileChange}
+              accept="image/*"
+              className="sr-only"
+              aria-label="Subir foto del ciclo"
+            />
+          </div>
         </div>
 
         {cycleImages && cycleImages.length > 0 ? (
           <ul className="custom-scrollbar flex snap-x gap-3 overflow-x-auto pb-3">
             {cycleImages.map((img) => {
               const isSelected = selectedImages.includes(img.id);
-              const dayNumber = Math.max(0, Math.floor(
-                (new Date(img.taken_at).getTime() - new Date(cycle.start_date).getTime()) / (1000 * 60 * 60 * 24)
-              ));
+              // Día de cultivo de la foto, en días de calendario de Argentina.
+              const startKey = dateKey(cycle.start_date);
+              const photoKey = dateKey(img.taken_at ?? img.created_at);
+              const dayNumber = startKey && photoKey ? Math.max(0, daysBetweenKeys(startKey, photoKey)) : 0;
 
               return (
                 <li key={img.id} className="shrink-0 snap-center">
@@ -497,7 +535,7 @@ export default function CycleDetailView({ cycle, plants, lastMeasurement, cycleI
                     <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 to-transparent p-2.5 text-left">
                       <span className="mono block text-[11px] font-semibold text-white">Día {dayNumber}</span>
                       <span className="block text-[10px] text-white/75">
-                        {new Date(img.taken_at).toLocaleDateString('es-AR')}
+                        {formatDay(img.taken_at ?? img.created_at)}
                       </span>
                     </span>
                   </button>
@@ -548,7 +586,7 @@ export default function CycleDetailView({ cycle, plants, lastMeasurement, cycleI
                   type="date"
                   name="date"
                   data-autofocus
-                  defaultValue={new Date(selectedImage.taken_at).toLocaleDateString('en-CA')}
+                  defaultValue={dateKey(selectedImage.taken_at ?? selectedImage.created_at) ?? ''}
                   className="field-input"
                 />
               </div>
@@ -628,7 +666,13 @@ export default function CycleDetailView({ cycle, plants, lastMeasurement, cycleI
 
       <BulkArchiveModal isOpen={isArchiveModalOpen} onClose={() => setIsArchiveModalOpen(false)} selectedIds={selectedPlants} onSuccess={handleBulkSuccess} />
       <BulkStageModal isOpen={isStageModalOpen} onClose={() => setIsStageModalOpen(false)} selectedIds={selectedPlants} onSuccess={handleBulkSuccess} />
-      <BulkWaterModal isOpen={isWaterModalOpen} onClose={() => setIsWaterModalOpen(false)} selectedIds={selectedPlants} onSuccess={handleBulkSuccess} />
+      <BulkWaterModal
+        isOpen={isWaterModalOpen}
+        onClose={() => setIsWaterModalOpen(false)}
+        selectedIds={selectedPlants}
+        onSuccess={handleBulkSuccess}
+        defaultWeek={weekInStage(averageDays(plants.filter((p) => selectedPlants.includes(p.id)).map((p) => getPlantMetrics(p).daysInCurrentStage)))}
+      />
       <MeasurementModal isOpen={isMeasureModalOpen} onClose={() => setIsMeasureModalOpen(false)} cycleId={cycle.id} />
     </div>
   );

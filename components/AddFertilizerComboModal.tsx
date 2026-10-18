@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { AlertCircle, Check, Loader2 } from 'lucide-react'
 import { Fertilizer, FertilizerCombo } from '@/app/lib/types'
 import Modal from '@/components/ui/Modal'
@@ -8,27 +8,18 @@ import Modal from '@/components/ui/Modal'
 interface AddFertilizerComboModalProps {
   isOpen: boolean
   onClose: () => void
-  onSave: (data: Partial<FertilizerCombo>) => Promise<any>
+  onSave: (data: Partial<FertilizerCombo>) => Promise<{ error?: string | null }>
   availableProducts: Fertilizer[]
   initialData?: FertilizerCombo | null
 }
 
 export default function AddFertilizerComboModal({ isOpen, onClose, onSave, availableProducts, initialData }: AddFertilizerComboModalProps) {
-  const [name, setName] = useState('')
-  const [selectedProducts, setSelectedProducts] = useState<{ fertilizer_id: number; name: string }[]>([])
+  // Quien lo abre le cambia la `key` en cada apertura: el estado arranca con
+  // el combo elegido (o en blanco) sin un efecto que copie props.
+  const [name, setName] = useState(initialData?.name ?? '')
+  const [selectedProducts, setSelectedProducts] = useState<{ fertilizer_id: number; name: string }[]>(initialData?.products ?? [])
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    if (initialData) {
-      setName(initialData.name)
-      setSelectedProducts(initialData.products || [])
-    } else {
-      setName('')
-      setSelectedProducts([])
-    }
-    setError(null)
-  }, [initialData, isOpen])
 
   const handleToggleProduct = (product: Fertilizer) => {
     const isSelected = selectedProducts.some(p => p.fertilizer_id === product.id)

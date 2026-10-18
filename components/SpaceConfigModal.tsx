@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useEffect, useId } from "react";
+import { useState, useTransition, useId } from "react";
 import { Space } from "@/app/lib/types";
 import { updateSpace } from "@/app/actions/spaces";
 import { Maximize, Sun, Wind, Save, Loader2 } from "lucide-react";
@@ -14,47 +14,42 @@ interface SpaceConfigModalProps {
   space: Space | null;
 }
 
+/** Lo que se edita: los números viajan como texto mientras se escriben. */
+type SpaceForm = Partial<Record<keyof Space, string | number | null>>;
+
+const NUMERIC_FIELDS = [
+  'width', 'length', 'height', 'area_m2',
+  'light_watts', 'light_ppfd',
+  'vent_extraction', 'vent_intraction', 'pot_capacity',
+] as const;
+
+/**
+ * Quien lo abre le pone `key={space.id}`: al cambiar de espacio el formulario
+ * se arma de nuevo con sus datos, sin copiar props al estado en un efecto.
+ */
 export default function SpaceConfigModal({ isOpen, onClose, space }: SpaceConfigModalProps) {
-  // Los campos numéricos se editan como texto y se parsean al guardar.
-  const [formData, setFormData] = useState<any>({});
+  const [formData, setFormData] = useState<SpaceForm>(() => ({ ...(space ?? {}) }));
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
   const { showToast } = useToast();
 
-  useEffect(() => {
-    if (space) {
-      setFormData(space);
-    }
-  }, [space]);
-
   if (!space) return null;
 
-  const handleChange = (field: keyof Space, value: any) => {
-    setFormData((prev: any) => ({ ...prev, [field]: value }));
+  const handleChange = (field: keyof Space, value: string) => {
+    setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
   const handleSave = () => {
     startTransition(async () => {
-      const dataToSave = { ...formData };
-      const numericFields = [
-        'width', 'length', 'height', 'area_m2',
-        'light_watts', 'light_ppfd',
-        'vent_extraction', 'vent_intraction', 'pot_capacity'
-      ];
+      const dataToSave: SpaceForm = { ...formData };
 
-      numericFields.forEach(field => {
-        if (typeof dataToSave[field] === 'string') {
-          const val = dataToSave[field].trim();
-          if (val === '') {
-            dataToSave[field] = null;
-          } else {
-            const parsed = parseFloat(val);
-            if (!isNaN(parsed)) {
-              dataToSave[field] = parsed;
-            }
-          }
-        }
-      });
+      // Un campo vacío es "sin dato"; el servidor valida el resto.
+      for (const field of NUMERIC_FIELDS) {
+        const value = dataToSave[field];
+        if (typeof value !== 'string') continue;
+        const trimmed = value.trim().replace(',', '.');
+        dataToSave[field] = trimmed === '' ? null : Number.isNaN(parseFloat(trimmed)) ? value : parseFloat(trimmed);
+      }
 
       const res = await updateSpace(space.id, dataToSave);
       if (res.success) {

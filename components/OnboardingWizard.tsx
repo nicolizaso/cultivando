@@ -7,6 +7,9 @@ import { createCycleWithSpace } from "@/app/cycles/actions";
 import { createPlantsBulk } from "@/app/actions/plants";
 import { AlertCircle, Loader2, Warehouse, RefreshCw, Leaf } from "lucide-react";
 import Modal from "@/components/ui/Modal";
+import { todayForInput } from "@/app/lib/dates";
+import { ONBOARDING_SKIPPED_COOKIE, ONBOARDING_SKIPPED_MAX_AGE } from "@/app/lib/onboarding";
+import type { SpaceType } from "@/app/lib/types";
 
 export default function OnboardingWizard() {
   const router = useRouter();
@@ -19,9 +22,9 @@ export default function OnboardingWizard() {
   const [cycleId, setCycleId] = useState<number | null>(null);
 
   // Forms
-  const [spaceForm, setSpaceForm] = useState({ name: "Mi primer espacio", type: "Indoor" });
-  const [cycleForm, setCycleForm] = useState({ name: "Primer ciclo", startDate: new Date().toISOString().split('T')[0] });
-  const [plantsForm, setPlantsForm] = useState({ count: 1, strain: "", source: "Semilla" });
+  const [spaceForm, setSpaceForm] = useState<{ name: string; type: SpaceType }>({ name: "Mi primer espacio", type: "Indoor" });
+  const [cycleForm, setCycleForm] = useState({ name: "Primer ciclo", startDate: todayForInput() });
+  const [plantsForm, setPlantsForm] = useState<{ count: number; strain: string; source: "Semilla" | "Esqueje" }>({ count: 1, strain: "", source: "Semilla" });
 
   const [isOpen, setIsOpen] = useState(true);
 
@@ -32,7 +35,7 @@ export default function OnboardingWizard() {
     setError(null);
     try {
       if (step === 1) {
-        const res = await createSpaceInline(spaceForm.name, spaceForm.type as any);
+        const res = await createSpaceInline(spaceForm.name, spaceForm.type);
         if (res.success && res.spaceId) {
           setSpaceId(res.spaceId);
           setStep(2);
@@ -46,20 +49,23 @@ export default function OnboardingWizard() {
         } else throw new Error(res.error || "Error creando ciclo");
       } else if (step === 3) {
         if (!cycleId) throw new Error("Falta el ciclo");
-        const res = await createPlantsBulk(plantsForm.count, plantsForm.strain.trim() || "Sin especificar", plantsForm.source as any, cycleId);
+        const res = await createPlantsBulk(plantsForm.count, plantsForm.strain.trim() || "Sin especificar", plantsForm.source, cycleId);
         if (res.success) {
           setIsOpen(false);
           router.refresh();
         } else throw new Error(res.error || "Error creando plantas");
       }
-    } catch (err: any) {
-      setError(err.message || "Ocurrió un error");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Ocurrió un error");
     } finally {
       setLoading(false);
     }
   };
 
+  // Omitir queda recordado: antes el asistente volvía a abrirse en cada visita
+  // al panel hasta crear un espacio y un ciclo.
   const handleSkip = () => {
+    document.cookie = `${ONBOARDING_SKIPPED_COOKIE}=1; path=/; max-age=${ONBOARDING_SKIPPED_MAX_AGE}; samesite=lax`;
     setIsOpen(false);
     router.refresh();
   };
@@ -142,7 +148,7 @@ export default function OnboardingWizard() {
                 id="onb-space-type"
                 className="field-input"
                 value={spaceForm.type}
-                onChange={e => setSpaceForm({...spaceForm, type: e.target.value})}
+                onChange={e => setSpaceForm({...spaceForm, type: e.target.value as SpaceType})}
               >
                 <option value="Indoor">Indoor</option>
                 <option value="Outdoor">Outdoor</option>
@@ -213,7 +219,7 @@ export default function OnboardingWizard() {
                   id="onb-plants-source"
                   className="field-input"
                   value={plantsForm.source}
-                  onChange={e => setPlantsForm({...plantsForm, source: e.target.value})}
+                  onChange={e => setPlantsForm({...plantsForm, source: e.target.value as "Semilla" | "Esqueje"})}
                 >
                   <option value="Semilla">Semilla</option>
                   <option value="Esqueje">Esqueje</option>

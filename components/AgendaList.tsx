@@ -1,12 +1,12 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { CheckCircle2, Loader2, Trash2 } from 'lucide-react'
 import { Task } from "@/app/lib/types"
 import TaskPill from "./TaskPill"
 import EditTaskModal from "./EditTaskModal"
 import EsquejarModal from "./EsquejarModal"
-import { toggleTaskStatus, deleteTasks } from "@/app/actions/tasks"
+import { toggleTaskStatus, deleteTasks, undoTaskCompletion } from "@/app/actions/tasks"
 import type { AmbienteMoveResult, TaskCompletionEffects } from "@/app/actions/tasks"
 import { useToast } from "@/app/context/ToastContext"
 import ConfirmDialog from "@/components/ui/ConfirmDialog"
@@ -49,13 +49,31 @@ function ambienteMessage(ambiente: AmbienteMoveResult): string {
   return message
 }
 
-interface AgendaListProps {
-  tasks: Task[]
-  disableDateFilter?: boolean
-  groupByStatus?: boolean
+/**
+ * Tareas que, al completarse, cambian mucho y de golpe: archivar plantas o
+ * mudarlas de espacio. Antes bastaba un toque de más; ahora se confirma.
+ */
+const CONFIRM_ON_COMPLETE: Record<string, { title: string; description: string; confirmLabel: string }> = {
+  muerta: {
+    title: '¿Archivar las plantas?',
+    description: 'Al completar esta tarea, las plantas que alcanza se archivan y dejan de aparecer en el cultivo activo.',
+    confirmLabel: 'Completar y archivar',
+  },
+  ambiente: {
+    title: '¿Mudar de espacio?',
+    description: 'Al completar esta tarea, los ciclos y plantas que alcanza pasan al espacio de destino.',
+    confirmLabel: 'Completar y mudar',
+  },
 }
 
-export default function AgendaList({ tasks, disableDateFilter = false, groupByStatus = false }: AgendaListProps) {
+interface AgendaListProps {
+  tasks: Task[]
+  groupByStatus?: boolean
+  /** Lo que se dice si no hay tareas. */
+  emptyLabel?: string
+}
+
+export default function AgendaList({ tasks, groupByStatus = false, emptyLabel = 'Sin tareas este día' }: AgendaListProps) {
   const { showToast } = useToast()
 
   const [isSelectionMode, setIsSelectionMode] = useState(false)
@@ -64,12 +82,60 @@ export default function AgendaList({ tasks, disableDateFilter = false, groupBySt
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [editingTask, setEditingTask] = useState<Task | null>(null)
   const [esquejandoTask, setEsquejandoTask] = useState<Task | null>(null)
+  const [confirmingTask, setConfirmingTask] = useState<Task | null>(null)
 
-  // Filter tasks for today using local time
-  const todayStr = new Date().toLocaleDateString('en-CA');
-  const tasksToDisplay = disableDateFilter
-    ? tasks
-    : tasks.filter(t => t.due_date && t.due_date.split('T')[0] === todayStr);
+  // Tareas con un cambio en curso: un segundo toque mientras tanto no hace nada.
+  const busy = useRef(new Set<string | number>())
+
+  const undo = async (id: string | number) => {
+    const res = await undoTaskCompletion(String(id))
+    if (res?.error) {
+      showToast(res.error, 'error')
+      return
+    }
+    showToast(
+      'partial' in res && res.partial
+        ? 'La tarea volvió a pendiente, pero algún cambio no se pudo deshacer. Revisá las plantas.'
+        : 'Listo, se deshizo la tarea.',
+      'partial' in res && res.partial ? 'error' : 'success'
+    )
+  }
+
+  const setStatus = async (task: Task, newStatus: 'pending' | 'completed') => {
+    if (busy.current.has(task.id)) return
+    busy.current.add(task.id)
+
+    try {
+      const res = await toggleTaskStatus(String(task.id), newStatus)
+
+      if (res?.error) {
+        showToast(res.error, 'error')
+        return
+      }
+
+      if (newStatus === 'completed') {
+        const message = res?.ambiente ? ambienteMessage(res.ambiente) : completionMessage(res?.effects)
+        showToast(
+          message,
+          'success',
+          res?.canUndo ? { action: { label: 'Deshacer', onClick: () => undo(task.id) } } : undefined
+        )
+        return
+      }
+
+      // Al desmarcarla, los esquejes ya creados siguen existiendo: son plantas
+      // con su propia historia, no un efecto secundario que se pueda deshacer.
+      const registered = task.metadata?.esquejado?.total ?? 0
+      showToast(
+        registered > 0
+          ? `Tarea pendiente. Los ${registered} esquejes creados se mantienen.`
+          : 'Tarea marcada como pendiente',
+        'success'
+      )
+    } finally {
+      busy.current.delete(task.id)
+    }
+  }
 
   const handleToggle = async (id: string | number) => {
     const task = tasks.find(t => t.id === id)
@@ -84,27 +150,12 @@ export default function AgendaList({ tasks, disableDateFilter = false, groupBySt
       return
     }
 
-    const res = await toggleTaskStatus(String(id), newStatus)
-
-    if (res?.error) {
-      showToast('Error al actualizar estado', 'error')
+    if (newStatus === 'completed' && CONFIRM_ON_COMPLETE[task.type]) {
+      setConfirmingTask(task)
       return
     }
 
-    if (newStatus === 'completed') {
-      showToast(res?.ambiente ? ambienteMessage(res.ambiente) : completionMessage(res?.effects), 'success')
-      return
-    }
-
-    // Al desmarcarla, los esquejes ya creados siguen existiendo: son plantas
-    // con su propia historia, no un efecto secundario que se pueda deshacer.
-    const registered = task.metadata?.esquejado?.total ?? 0
-    showToast(
-      registered > 0
-        ? `Tarea pendiente. Los ${registered} esquejes creados se mantienen.`
-        : 'Tarea marcada como pendiente',
-      'success'
-    )
+    await setStatus(task, newStatus)
   }
 
   // --- Selección múltiple ---
@@ -148,20 +199,18 @@ export default function AgendaList({ tasks, disableDateFilter = false, groupBySt
   }
 
   // Ordenar: pendientes primero y, dentro de cada grupo, por fecha.
-  const sortedTasks = [...(tasksToDisplay || [])].sort((a, b) => {
+  const sortedTasks = [...tasks].sort((a, b) => {
     if (a.status === b.status) {
        return new Date(a.due_date).getTime() - new Date(b.due_date).getTime();
     }
     return a.status === 'pending' ? -1 : 1
   })
 
-  if (!tasksToDisplay || tasksToDisplay.length === 0) {
+  if (tasks.length === 0) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-2 py-10 text-center">
         <CheckCircle2 size={26} className="text-fg-subtle" aria-hidden="true" />
-        <p className="text-sm font-medium text-fg">
-          {disableDateFilter ? 'Sin tareas este día' : 'Nada pendiente para hoy'}
-        </p>
+        <p className="text-sm font-medium text-fg">{emptyLabel}</p>
         <p className="text-xs text-fg-muted">Podés agendar una desde el botón de nueva tarea.</p>
       </div>
     )
@@ -221,8 +270,21 @@ export default function AgendaList({ tasks, disableDateFilter = false, groupBySt
         confirmLabel="Eliminar"
       />
 
+      <ConfirmDialog
+        isOpen={!!confirmingTask}
+        onClose={() => setConfirmingTask(null)}
+        onConfirm={async () => {
+          if (confirmingTask) await setStatus(confirmingTask, 'completed')
+        }}
+        tone={confirmingTask?.type === 'muerta' ? 'danger' : 'brand'}
+        title={confirmingTask ? CONFIRM_ON_COMPLETE[confirmingTask.type]?.title ?? '' : ''}
+        description={confirmingTask ? CONFIRM_ON_COMPLETE[confirmingTask.type]?.description ?? '' : ''}
+        confirmLabel={confirmingTask ? CONFIRM_ON_COMPLETE[confirmingTask.type]?.confirmLabel ?? 'Completar' : 'Completar'}
+      />
+
       {editingTask && (
         <EditTaskModal
+           key={editingTask.id}
            isOpen={!!editingTask}
            onClose={() => setEditingTask(null)}
            task={editingTask}

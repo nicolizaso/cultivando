@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
-import { AlertCircle, ArrowRight, CalendarCheck, FlaskConical, Loader2, Lock, Mail, RefreshCw, User } from 'lucide-react'
+import { AlertCircle, ArrowRight, CalendarCheck, FlaskConical, Loader2, Lock, Mail, MailCheck, RefreshCw, User } from 'lucide-react'
 import { login, signup } from './actions'
 import Logo from '@/components/Logo'
 import { BRAND_NAME, BRAND_TAGLINE } from '@/components/Brand'
@@ -33,6 +33,11 @@ export default function LoginPage() {
 
       if (res?.error) {
         setMsg({ type: 'error', text: res.error })
+        setLoading(false)
+      } else if (res && 'needsConfirmation' in res && res.needsConfirmation) {
+        // La cuenta existe pero falta confirmar el email: no hay sesión todavía.
+        setMsg({ type: 'success', text: 'Te mandamos un email para confirmar la cuenta. Después de confirmarla, ingresá desde acá.' })
+        setIsLogin(true)
         setLoading(false)
       } else if (res?.success) {
         router.push('/')
@@ -159,10 +164,16 @@ export default function LoginPage() {
 
           {msg && (
             <p
-              role="alert"
-              className="mb-5 flex items-start gap-2 rounded-[var(--radius-md)] border border-[color:color-mix(in_srgb,var(--danger)_35%,transparent)] bg-[color:var(--danger-soft)] p-3 text-sm font-medium text-[color:var(--danger)]"
+              role={msg.type === 'error' ? 'alert' : 'status'}
+              className={`mb-5 flex items-start gap-2 rounded-[var(--radius-md)] border p-3 text-sm font-medium ${
+                msg.type === 'error'
+                  ? 'border-[color:color-mix(in_srgb,var(--danger)_35%,transparent)] bg-[color:var(--danger-soft)] text-[color:var(--danger)]'
+                  : 'border-[color:color-mix(in_srgb,var(--success)_35%,transparent)] bg-[color:var(--success-soft)] text-[color:var(--success)]'
+              }`}
             >
-              <AlertCircle size={16} className="mt-0.5 shrink-0" aria-hidden="true" />
+              {msg.type === 'error'
+                ? <AlertCircle size={16} className="mt-0.5 shrink-0" aria-hidden="true" />
+                : <MailCheck size={16} className="mt-0.5 shrink-0" aria-hidden="true" />}
               {msg.text}
             </p>
           )}
@@ -179,10 +190,17 @@ export default function LoginPage() {
                     type="text"
                     autoComplete="username"
                     required={!isLogin}
+                    minLength={3}
+                    maxLength={30}
+                    pattern="[A-Za-z0-9._\-]{3,30}"
+                    aria-describedby="login-username-hint"
                     placeholder="Cómo querés que te llamemos"
                     className="field-input pl-10"
                   />
                 </div>
+                <p id="login-username-hint" className="text-xs text-fg-muted">
+                  Entre 3 y 30 caracteres: letras, números, punto, guion o guion bajo.
+                </p>
               </div>
             )}
 
@@ -214,10 +232,15 @@ export default function LoginPage() {
                   type="password"
                   autoComplete={isLogin ? 'current-password' : 'new-password'}
                   required
+                  minLength={isLogin ? undefined : 8}
+                  aria-describedby={isLogin ? undefined : 'login-password-hint'}
                   placeholder="Tu contraseña"
                   className="field-input pl-10"
                 />
               </div>
+              {!isLogin && (
+                <p id="login-password-hint" className="text-xs text-fg-muted">Al menos 8 caracteres.</p>
+              )}
             </div>
 
             {!isLogin && (

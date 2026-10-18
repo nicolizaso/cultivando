@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { supabase } from "@/app/lib/supabase";
+import { deleteSpace } from "@/app/actions/spaces";
 import { useRouter } from "next/navigation";
 import { Space } from "@/app/lib/types";
 import { Warehouse, Sun, Trash2, Tent, Maximize, Wind, SlidersHorizontal } from "lucide-react";
@@ -23,15 +23,14 @@ export default function SpaceCard({ space, activeCycles = 0, plants = 0, onConfi
   const [showConfirm, setShowConfirm] = useState(false);
 
   const handleDelete = async () => {
-    try {
-      const { error } = await supabase.from('spaces').delete().eq('id', space.id);
-      if (error) throw error;
-      setIsDeleting(true);
-      showToast(`Espacio "${space.name}" eliminado`);
-      router.refresh();
-    } catch (error) {
-      showToast(error instanceof Error ? error.message : "No se pudo eliminar el espacio", "error");
+    const result = await deleteSpace(space.id);
+    if (!result.success) {
+      showToast(result.error || "No se pudo eliminar el espacio", "error");
+      return;
     }
+    setIsDeleting(true);
+    showToast(`Espacio "${space.name}" eliminado`);
+    router.refresh();
   };
 
   if (isDeleting) return null;

@@ -3,13 +3,14 @@
 import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { supabase } from "@/app/lib/supabase";
+import { deleteCycle, setCycleActive } from "@/app/cycles/actions";
 import { useRouter } from "next/navigation";
 import { PlayCircle, StopCircle, Trash2, MapPin, Sprout, Loader2 } from "lucide-react";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import MoveCycleSpaceModal from "@/components/MoveCycleSpaceModal";
 import { useToast } from "@/app/context/ToastContext";
 import { Space } from "@/app/lib/types";
+import { formatDay } from "@/app/lib/dates";
 
 export interface CycleWithSpace {
   id: number;
@@ -40,26 +41,26 @@ export default function CycleCard({ cycle, days, plantCount, spaces = [] }: Cycl
   const toggleStatus = async () => {
     setLoading(true);
     try {
-      const { error } = await supabase.from('cycles').update({ is_active: !cycle.is_active }).eq('id', cycle.id);
-      if (error) throw error;
+      const result = await setCycleActive(cycle.id, !cycle.is_active);
+      if (!result.success) {
+        showToast(result.error || "No se pudo actualizar el ciclo", "error");
+        return;
+      }
       showToast(cycle.is_active ? "Ciclo finalizado" : "Ciclo reactivado");
       router.refresh();
-    } catch (error) {
-      showToast(error instanceof Error ? error.message : "No se pudo actualizar el ciclo", "error");
     } finally {
       setLoading(false);
     }
   };
 
   const handleDelete = async () => {
-    try {
-      const { error } = await supabase.from('cycles').delete().eq('id', cycle.id);
-      if (error) throw error;
-      showToast("Ciclo eliminado");
-      router.refresh();
-    } catch (error) {
-      showToast(error instanceof Error ? error.message : "No se pudo eliminar el ciclo", "error");
+    const result = await deleteCycle(cycle.id);
+    if (!result.success) {
+      showToast(result.error || "No se pudo eliminar el ciclo", "error");
+      return;
     }
+    showToast("Ciclo eliminado");
+    router.refresh();
   };
 
   return (
@@ -135,7 +136,7 @@ export default function CycleCard({ cycle, days, plantCount, spaces = [] }: Cycl
                 {cycle.spaces?.name || "Sin espacio"}
               </dd>
               <dd className="mt-0.5 text-[11px] text-fg-subtle">
-                Desde el {new Date(cycle.start_date).toLocaleDateString('es-AR')}
+                Desde el {formatDay(cycle.start_date)}
               </dd>
             </div>
           </dl>
@@ -184,7 +185,7 @@ export default function CycleCard({ cycle, days, plantCount, spaces = [] }: Cycl
         onClose={() => setShowConfirm(false)}
         onConfirm={handleDelete}
         title="Eliminar ciclo"
-        description={`Se eliminará "${cycle.name}" y su historial. Esta acción no se puede deshacer.`}
+        description={`Se eliminarán "${cycle.name}", su galería, sus mediciones y sus tareas. Las plantas no se borran: quedan sin ciclo. Esta acción no se puede deshacer.`}
         confirmLabel="Eliminar"
       />
     </>

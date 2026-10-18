@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useCallback, useEffect, useId, useRef, useState } from "react";
+import React, { useCallback, useEffect, useId, useRef } from "react";
+import { useIsClient } from "@/app/hooks/useIsClient";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 
@@ -50,13 +51,9 @@ export default function Modal({
 }: ModalProps) {
   const panelRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLElement | null>(null);
-  const [mounted, setMounted] = useState(false);
+  const mounted = useIsClient();
   const titleId = useId();
   const descId = useId();
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   // Guarda quién abrió el modal para devolverle el foco al cerrar.
   useEffect(() => {

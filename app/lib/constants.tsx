@@ -1,8 +1,9 @@
 import {
   Droplets, FlaskConical, ShieldAlert, Shovel, Scissors, Activity,
   ArrowRightLeft, ArrowRightCircle, CloudRain, Flower, Skull, PenTool,
-  Calendar, Camera, Sprout, GitBranch, LucideIcon
+  Calendar, Camera, Sprout, GitBranch, StickyNote, Scale, LucideIcon
 } from 'lucide-react';
+import { canonicalLogType } from './logs';
 import React from 'react';
 
 /**
@@ -129,6 +130,8 @@ export const TASK_TYPES: TaskTypeDef[] = [
 const FALLBACK_TYPES: Record<string, TaskTypeDef> = {
   foto: defineTask('foto', 'Foto', Camera, 'amber'),
   image: defineTask('image', 'Foto', Camera, 'amber'),
+  nota: defineTask('nota', 'Nota', StickyNote, 'slate'),
+  cosecha: defineTask('cosecha', 'Cosecha', Scale, 'violet'),
   log: defineTask('log', 'Registro', Sprout, 'lime'),
 };
 
@@ -138,8 +141,8 @@ const UNKNOWN_TYPE = defineTask('desconocido', 'Evento', Calendar, 'slate');
  * Punto único de entrada: dado el `type` que guarda la base (que a veces trae
  * mayúsculas, acentos o valores heredados), devuelve su definición.
  */
-export function getTaskType(type?: string): TaskTypeDef {
-  const key = type?.toLowerCase().trim() ?? '';
+export function getTaskType(type?: string | null): TaskTypeDef {
+  const key = canonicalLogType(type);
   return (
     TASK_TYPES.find(t => t.id === key) ??
     FALLBACK_TYPES[key] ??

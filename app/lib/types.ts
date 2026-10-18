@@ -1,3 +1,6 @@
+import type { Tables } from './database.types';
+import type { DosageType, FertilizerStage, WeeklyDose } from './nutrition';
+
 export type CycleStage = 
   | 'Germinación' 
   | 'Plántula'
@@ -7,73 +10,38 @@ export type CycleStage =
   | 'Secado' 
   | 'Curado';
 
-export interface Plant {
-  id: number;
-  name: string;
-  stage: string;
-  days?: number; // Deprecated: Use current_age_days instead
-  planted_at?: string; // ISO timestamp
-  stage_updated_at?: string; // ISO timestamp
-  current_age_days?: number; // Computed field
-  days_in_stage?: number; // Computed field
-  last_water: string;
-  cycle_id: number | null;
-  image_url?: string;
-  strain?: string;
-  breeder?: string;
-  source_type?: 'Semilla' | 'Esqueje';
-  mother_id?: number | null;
-  date_germinacion?: string;
-  date_plantula?: string;
-  date_enraizamiento?: string;
-  date_vegetativo?: string;
-  date_floracion?: string;
-  date_secado?: string;
-  date_curado?: string;
-  is_archived?: boolean;
-}
+/*
+ * Las filas de la base salen de los tipos generados (`database.types.ts`):
+ * así un nombre de columna equivocado falla al compilar. Antes estos tipos se
+ * escribían a mano y se habían separado de la base (Nutrición leía columnas
+ * que no existían y nadie se enteraba hasta abrir la pantalla).
+ */
 
-export interface Cycle {
-  id: number;
-  name: string;
-  start_date: string;
-  is_active: boolean;
-  space_id: number;
-  stage?: CycleStage; // Opcional por si no lo usas aún
-}
+/** Una planta tal como está en la base. */
+export type Plant = Tables<'plants'>;
 
-export interface Space {
-  id: number;
-  name: string;
-  type: 'Indoor' | 'Outdoor' | 'Mixto';
-  cycleCount?: number;
-  width?: number;
-  length?: number;
-  height?: number;
-  area_m2?: number;
-  light_type?: string;
-  light_brand_model?: string;
-  light_watts?: number;
-  light_ppfd?: number;
-  vent_extraction?: number;
-  vent_intraction?: number;
-  vent_filter_brand?: string;
-  vent_extra_equipment?: string;
-  pot_capacity?: number;
-}
+/** Un ciclo tal como está en la base. */
+export type Cycle = Tables<'cycles'>;
 
-// ESTA ES LA INTERFAZ QUE FALTABA:
+export type SpaceType = 'Indoor' | 'Outdoor' | 'Mixto';
+
+/** Un espacio tal como está en la base, más el recuento que arma la página. */
+export type Space = Tables<'spaces'> & { cycleCount?: number };
+
+/** Una medición de clima. */
+export type Measurement = Tables<'measurements'>;
+
+/** Una tarea, con los ciclos que arma la página para filtrar y mostrar. */
 export interface Task {
   id: number | string;
   title: string;
-  due_date: string; // ISO string YYYY-MM-DD
-  completed?: boolean;
+  /** Instante ISO; el día se lee con `dateKey`, en hora argentina. */
+  due_date: string;
   status?: 'pending' | 'completed';
   completed_at?: string;
-  cycle_id?: number; // Deprecated
-  cycleId?: string;
+  /** Ciclos de la tarea, aplanados desde `task_cycles` para filtrar. */
   cycleIds?: number[];
-  cycleName?: string; // Deprecated
+  /** Sus nombres, para mostrar ("Ciclo A, Ciclo B"). */
   cycleNames?: string;
   type: string; // 'riego', 'poda', etc.
   application_type?: string;
@@ -94,7 +62,6 @@ export interface Task {
   task_cycles?: {
     cycles?: { id: number; name: string; };
   }[];
-  plants?: any;
 }
 
 /**
@@ -115,43 +82,40 @@ export interface TaskMetadata {
   [key: string]: unknown;
 }
 
-export interface Log {
-  id: number;
-  plant_id: number | null;
-  cycle_id?: number | null;
-  type: string;
-  title: string;
-  notes?: string;
-  media_url?: string[];
-  created_at: string;
-}
+/** Un registro de la bitácora. */
+export type Log = Tables<'logs'>;
 
-export interface CycleImage {
-  id: string;
-  cycle_id: number;
-  storage_path: string;
-  public_url: string;
-  taken_at: string; // ISO Timestamp
-  created_at: string; // ISO Timestamp
-  description?: string;
-}
+/** Una foto de la galería de un ciclo. */
+export type CycleImage = Tables<'cycle_images'>;
 
+/** Un fertilizante, con los nombres reales de las columnas de `fertilizers`. */
 export interface Fertilizer {
   id: number;
-  user_id: string;
+  user_id: string | null;
   name: string;
-  brand: string;
-  stage: 'enraizamiento' | 'vegetativo' | 'floracion' | 'lavado' | 'todo';
-  dose_type: 'fija' | 'semanal';
-  dose_fixed?: number | null;
-  dose_weekly?: { week: number; dose: number }[] | null;
-  created_at: string;
+  brand: string | null;
+  stage_category: FertilizerStage | null;
+  dosage_type: DosageType | null;
+  /** ml por litro, cuando la dosis es fija. */
+  fixed_dosage: number | null;
+  /** Tabla por semana de la etapa, cuando la dosis es semanal. */
+  weekly_dosages: WeeklyDose[] | null;
+  /** Lo que queda, en ml. Null = no se lleva la cuenta. */
+  stock_ml: number | null;
+  /** Tamaño del envase, para sumar "una botella" al comprar. */
+  container_ml: number | null;
+  /** Con menos que esto, se avisa. */
+  low_stock_ml: number | null;
+  created_at: string | null;
 }
 
+/** Un combo: varios productos que se aplican en el mismo riego. */
 export interface FertilizerCombo {
   id: number;
-  user_id: string;
+  user_id: string | null;
   name: string;
+  description: string | null;
+  /** Sale de `combo_items`; no es una columna de la tabla. */
   products: { fertilizer_id: number; name: string }[];
-  created_at: string;
+  created_at: string | null;
 }
