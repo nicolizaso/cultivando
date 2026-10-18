@@ -1,154 +1,208 @@
-# Lo que te toca hacer a vos
+# Pendientes: lo que te toca a vos
 
-Todo lo que no puedo hacer desde el código, en el orden en que conviene
-hacerlo. Lo voy completando a medida que avanzan las etapas.
+Son las cosas que no puedo hacer desde el código. Seguí el orden de la tabla:
+cada paso necesita el anterior.
 
-> Las migraciones que tienen `drop` o `revoke` (todas las de cierre) las tenés
-> que pegar vos en el SQL Editor: el conector de Supabase pide una aprobación
-> que no se puede dar desde el chat. Yo te armo un solo archivo, lo pruebo antes
-> y reviso la base después.
+| # | Qué | Cuánto lleva | Estado |
+|---|---|---|---|
+| 1 | Actualizar la base de datos | — | ✅ Hecho (18/10) |
+| 2 | Cargar las claves en Vercel | 10 min | ⬜ Falta |
+| 3 | Dos ajustes de contraseñas en Supabase | 2 min | ⬜ Falta |
+| 4 | Probar la app en la versión de prueba | 30–60 min | ⬜ Falta |
+| 5 | Publicar (merge del PR) | 1 min | ⬜ Falta |
+| 6 | Terminar la base de datos | 5 min | ⬜ Falta (después del 5) |
+| 7 | Borrar fotos que sobran | 5 min | ⬜ Opcional |
 
 ---
 
-## 1 · Antes de probar el preview
+## 1 · Actualizar la base de datos ✅
 
-### 1.1 · Variables de entorno en Vercel
-Proyecto → Settings → Environment Variables. Cargalas para **Production** y
-**Preview**.
+Ya está. Se aplicaron los 12 cambios a la base y los revisé: no se perdió
+nada y está todo lo que la app nueva necesita. No tenés que hacer nada más acá.
 
-| Variable | De dónde sale | Para qué |
-|---|---|---|
-| `SUPABASE_SERVICE_ROLE_KEY` | Supabase → Project Settings → API Keys → `service_role` (secreta) | Login con nombre de usuario y el aviso diario. Sin ella, se entra sólo con email y no salen avisos. |
-| `NEXT_PUBLIC_VAPID_PUBLIC_KEY` | La "Public Key" que imprime `npx web-push generate-vapid-keys` (ver abajo) | Que el navegador pueda suscribirse a los avisos. |
-| `VAPID_PRIVATE_KEY` | La "Private Key" del mismo comando (secreta) | Firmar cada aviso. |
-| `VAPID_SUBJECT` | `mailto:` + tu email, por ejemplo `mailto:tu-email@ejemplo.com` | Contacto que piden los servicios de push. |
-| `CRON_SECRET` | Cualquier texto largo al azar (por ejemplo, el resultado de `openssl rand -hex 32`) | Que sólo el cron de Vercel pueda disparar el aviso diario. |
+---
 
-Nunca cargues `SUPABASE_SERVICE_ROLE_KEY` ni `VAPID_PRIVATE_KEY` con prefijo
-`NEXT_PUBLIC_`: quedarían a la vista en el navegador.
+## 2 · Cargar las claves en Vercel
 
-Para las claves VAPID, en tu compu (una sola vez; no las cambies después o los
-dispositivos suscriptos dejan de recibir):
+La app necesita cinco claves que no pueden ir en el código porque son
+secretas. Se cargan en Vercel.
+
+### a) Generá las claves de las notificaciones
+
+En tu computadora, en una terminal, corré **una sola vez**:
 
 ```
 npx web-push generate-vapid-keys
 ```
 
-El aviso diario corre con el cron de `vercel.json` a las 8:00 de Argentina
-(11:00 UTC) y **sólo en Production**: en el preview se prueba con el botón
-"Mandar uno ahora".
+Te muestra dos textos: **Public Key** y **Private Key**. Guardalos.
 
-### 1.2 · Migraciones compatibles (`supabase/migrations/`) — ✅ hecho
-Aplicadas el 18/10, las 12 (de `20261017140000_seguridad` a
-`20261017250000_notificaciones`). Revisado después:
+> No las vuelvas a generar más adelante: si cambian, los celulares que ya
+> activaron las notificaciones dejan de recibirlas.
 
-- No se perdió ninguna fila; están las tablas, columnas y funciones nuevas.
-- El historial de migraciones de Supabase quedó igual a estos archivos, así que
-  `supabase db push` no las vuelve a correr.
-- Los tipos que genera Supabase coinciden con `app/lib/database.types.ts`. Las
-  únicas diferencias son las columnas viejas de `tasks` y dos funciones que se
-  van con las migraciones de cierre (3.1).
+### b) Cargalas en Vercel
+
+En Vercel, entrá a tu proyecto → **Settings → Environment Variables**. Agregá
+estas cinco y en cada una tildá **Production** y **Preview**:
+
+| Nombre (copialo tal cual) | Qué valor va | Para qué sirve |
+|---|---|---|
+| `SUPABASE_SERVICE_ROLE_KEY` | En Supabase: **Project Settings → API Keys**, la clave `service_role` | Entrar con nombre de usuario y mandar el aviso diario |
+| `NEXT_PUBLIC_VAPID_PUBLIC_KEY` | La **Public Key** del paso a) | Que el celular pueda activar las notificaciones |
+| `VAPID_PRIVATE_KEY` | La **Private Key** del paso a) | Firmar cada notificación |
+| `VAPID_SUBJECT` | `mailto:` y tu email, todo junto. Ej.: `mailto:tu-email@ejemplo.com` | Un contacto que piden los servicios de notificaciones |
+| `CRON_SECRET` | Cualquier texto largo inventado (30 letras y números o más) | Que nadie más que Vercel pueda disparar el aviso diario |
+
+⚠️ Copiá los nombres exactos. Las dos secretas (`SUPABASE_SERVICE_ROLE_KEY` y
+`VAPID_PRIVATE_KEY`) **nunca** van con `NEXT_PUBLIC_` adelante: eso las haría
+visibles para cualquiera que abra la app.
+
+### c) Volvé a publicar la versión de prueba
+
+Las claves nuevas recién se usan en la próxima publicación. En Vercel →
+**Deployments**, buscá la última del PR (la de la rama
+`claude/fervent-cerf-u5zjei`) → menú **⋯** → **Redeploy**.
 
 ---
 
-## 2 · Probar
+## 3 · Dos ajustes de contraseñas en Supabase
 
-Checklist para el preview del PR, una vez hechos los pasos de arriba:
+En Supabase → **Authentication**, en la configuración de contraseñas:
 
+- [ ] Subí el **largo mínimo a 8 caracteres**, igual que pide la app.
+- [ ] Activá la **protección contra contraseñas filtradas** (*leaked password
+  protection*). Si no te deja, es porque es del plan pago: dejalo así.
+
+---
+
+## 4 · Probar la app
+
+Usá la versión de prueba del PR (el link de Vercel que aparece en el PR). Está
+conectada a tu base real, así que lo que crees para probar, borralo después.
+
+Si algo no anda como dice acá, pasame qué hiciste y qué pasó (con una captura
+si podés).
+
+### Entrar y cuenta
 - [ ] Entrar con email y contraseña.
 - [ ] Entrar con nombre de usuario.
-- [ ] Registrar una cuenta nueva: pide 8 caracteres y avisa si el usuario ya existe.
-- [ ] Subir una foto a la bitácora de una planta.
-- [ ] Subir una foto a la galería de un ciclo y después borrarla.
-- [ ] Editar la ficha técnica de un espacio.
-- [ ] Nutrición: tus 3 productos muestran su dosis y el combo sus 2 productos.
-- [ ] Editar un producto (abre con sus datos) y editar el combo.
-- [ ] Agendar un fertilizante con un combo: la receta aparece en los detalles con la semana de la etapa.
-- [ ] Agendar una serie semanal de fertilizante: cada tarea tiene la dosis de su semana.
-- [ ] Agendar una serie mensual que empiece un 31: cae el último día de los meses cortos.
-- [ ] Crear una planta nueva: al día siguiente dice "1 día" en su etapa (antes quedaba en 0).
-- [ ] Crear un esqueje con madre; después borrar la madre: el esqueje sigue, sin madre.
-- [ ] Editar una planta de un ciclo finalizado: el desplegable muestra su ciclo; probar "Sin ciclo".
+- [ ] Crear una cuenta nueva: pide 8 caracteres como mínimo y avisa si el usuario ya existe.
+- [ ] En esa cuenta nueva, tocar "Omitir por ahora" en la bienvenida y recargar: no vuelve a aparecer.
+
+### Lo general
+- [ ] Entrar a Plantas, Ciclos, Espacios, Nutrición y Agenda, y en cada una
+  crear algo y borrarlo. Todo tiene que andar igual que antes.
+
+### Plantas
+- [ ] Crear una planta: al día siguiente dice "1 día" en su etapa (antes quedaba en 0).
+- [ ] Agregar una planta: se cargan las listas de ciclos y de madres; al elegir una madre se completan genética y nombre.
+- [ ] Crear un esqueje con madre y después borrar la madre: el esqueje sigue, sin madre.
+- [ ] Editar una planta de un ciclo terminado: la lista muestra su ciclo. Probar también "Sin ciclo".
 - [ ] Regar desde el menú de la tarjeta: aparece en la bitácora.
-- [ ] Aceptar una sugerencia de etapa del panel; descartar otra con "Ahora no" y recargar: no vuelve.
-- [ ] Ficha de una planta: aparecen notas, riegos y cambios de etapa, no sólo fotos.
-- [ ] Ficha de una planta: aparecen las tareas de su ciclo entero, pero no las de otra planta del mismo ciclo.
-- [ ] Agenda: cambiar de mes (carga ese mes), tocar un día del mes vecino, ver registros con su tipo.
-- [ ] Agenda: editar un "Cambio de etapa" a Floración y guardar: sigue en Floración.
-- [ ] Finalizar y reactivar un ciclo; borrar un ciclo de prueba con fotos: sus plantas quedan sin ciclo.
-- [ ] Borrar un espacio de prueba que sea destino de una tarea "Cambiar ambiente".
-- [ ] Panel después de las 21:00: "Tareas de hoy" sigue mostrando las de hoy, no las de mañana.
-- [ ] Panel: una tarea pendiente de ayer aparece en "Atrasadas"; completarla la saca de ahí.
-- [ ] Panel: una planta archivada no cuenta en "Plantas en curso" ni en el sugeridor.
-- [ ] Completar un riego y tocar "Deshacer" en el aviso: vuelve a pendiente y el riego anterior queda como estaba.
-- [ ] Completar una "Declarar muerta": pide confirmación; después "Deshacer" desarchiva las plantas.
-- [ ] Completar un "Cambiar ambiente": pide confirmación; "Deshacer" devuelve el ciclo a su espacio.
-- [ ] Tocar dos veces rápido una tarea de riego: se completa una sola vez.
-- [ ] Esquejado: completar con 2 esquejes en un ciclo nuevo; desmarcar y volver a completar: no duplica.
+- [ ] Subir una foto a la bitácora de una planta.
+- [ ] En la ficha de una planta aparecen notas, riegos y cambios de etapa, no sólo fotos.
+- [ ] En la ficha de una planta aparecen las tareas de su ciclo, pero no las de otra planta del mismo ciclo.
+- [ ] En un ciclo con plantas numeradas ("X #1-6"), tocar el grupo: la lista de plantas se abre filtrada.
+
+### Ciclos y espacios
+- [ ] Crear un ciclo desde "Ciclos", y un espacio nuevo desde ahí mismo. Crear otro espacio desde "Espacios".
+- [ ] Editar la ficha técnica de un espacio.
+- [ ] Subir una foto a la galería de un ciclo y después borrarla.
+- [ ] Terminar un ciclo y reactivarlo.
+- [ ] Borrar un ciclo de prueba que tenga fotos: sus plantas quedan sin ciclo.
+- [ ] Borrar un espacio de prueba al que apunte una tarea "Cambiar ambiente".
+
+### Tareas y agenda
+- [ ] Agendar un fertilizante con un combo: la receta aparece en los detalles, con la semana de la etapa.
+- [ ] Agendar una serie semanal de fertilizante: cada tarea tiene la dosis de su semana.
+- [ ] Agendar una serie mensual que empiece un 31: en los meses cortos cae el último día.
 - [ ] Editar una tarea de una serie con "Esta y todas las futuras", cambiando la fecha: todas se corren igual.
-- [ ] En una cuenta sin espacios, "Omitir por ahora" en la bienvenida y recargar: no vuelve a aparecer.
-- [ ] En un ciclo con plantas numeradas ("X #1-6"), tocar el grupo: la lista de plantas abre filtrada.
-- [ ] Después de aplicar `rendimiento.sql`: entrar, ver plantas, ciclos, espacios, nutrición y agenda; crear y borrar algo en cada una (las reglas de acceso se reescribieron).
-- [ ] Crear un ciclo desde "Ciclos" (y un espacio nuevo desde ahí mismo); crear un espacio desde "Espacios".
-- [ ] Agregar una planta: el desplegable de ciclos y el de madres se cargan; elegir una madre completa genética y nombre.
-- [ ] "Gestionar tareas" en el panel: filtrar por ciclo muestra las tareas de ese ciclo.
-- [ ] Editar un producto y un combo de nutrición, cerrar y abrir otro: cada uno abre con sus datos.
-- [ ] Ficha de un ciclo con varias mediciones: aparece el historial; pasar el dedo o el mouse muestra los tres valores del día; el botón de tabla muestra lo mismo en filas.
-- [ ] Ficha de un ciclo en floración: el VPD dice "ideal 1,2–1,6 kPa en Floración"; en "VPD por etapa" aparecen las etapas que pasó el ciclo.
-- [ ] Ficha de un ciclo con fotos (galería o bitácora de sus plantas): "Timelapse" las pasa en orden con el día y la etapa; probar el filtro por planta.
-- [ ] Ficha de una planta que dio esquejes: aparece "Linaje" con sus esquejes; en la ficha de un esqueje, "Viene de" con su madre.
-- [ ] Editar una planta y marcar "Planta madre": en Plantas aparece el filtro "Madres" y al crear un esqueje sale primera.
-- [ ] Plantas → "Genéticas": aparecen tus genéticas con sus días por etapa; tocar una abre la lista filtrada.
-- [ ] Con dos plantas de una genética que ya terminaron la floración, una tercera en floración recibe el aviso "pasaron a secado a los N días".
-- [ ] Ficha de una planta → "Regar": cargar litros, pH y EC; en la bitácora aparece "2 L · pH 6,2 · EC 1,4 (700 ppm)" y en "Último riego" también.
-- [ ] Riego en lote con la calculadora: elegir un combo, poner los litros y "Anotar en la nota".
-- [ ] Nutrición: editar un producto y cargar "Queda 500 ml", "Envase 1000", "Avisar con 100"; la tarjeta muestra la barra. "Compré" suma un envase.
-- [ ] Riego con la calculadora y "Descontar del stock": el producto baja; si queda menos del aviso, sale "Queda poco" en el aviso, en Nutrición y en el panel.
-- [ ] Ciclo en floración: aparece "Cosecha estimada" con la fecha; en "Cosecha", "Cargar pesos" para varias plantas (pasan a Secado).
-- [ ] Ficha de una planta cosechada: "Editar" la cosecha y cargar el peso seco; en el ciclo se actualizan g/planta, g/m² y g/W (si el espacio tiene medidas y potencia).
-- [ ] Ciclo en vegetativo → "Plan de cultivo": elegir productos, destildar un par de tareas y crear; aparecen en la agenda con la receta de su semana. Después, el tachito al lado borra las pendientes del plan.
-- [ ] Ciclo → "Reporte": "Imprimir o guardar PDF" y bajar los cuatro CSV; abrirlos en Excel (acentos y decimales bien).
-- [ ] Ciclo → "Compartir": copiar el enlace y abrirlo en una ventana privada (sin sesión): se ve el ciclo y no la bitácora. "Cortar enlace" y recargar: ya no abre.
-- [ ] Menú de la cuenta (en el celular: "Más") → "Notificaciones" → "Activar en este dispositivo" y "Mandar uno ahora": llega el resumen del día. En iPhone, primero agregá la app a la pantalla de inicio.
-- [ ] Tocar la notificación abre la app.
-- [x] En Supabase → Advisors → Performance: ya no aparece "Auth RLS Initialization Plan" ni "Multiple Permissive Policies" en las tablas de Cultivando (revisado el 18/10). Quedan dos de claves foráneas sin índice en `tasks` (`plant_id`, `space_id`): se van con las migraciones de cierre, que borran esas columnas. Los de "Unused Index" son normales: los índices son nuevos y todavía no tuvieron uso.
+- [ ] Completar un riego y tocar "Deshacer": vuelve a pendiente y el riego anterior queda como estaba.
+- [ ] Completar "Declarar muerta": pide confirmación; "Deshacer" vuelve a activar las plantas.
+- [ ] Completar "Cambiar ambiente": pide confirmación; "Deshacer" devuelve el ciclo a su espacio.
+- [ ] Tocar dos veces rápido una tarea de riego: se completa una sola vez.
+- [ ] Esquejado: completarlo con 2 esquejes en un ciclo nuevo; desmarcarlo y volver a completarlo: no se duplican.
+- [ ] Agenda: cambiar de mes (carga ese mes), tocar un día del mes de al lado, ver los registros con su tipo.
+- [ ] Agenda: editar un "Cambio de etapa" a Floración y guardar: sigue en Floración.
+
+### Panel
+- [ ] Después de las 21:00, "Tareas de hoy" sigue mostrando las de hoy, no las de mañana.
+- [ ] Una tarea pendiente de ayer aparece en "Atrasadas"; al completarla desaparece de ahí.
+- [ ] Una planta archivada no cuenta en "Plantas en curso" ni en las sugerencias.
+- [ ] Aceptar una sugerencia de etapa; descartar otra con "Ahora no" y recargar: no vuelve.
+- [ ] "Gestionar tareas": filtrar por ciclo muestra las tareas de ese ciclo.
+
+### Nutrición y riego
+- [ ] Tus 3 productos muestran su dosis y el combo muestra sus 2 productos.
+- [ ] Editar un producto y después un combo: cada uno abre con sus datos.
+- [ ] Editar un producto y cargar "Queda 500 ml", "Envase 1000" y "Avisar con 100": la tarjeta muestra la barra. "Compré" suma un envase.
+- [ ] En la ficha de una planta, "Regar" con litros, pH y EC: en la bitácora y en "Último riego" aparece "2 L · pH 6,2 · EC 1,4 (700 ppm)".
+- [ ] Riego en grupo con la calculadora: elegir un combo, poner los litros y "Anotar en la nota".
+- [ ] Riego con la calculadora y "Descontar del stock": el producto baja; si queda menos de lo que pusiste en "Avisar con", sale "Queda poco" en el aviso, en Nutrición y en el panel.
+
+### Funciones nuevas
+- [ ] **Clima:** en un ciclo con varias mediciones aparece el historial. Al pasar el dedo o el mouse se ven los tres valores del día; el botón de tabla muestra lo mismo en filas.
+- [ ] **VPD:** en un ciclo en floración dice "ideal 1,2–1,6 kPa en Floración", y en "VPD por etapa" aparecen las etapas que pasó el ciclo.
+- [ ] **Timelapse:** en un ciclo con fotos, "Timelapse" las pasa en orden, con el día y la etapa. Probar el filtro por planta.
+- [ ] **Linaje:** en la ficha de una planta que dio esquejes aparece "Linaje"; en la del esqueje, "Viene de" con su madre.
+- [ ] **Madres:** marcar una planta como "Planta madre": en Plantas aparece el filtro "Madres", y al crear un esqueje sale primera.
+- [ ] **Genéticas:** en Plantas → "Genéticas" aparecen tus genéticas con sus días por etapa; al tocar una se abre la lista filtrada.
+- [ ] **Aviso por genética:** con dos plantas de una genética que ya terminaron la floración, una tercera en floración muestra "pasaron a secado a los N días".
+- [ ] **Cosecha:** en un ciclo en floración aparece "Cosecha estimada". En "Cosecha" → "Cargar pesos" para varias plantas (pasan a Secado).
+- [ ] **Rendimiento:** en una planta cosechada, "Editar" la cosecha y cargar el peso seco. En el ciclo se actualizan g/planta, g/m² y g/W (si el espacio tiene medidas y potencia).
+- [ ] **Plan de cultivo:** en un ciclo en vegetativo → "Plan de cultivo": elegir productos, destildar un par de tareas y crear. Aparecen en la agenda con la receta de su semana. El tachito de al lado borra las pendientes del plan.
+- [ ] **Reporte:** en un ciclo → "Reporte" → "Imprimir o guardar PDF", y bajar los cuatro CSV. Abrirlos en Excel: acentos y decimales tienen que verse bien.
+- [ ] **Compartir:** en un ciclo → "Compartir", copiar el enlace y abrirlo en una ventana privada: se ve el ciclo pero no la bitácora. Después "Cortar enlace" y recargar: ya no abre.
+- [ ] **Notificaciones:** menú de la cuenta (en el celular, "Más") → "Notificaciones" → "Activar en este dispositivo" → "Mandar uno ahora": llega el resumen del día. Tocarlo abre la app. En iPhone, primero agregá la app a la pantalla de inicio.
+
+> El aviso diario automático sale a las 8:00 (hora de Argentina) y **sólo en
+> la versión publicada**. En la de prueba se prueba con "Mandar uno ahora".
 
 ---
 
-## 3 · Después de publicar (merge a `main`)
+## 5 · Publicar
 
-### 3.1 · Migraciones de cierre (`supabase/post-deploy/`)
-Cierran cosas que la versión vieja todavía usaba, por eso van **después** de
-que el código nuevo esté en producción. Mismo método que en 1.2, en orden:
+Cuando las pruebas den bien, hacé el merge del PR en GitHub:
+https://github.com/nicolizaso/cultivando/pull/115
 
-1. `20261017140000_seguridad_cierre.sql`
-2. `20261017170000_plantas_cierre.sql`
-3. `20261017180000_bitacora_y_tareas_cierre.sql`
+---
 
-Después de aplicarlas, se pueden mover a `supabase/migrations/` para que el
-historial quede en un solo lugar.
+## 6 · Terminar la base de datos (después de publicar)
 
-### 3.2 · Fotos huérfanas
-Hay 11 archivos (6,3 MB) que ya no usa ninguna fila. Primero listalos y,
-si la lista te cierra, borralos:
+Quedan tres cambios que borran cosas que la versión vieja de la app todavía
+usaba. Por eso van **recién cuando la versión nueva ya está publicada**.
+
+Avisame y te paso un solo archivo, igual que la otra vez:
+Supabase → **SQL Editor** → **New query** → pegarlo → **Run**.
+
+---
+
+## 7 · Borrar fotos que sobran (opcional)
+
+Hay 11 fotos (6,3 MB) guardadas en Supabase que ya no usa nada de la app. Sólo
+ocupan espacio. Para verlas y borrarlas, en tu computadora, dentro de la
+carpeta del proyecto:
 
 ```bash
+# 1. Ver la lista (no borra nada)
 NEXT_PUBLIC_SUPABASE_URL=… SUPABASE_SERVICE_ROLE_KEY=… node scripts/limpiar-fotos-huerfanas.mjs
+
+# 2. Si la lista te cierra, borrarlas
 NEXT_PUBLIC_SUPABASE_URL=… SUPABASE_SERVICE_ROLE_KEY=… node scripts/limpiar-fotos-huerfanas.mjs --borrar
 ```
 
+Donde dice `…` va la URL de tu proyecto de Supabase y la clave `service_role`.
+
 ---
 
-## 4 · En el panel de Supabase
+## Avisos de Supabase que podés ignorar
 
-- El asesor de seguridad puede marcar `get_shared_cycle` por ser `SECURITY DEFINER`
-  y poder llamarse sin sesión. Es a propósito: es lo que abre un ciclo compartido, y
-  sólo devuelve ese ciclo (sin bitácora ni datos de usuario) si el enlace existe y no
-  se cortó. No hace falta tocar nada.
-- También marca `email_for_username` (el login viejo por nombre de usuario).
-  Ese aviso se va con la migración de cierre `seguridad_cierre` (3.1).
+En Supabase → **Advisors** vas a ver algunos avisos. Estos están bien:
 
-
-- [ ] **Authentication → Passwords:** activar la protección contra contraseñas
-  filtradas (*leaked password protection*).
-- [ ] **Authentication → Passwords:** subir el mínimo a 8 caracteres, igual que la app.
+- **`get_shared_cycle`**: es a propósito. Es lo que abre un ciclo compartido sin
+  tener cuenta, y sólo muestra ese ciclo (sin bitácora ni datos tuyos) mientras
+  el enlace no esté cortado.
+- **`email_for_username`** y **dos claves sin índice en `tasks`**: desaparecen
+  con el paso 6.
+- **"Unused Index"**: son índices nuevos que todavía no se usaron. Es normal.
+- **Los del esquema `vicio`**: no son de Cultivando.
