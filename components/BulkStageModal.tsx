@@ -1,13 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowRightCircle, Loader2 } from "lucide-react";
+import { ArrowRightCircle } from "lucide-react";
 
 import { bulkChangeStage } from "@/app/actions/plants";
 import { STAGE_NAMES } from "@/app/lib/stage-logic";
 import { plantCountLabel, todayForInput } from "@/app/lib/utils";
 import Modal from "@/components/ui/Modal";
 import { useToast } from "@/app/context/ToastContext";
+import { ChoiceGroup, DateField, FormActions, stageOptions } from "@/components/ui/form";
 
 interface BulkStageModalProps {
   isOpen: boolean;
@@ -15,6 +16,8 @@ interface BulkStageModalProps {
   selectedIds: number[];
   onSuccess: () => void;
 }
+
+const STAGE_OPTIONS = stageOptions(STAGE_NAMES);
 
 export default function BulkStageModal({ isOpen, onClose, selectedIds, onSuccess }: BulkStageModalProps) {
   const { showToast } = useToast();
@@ -45,53 +48,28 @@ export default function BulkStageModal({ isOpen, onClose, selectedIds, onSuccess
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title="Cambio de etapa"
-      description={`Se moverá ${plantCountLabel(selectedIds.length)}.`}
-      size="sm"
+      title="Cambiar de etapa"
+      description={`${plantCountLabel(selectedIds.length)} pasan a la etapa que elijas.`}
       footer={
-        <>
-          <button type="button" className="btn btn-ghost" onClick={onClose}>
-            Cancelar
-          </button>
-          <button type="submit" form="bulk-stage-form" className="btn btn-primary" disabled={loading}>
-            {loading ? (
-              <Loader2 size={16} className="animate-spin" aria-hidden="true" />
-            ) : (
-              <ArrowRightCircle size={16} aria-hidden="true" />
-            )}
-            {loading ? "Procesando..." : "Cambiar etapa"}
-          </button>
-        </>
+        <FormActions
+          form="bulk-stage-form"
+          onCancel={onClose}
+          icon={ArrowRightCircle}
+          pending={loading}
+          pendingLabel="Cambiando…"
+          submitLabel={`Pasar a ${stage}`}
+        />
       }
     >
-      <form id="bulk-stage-form" onSubmit={handleSubmit} className="space-y-5">
-        <div className="field">
-          <label htmlFor="bulk-stage-select" className="field-label">Nueva etapa</label>
-          <select
-            id="bulk-stage-select"
-            data-autofocus
-            className="field-input"
-            value={stage}
-            onChange={(e) => setStage(e.target.value)}
-          >
-            {STAGE_NAMES.map((label) => (
-              <option key={label} value={label}>{label}</option>
-            ))}
-          </select>
-        </div>
+      <form id="bulk-stage-form" onSubmit={handleSubmit} className="space-y-6">
+        <ChoiceGroup legend="Nueva etapa" options={STAGE_OPTIONS} value={stage} onChange={setStage} size="sm" />
 
-        <div className="field">
-          <label htmlFor="bulk-stage-date" className="field-label">Fecha del cambio</label>
-          <input
-            id="bulk-stage-date"
-            type="date"
-            required
-            className="field-input"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-          />
-          <p className="field-hint">La edad en etapa se cuenta desde esta fecha.</p>
-        </div>
+        <DateField
+          label="Desde cuándo"
+          value={date}
+          onChange={setDate}
+          hint="Los días en la etapa se cuentan desde acá."
+        />
       </form>
     </Modal>
   );

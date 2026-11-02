@@ -2,12 +2,13 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Loader2, Pencil, Scale, Star } from 'lucide-react'
+import { Pencil, Scale, Star, Trash2 } from 'lucide-react'
 import { deleteHarvest, saveHarvest } from '@/app/actions/harvests'
 import type { HarvestRow } from '@/app/lib/harvest'
 import { formatDay, todayForInput } from '@/app/lib/dates'
 import { useToast } from '@/app/context/ToastContext'
 import Modal from '@/components/ui/Modal'
+import { DateField, Field, FormActions, FormSection, Input, Rating, Switch, Textarea } from '@/components/ui/form'
 
 const HARVESTABLE = new Set(['Floración', 'Secado', 'Curado', 'Cosechada'])
 
@@ -134,6 +135,10 @@ function HarvestForm({ plantId, plantName, stage, harvest, onClose }: HarvestCar
     onClose()
   }
 
+  const wet = Number(values.wet_g.replace(',', '.'))
+  const dry = Number(values.dry_g.replace(',', '.'))
+  const loss = wet > 0 && dry > 0 && dry <= wet ? Math.round((1 - dry / wet) * 100) : null
+
   return (
     <Modal
       isOpen
@@ -141,58 +146,68 @@ function HarvestForm({ plantId, plantName, stage, harvest, onClose }: HarvestCar
       title={harvest ? 'Editar cosecha' : 'Registrar cosecha'}
       description={plantName}
       footer={
-        <>
-          {harvest && (
-            <button type="button" className="btn btn-ghost mr-auto text-[color:var(--danger)]" onClick={remove} disabled={saving}>
-              Borrar
-            </button>
-          )}
-          <button type="button" className="btn btn-ghost" onClick={onClose}>Cancelar</button>
-          <button type="submit" form="harvest-form" className="btn btn-primary" disabled={saving}>
-            {saving && <Loader2 size={16} className="animate-spin" aria-hidden="true" />}
-            Guardar
-          </button>
-        </>
+        <FormActions
+          form="harvest-form"
+          onCancel={onClose}
+          pending={saving}
+          submitLabel="Guardar cosecha"
+          extra={
+            harvest ? (
+              <button type="button" className="btn btn-danger" onClick={remove} disabled={saving} aria-label="Borrar cosecha">
+                <Trash2 size={16} aria-hidden="true" />
+                <span className="hidden sm:inline">Borrar</span>
+              </button>
+            ) : undefined
+          }
+        />
       }
     >
-      <form id="harvest-form" onSubmit={submit} className="space-y-4">
-        <div className="grid grid-cols-2 gap-3">
-          <div className="field">
-            <label htmlFor="h-cut" className="field-label">Cosechada el</label>
-            <input id="h-cut" type="date" required className="field-input" value={values.harvested_on} onChange={set('harvested_on')} />
+      <form id="harvest-form" onSubmit={submit} className="space-y-6">
+        <FormSection title="El corte">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <DateField
+              label="Cosechada"
+              value={values.harvested_on}
+              onChange={(v) => setValues((prev) => ({ ...prev, harvested_on: v }))}
+              required
+            />
+            <Field label="Peso húmedo" optional>
+              <Input data-autofocus type="text" inputMode="decimal" suffix="g" className="metric text-lg" value={values.wet_g} onChange={set('wet_g')} placeholder="420" />
+            </Field>
           </div>
-          <div className="field">
-            <label htmlFor="h-wet" className="field-label">Peso húmedo (g)</label>
-            <input id="h-wet" data-autofocus type="text" inputMode="decimal" className="field-input" value={values.wet_g} onChange={set('wet_g')} placeholder="420" />
+          {stage === 'Floración' && (
+            <Switch
+              checked={moveToDrying}
+              onChange={setMoveToDrying}
+              label="Pasar la planta a Secado"
+              description="Con la fecha de cosecha como inicio del secado."
+            />
+          )}
+        </FormSection>
+
+        <FormSection title="Después del secado" description="Completalo cuando termine; podés volver a editar.">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <DateField
+              label="Terminó de secar"
+              optional
+              quick="none"
+              value={values.dried_on}
+              onChange={(v) => setValues((prev) => ({ ...prev, dried_on: v }))}
+            />
+            <Field label="Peso seco" optional hint={loss !== null ? `Perdió el ${loss}% al secar.` : undefined}>
+              <Input type="text" inputMode="decimal" suffix="g" className="metric text-lg" value={values.dry_g} onChange={set('dry_g')} placeholder="95" />
+            </Field>
           </div>
-          <div className="field">
-            <label htmlFor="h-dried" className="field-label">Terminó de secar</label>
-            <input id="h-dried" type="date" className="field-input" value={values.dried_on} onChange={set('dried_on')} />
-          </div>
-          <div className="field">
-            <label htmlFor="h-dry" className="field-label">Peso seco (g)</label>
-            <input id="h-dry" type="text" inputMode="decimal" className="field-input" value={values.dry_g} onChange={set('dry_g')} placeholder="95" />
-          </div>
-        </div>
-        <div className="field">
-          <label htmlFor="h-rating" className="field-label">Calificación</label>
-          <select id="h-rating" className="field-input" value={values.rating} onChange={set('rating')}>
-            <option value="">Sin calificar</option>
-            {[5, 4, 3, 2, 1].map((n) => (
-              <option key={n} value={n}>{'★'.repeat(n)} ({n})</option>
-            ))}
-          </select>
-        </div>
-        <div className="field">
-          <label htmlFor="h-notes" className="field-label">Notas</label>
-          <textarea id="h-notes" rows={3} className="field-input resize-none" value={values.notes} onChange={set('notes')} placeholder="Aroma, densidad, tricomas…" />
-        </div>
-        {stage === 'Floración' && (
-          <label className="flex items-center gap-2 text-sm text-fg">
-            <input type="checkbox" className="h-4 w-4 accent-[color:var(--brand)]" checked={moveToDrying} onChange={(e) => setMoveToDrying(e.target.checked)} />
-            Pasar la planta a Secado con la fecha de cosecha
-          </label>
-        )}
+          <Rating
+            legend="Calificación"
+            optional
+            value={Number(values.rating) || 0}
+            onChange={(n) => setValues((prev) => ({ ...prev, rating: n ? String(n) : '' }))}
+          />
+          <Field label="Notas" optional>
+            <Textarea value={values.notes} onChange={set('notes')} placeholder="Aroma, densidad, tricomas…" />
+          </Field>
+        </FormSection>
       </form>
     </Modal>
   )

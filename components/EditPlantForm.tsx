@@ -7,10 +7,11 @@ import { Plant, Cycle } from "@/app/lib/types";
 import { getStageColor, todayForInput } from "@/app/lib/utils";
 import { dateKey as dayKeyOf } from "@/app/lib/dates";
 import { STAGE_DATE_COLUMNS, STAGE_NAMES, StageName } from "@/app/lib/stage-logic";
-import { Sprout, Leaf, Flower, Wind, Thermometer, Calendar, Save, ArrowLeft, Trash2, Dna, Loader2, LucideIcon } from "lucide-react";
+import { Sprout, Leaf, Flower, Wind, Thermometer, Calendar, Save, ArrowLeft, Trash2, Dna, Loader2, GitBranch, LucideIcon } from "lucide-react";
 import Link from "next/link";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { useToast } from "@/app/context/ToastContext";
+import { ChoiceGroup, Field, Input, SOURCE_OPTIONS, Select, Switch } from "@/components/ui/form";
 
 interface EditPlantFormProps {
   plant: Plant;
@@ -131,7 +132,7 @@ export default function EditPlantForm({ plant, cycles }: EditPlantFormProps) {
   };
 
   return (
-    <div className="mx-auto max-w-2xl space-y-8">
+    <div className="mx-auto max-w-2xl space-y-6">
       <div className="flex items-center justify-between gap-3">
         <Link href={`/plants/${plant.id}`} className="btn btn-sm btn-ghost">
           <ArrowLeft size={16} aria-hidden="true" />
@@ -147,103 +148,86 @@ export default function EditPlantForm({ plant, cycles }: EditPlantFormProps) {
         </button>
       </div>
 
-      <form onSubmit={handleSave} className="space-y-8">
-        <section aria-labelledby="info-basica" className="surface space-y-5 rounded-[var(--radius-lg)] p-5 md:p-6">
-          <h2 id="info-basica" className="font-title text-lg font-semibold text-fg">Información básica</h2>
+      <form onSubmit={handleSave} className="space-y-6">
+        <section aria-labelledby="info-basica" className="surface space-y-6 rounded-[var(--radius-lg)] p-5 md:p-6">
+          <h2 id="info-basica" className="font-title text-lg font-semibold text-fg">La planta</h2>
 
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <div className="field">
-              <label htmlFor="edit-plant-name" className="field-label">Nombre</label>
-              <input
-                id="edit-plant-name"
+            <Field label="Nombre" className="md:col-span-2">
+              <Input
                 type="text"
                 required
-                className="field-input"
+                autoComplete="off"
                 value={basicInfo.name}
                 onChange={(e) => handleBasicChange('name', e.target.value)}
               />
-            </div>
+            </Field>
 
-            <div className="field">
-              <label htmlFor="edit-plant-strain" className="field-label">Genética</label>
-              <input
-                id="edit-plant-strain"
+            <Field label="Genética">
+              <Input
                 type="text"
-                className="field-input"
+                autoComplete="off"
+                autoCapitalize="words"
                 value={basicInfo.strain}
                 onChange={(e) => handleBasicChange('strain', e.target.value)}
               />
-            </div>
+            </Field>
 
-            <div className="field">
-              <label htmlFor="edit-plant-breeder" className="field-label">Banco</label>
-              <input
-                id="edit-plant-breeder"
+            <Field label="Banco" optional>
+              <Input
                 type="text"
-                className="field-input"
+                autoComplete="off"
+                autoCapitalize="words"
                 value={basicInfo.breeder}
                 onChange={(e) => handleBasicChange('breeder', e.target.value)}
               />
-            </div>
+            </Field>
+          </div>
 
-            <div className="field">
-              <label htmlFor="edit-plant-source" className="field-label">Origen</label>
-              <select
-                id="edit-plant-source"
-                className="field-input"
-                value={basicInfo.source_type}
-                onChange={(e) => handleBasicChange('source_type', e.target.value)}
-              >
-                <option value="Semilla">Semilla</option>
-                <option value="Esqueje">Esqueje</option>
-              </select>
-            </div>
+          <ChoiceGroup
+            legend="Origen"
+            variant="tile"
+            layout="grid grid-cols-2 gap-2"
+            options={SOURCE_OPTIONS}
+            value={basicInfo.source_type as 'Semilla' | 'Esqueje'}
+            onChange={(value) => handleBasicChange('source_type', value)}
+          />
 
-            <div className="field md:col-span-2">
-              <label htmlFor="edit-plant-cycle" className="field-label">Ciclo</label>
-              {/* El ciclo actual aparece aunque esté cerrado: antes sólo se
-                  listaban los activos y una planta de un ciclo finalizado
-                  mostraba otro ciclo en el desplegable. */}
-              <select
-                id="edit-plant-cycle"
-                className="field-input"
-                value={basicInfo.cycle_id ?? ''}
-                onChange={(e) => handleBasicChange('cycle_id', e.target.value ? Number(e.target.value) : null)}
-              >
-                <option value="">Sin ciclo</option>
-                {cycles.map(cycle => (
-                  <option key={cycle.id} value={cycle.id}>
-                    {cycle.name}{cycle.is_active ? '' : ' (finalizado)'}
-                  </option>
-                ))}
-              </select>
-            </div>
+          {/* El ciclo actual aparece aunque esté cerrado: antes sólo se
+              listaban los activos y una planta de un ciclo finalizado
+              mostraba otro ciclo en el desplegable. */}
+          <Field label="Ciclo">
+            <Select
+              value={basicInfo.cycle_id ?? ''}
+              onChange={(e) => handleBasicChange('cycle_id', e.target.value ? Number(e.target.value) : null)}
+            >
+              <option value="">Sin ciclo</option>
+              {cycles.map(cycle => (
+                <option key={cycle.id} value={cycle.id}>
+                  {cycle.name}{cycle.is_active ? '' : ' (finalizado)'}
+                </option>
+              ))}
+            </Select>
+          </Field>
 
-            <label htmlFor="edit-plant-mother" className="flex cursor-pointer items-start gap-3 rounded-[var(--radius-md)] border border-line p-3 md:col-span-2">
-              <input
-                id="edit-plant-mother"
-                type="checkbox"
-                className="mt-0.5 h-4 w-4 accent-[color:var(--brand)]"
-                checked={basicInfo.is_mother}
-                onChange={(e) => handleBasicChange('is_mother', e.target.checked)}
-              />
-              <span>
-                <span className="block text-sm font-semibold text-fg">Planta madre</span>
-                <span className="block text-xs text-fg-muted">
-                  La guardás para sacar esquejes. Aparece primera al elegir madre y en el filtro de madres.
-                </span>
-              </span>
-            </label>
+          <div className="rounded-[var(--radius-md)] border border-line px-4 py-1">
+            <Switch
+              checked={basicInfo.is_mother}
+              onChange={(value) => handleBasicChange('is_mother', value)}
+              icon={<GitBranch size={17} />}
+              label="Planta madre"
+              description="La guardás para sacar esquejes: aparece primera al elegir madre."
+            />
           </div>
         </section>
 
         <section aria-labelledby="linea-tiempo" className="surface rounded-[var(--radius-lg)] p-5 md:p-6">
-          <h2 id="linea-tiempo" className="mb-2 font-title text-lg font-semibold text-fg">Línea de tiempo</h2>
-          <p className="mb-6 text-sm text-fg-muted">
-            Activá cada etapa para registrar la fecha en la que empezó.
+          <h2 id="linea-tiempo" className="font-title text-lg font-semibold text-fg">Línea de tiempo</h2>
+          <p className="mb-5 mt-1 text-sm text-fg-muted">
+            Tocá cada etapa por la que pasó y poné el día en que empezó. La última con fecha es la etapa actual.
           </p>
 
-          <div className="space-y-3">
+          <ol className="relative space-y-2 before:absolute before:bottom-6 before:left-[calc(1.75rem+0.5px)] before:top-6 before:w-px before:bg-[color:var(--border-strong)]">
             {STAGE_CONFIG.filter(stage => {
               // Una etapa con fecha se muestra siempre, aunque no sea la que
               // le toca al origen: si no, queda un dato que el usuario no
@@ -263,10 +247,10 @@ export default function EditPlantForm({ plant, cycles }: EditPlantFormProps) {
               const colors = getStageColor(stage.label);
 
               return (
-                <div
+                <li
                   key={stage.key}
-                  className={`flex flex-wrap items-center gap-3 rounded-[var(--radius-md)] border p-3 transition-colors ${
-                    isActive ? `border-line bg-surface-2` : 'border-dashed border-line-strong'
+                  className={`relative flex flex-wrap items-center gap-3 rounded-[var(--radius-md)] border p-2.5 transition-colors ${
+                    isActive ? 'border-line bg-surface' : 'border-transparent'
                   }`}
                 >
                   {/* Un único control activa la etapa: antes el icono y la fila
@@ -275,57 +259,60 @@ export default function EditPlantForm({ plant, cycles }: EditPlantFormProps) {
                     type="button"
                     onClick={() => activateStage(dateKey)}
                     aria-pressed={isActive}
-                    className={`flex min-w-0 flex-1 items-center gap-3 text-left ${isActive ? '' : 'opacity-80'}`}
+                    className="flex min-h-[2.75rem] min-w-0 flex-1 items-center gap-3 rounded-[var(--radius-sm)] text-left"
                   >
                     <span
-                      className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full border-2 ${
+                      className={`relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-2 bg-surface transition-colors ${
                         isActive
                           ? `${colors.bgColor} ${colors.textColor} ${colors.borderColor}`
-                          : 'border-line-strong text-fg-muted'
+                          : 'border-dashed border-line-strong text-fg-subtle'
                       }`}
                       aria-hidden="true"
                     >
-                      <Icon size={18} strokeWidth={isActive ? 2 : 1.5} />
+                      <Icon size={16} strokeWidth={isActive ? 2.25 : 1.75} />
                     </span>
 
                     <span className="min-w-0">
                       <span className={`block text-sm font-semibold ${isActive ? 'text-fg' : 'text-fg-muted'}`}>
                         {stage.label}
                       </span>
-                      {!isActive && <span className="block text-xs text-fg-subtle">Tocá para activarla</span>}
+                      <span className="block text-xs text-fg-subtle">
+                        {isActive ? 'Tocá para quitarla' : 'No pasó por acá · tocá para sumarla'}
+                      </span>
                     </span>
                   </button>
 
-                  {isActive ? (
-                    <>
+                  {isActive && (
+                    <div className="w-full pl-12 sm:w-44 sm:pl-0">
                       <label htmlFor={`stage-${stage.key}`} className="sr-only">
                         Fecha de {stage.label}
                       </label>
-                      <input
+                      <Input
                         id={`stage-${stage.key}`}
                         type="date"
-                        className="field-input w-40"
+                        leading={<Calendar size={16} />}
                         value={dayKeyOf(dateValue) ?? ''}
                         onChange={(e) => handleDateChange(dateKey, e.target.value)}
                       />
-                    </>
-                  ) : (
-                    <Calendar className="text-fg-subtle" size={20} aria-hidden="true" />
+                    </div>
                   )}
-                </div>
+                </li>
               );
             })}
-          </div>
+          </ol>
         </section>
 
-        <button type="submit" disabled={loading} className="btn btn-primary w-full">
-          {loading ? (
-            <Loader2 size={18} className="animate-spin" aria-hidden="true" />
-          ) : (
-            <Save size={18} aria-hidden="true" />
-          )}
-          {loading ? "Guardando..." : "Guardar cambios"}
-        </button>
+        {/* Guardar queda siempre a mano, por encima de la barra inferior */}
+        <div className="sticky bottom-[calc(var(--nav-bottom)+0.75rem+env(safe-area-inset-bottom))] z-10 lg:bottom-4">
+          <button type="submit" disabled={loading} className="btn btn-primary min-h-[3rem] w-full shadow-[var(--shadow-lg)]">
+            {loading ? (
+              <Loader2 size={18} className="animate-spin" aria-hidden="true" />
+            ) : (
+              <Save size={18} aria-hidden="true" />
+            )}
+            {loading ? "Guardando…" : "Guardar cambios"}
+          </button>
+        </div>
       </form>
 
       <ConfirmDialog

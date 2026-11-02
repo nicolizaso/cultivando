@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { AlertCircle, Loader2, Sprout } from "lucide-react";
+import { Sprout } from "lucide-react";
 
 import { bulkMoveToCycle } from "@/app/actions/plants";
 import { Cycle } from "@/app/lib/types";
@@ -9,6 +9,7 @@ import { plantCountLabel } from "@/app/lib/utils";
 import EmptyState from "./EmptyState";
 import Modal from "@/components/ui/Modal";
 import { useToast } from "@/app/context/ToastContext";
+import { ChoiceOrSelect, FormActions } from "@/components/ui/form";
 
 /** Valor del desplegable para dejar las plantas sin ciclo. */
 const NO_CYCLE = 'none';
@@ -80,59 +81,37 @@ export default function BulkMoveCycleModal({
       onClose={close}
       title="Cambiar de ciclo"
       description={`${plantCountLabel(selectedIds.length)} pasan al ciclo que elijas.`}
-      size="sm"
       dismissOnBackdrop={!loading}
       footer={
         cycles.length > 0 ? (
-          <>
-            <button type="button" className="btn btn-ghost" onClick={close} disabled={loading}>
-              Cancelar
-            </button>
-            <button type="submit" form="bulk-move-cycle-form" className="btn btn-primary" disabled={loading}>
-              {loading && <Loader2 size={16} className="animate-spin" aria-hidden="true" />}
-              {loading ? "Moviendo..." : "Mover plantas"}
-            </button>
-          </>
+          <FormActions
+            form="bulk-move-cycle-form"
+            onCancel={close}
+            pending={loading}
+            pendingLabel="Moviendo…"
+            submitLabel="Mover plantas"
+          />
         ) : (
-          <button type="button" className="btn btn-ghost" onClick={close}>
+          <button type="button" className="btn btn-secondary w-full sm:ml-auto sm:w-auto" onClick={close}>
             Cerrar
           </button>
         )
       }
     >
       {cycles.length > 0 ? (
-        <form id="bulk-move-cycle-form" onSubmit={handleSubmit} className="space-y-5">
-          {error && (
-            <p className="field-error" role="alert">
-              <AlertCircle size={14} aria-hidden="true" />
-              {error}
-            </p>
-          )}
-
-          <div className="field">
-            <label htmlFor="bulk-move-cycle" className="field-label">Ciclo de destino</label>
-            <select
-              id="bulk-move-cycle"
-              data-autofocus
-              required
-              aria-invalid={error ? true : undefined}
-              className="field-input"
-              value={cycleId}
-              onChange={(e) => {
-                setCycleId(e.target.value);
-                setError(null);
-              }}
-            >
-              <option value="">Seleccionar ciclo...</option>
-              {cycles.map(cycle => (
-                <option key={cycle.id} value={cycle.id}>{cycle.name}</option>
-              ))}
-              <option value={NO_CYCLE}>Sin ciclo</option>
-            </select>
-            <p className="field-hint">
-              La etapa, la edad y la bitácora de cada planta viajan con ella.
-            </p>
-          </div>
+        <form id="bulk-move-cycle-form" onSubmit={handleSubmit} className="space-y-5" noValidate>
+          <ChoiceOrSelect
+            legend="Ciclo de destino"
+            placeholder="Elegir ciclo…"
+            options={[
+              ...cycles.map(cycle => ({ value: String(cycle.id), label: cycle.name })),
+              { value: NO_CYCLE, label: "Sin ciclo" },
+            ]}
+            value={cycleId || null}
+            onChange={(value) => { setCycleId(value); setError(null); }}
+            error={error}
+            hint="La etapa, la edad y la bitácora de cada planta viajan con ella."
+          />
         </form>
       ) : (
         <EmptyState

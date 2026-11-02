@@ -2,13 +2,14 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Loader2, Scale } from 'lucide-react'
+import { Scale } from 'lucide-react'
 import { saveCycleHarvests } from '@/app/actions/harvests'
 import { cycleYield } from '@/app/lib/harvest'
 import type { HarvestRow, SpaceSize } from '@/app/lib/harvest'
 import { todayForInput } from '@/app/lib/dates'
 import { useToast } from '@/app/context/ToastContext'
 import Modal from '@/components/ui/Modal'
+import { DateField, FormActions, Input, Switch } from '@/components/ui/form'
 
 interface CyclePlant {
   id: number
@@ -133,63 +134,58 @@ function HarvestSheet({ cycleId, plants, harvests, onClose }: { cycleId: number;
       description="Dejá vacío lo que todavía no pesaste."
       size="lg"
       footer={
-        <>
-          <button type="button" className="btn btn-ghost" onClick={onClose}>Cancelar</button>
-          <button type="submit" form="harvest-sheet" className="btn btn-primary" disabled={saving}>
-            {saving && <Loader2 size={16} className="animate-spin" aria-hidden="true" />}
-            Guardar pesos
-          </button>
-        </>
+        <FormActions form="harvest-sheet" onCancel={onClose} pending={saving} submitLabel="Guardar pesos" />
       }
     >
-      <form id="harvest-sheet" onSubmit={submit} className="space-y-4">
-        <div className="field max-w-[12rem]">
-          <label htmlFor="sheet-date" className="field-label">Cosechadas el</label>
-          <input id="sheet-date" type="date" required className="field-input" value={date} onChange={(e) => setDate(e.target.value)} />
-          <p className="field-hint">Para las que todavía no tenían cosecha.</p>
+      <form id="harvest-sheet" onSubmit={submit} className="space-y-6">
+        <DateField
+          label="Cosechadas"
+          value={date}
+          onChange={setDate}
+          required
+          hint="Para las que todavía no tenían cosecha."
+        />
+
+        <div>
+          {/* Encabezado de columnas: en el teléfono cada fila ya dice qué es cada campo */}
+          <div className="mb-1 hidden grid-cols-[1fr_8rem_8rem] gap-3 px-1 text-xs font-semibold text-fg-muted sm:grid" aria-hidden="true">
+            <span>Planta</span>
+            <span>Húmedo</span>
+            <span>Seco</span>
+          </div>
+          <ul className="divide-y divide-[color:var(--border)] border-y border-line">
+            {plants.map((plant) => (
+              <li key={plant.id} className="grid grid-cols-2 gap-x-3 gap-y-2 py-3 sm:grid-cols-[1fr_8rem_8rem] sm:items-center">
+                <span className="col-span-2 truncate text-sm font-semibold text-fg sm:col-span-1">{plant.name}</span>
+                <Input
+                  type="text"
+                  inputMode="decimal"
+                  suffix="g"
+                  placeholder="Húmedo"
+                  aria-label={`Peso húmedo de ${plant.name}`}
+                  value={rows[plant.id]?.wet_g ?? ''}
+                  onChange={(e) => set(plant.id, 'wet_g', e.target.value)}
+                />
+                <Input
+                  type="text"
+                  inputMode="decimal"
+                  suffix="g"
+                  placeholder="Seco"
+                  aria-label={`Peso seco de ${plant.name}`}
+                  value={rows[plant.id]?.dry_g ?? ''}
+                  onChange={(e) => set(plant.id, 'dry_g', e.target.value)}
+                />
+              </li>
+            ))}
+          </ul>
         </div>
 
-        <table className="w-full text-sm">
-          <thead className="text-left text-xs text-fg-muted">
-            <tr>
-              <th scope="col" className="py-2 pr-3 font-semibold">Planta</th>
-              <th scope="col" className="w-28 py-2 pr-3 font-semibold">Húmedo (g)</th>
-              <th scope="col" className="w-28 py-2 font-semibold">Seco (g)</th>
-            </tr>
-          </thead>
-          <tbody>
-            {plants.map((plant) => (
-              <tr key={plant.id} className="border-t border-line">
-                <th scope="row" className="py-2 pr-3 text-left font-medium text-fg">{plant.name}</th>
-                <td className="py-2 pr-3">
-                  <input
-                    type="text"
-                    inputMode="decimal"
-                    aria-label={`Peso húmedo de ${plant.name}`}
-                    className="field-input py-1.5"
-                    value={rows[plant.id]?.wet_g ?? ''}
-                    onChange={(e) => set(plant.id, 'wet_g', e.target.value)}
-                  />
-                </td>
-                <td className="py-2">
-                  <input
-                    type="text"
-                    inputMode="decimal"
-                    aria-label={`Peso seco de ${plant.name}`}
-                    className="field-input py-1.5"
-                    value={rows[plant.id]?.dry_g ?? ''}
-                    onChange={(e) => set(plant.id, 'dry_g', e.target.value)}
-                  />
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-
-        <label className="flex items-center gap-2 text-sm text-fg">
-          <input type="checkbox" className="h-4 w-4 accent-[color:var(--brand)]" checked={moveToDrying} onChange={(e) => setMoveToDrying(e.target.checked)} />
-          Pasar a Secado las plantas que se pesen y todavía estén en floración
-        </label>
+        <Switch
+          checked={moveToDrying}
+          onChange={setMoveToDrying}
+          label="Pasar a Secado las que se pesen"
+          description="Sólo las que todavía estén en floración."
+        />
       </form>
     </Modal>
   )

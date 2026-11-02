@@ -1,8 +1,9 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { AlertTriangle, FlaskConical, Layers, Loader2, Pencil, Plus, ShoppingCart, Trash2 } from 'lucide-react'
+import { AlertTriangle, FlaskConical, Layers, Pencil, Plus, ShoppingCart, Trash2 } from 'lucide-react'
 import Modal from '@/components/ui/Modal'
+import { Field, FormActions, Input } from '@/components/ui/form'
 
 import AddFertilizerModal from '@/components/AddFertilizerModal'
 import AddFertilizerComboModal from '@/components/AddFertilizerComboModal'
@@ -403,21 +404,30 @@ function RestockDialog({ fertilizer, onClose, onDone }: { fertilizer: Fertilizer
       description={fertilizer.stock_ml === null ? 'Desde ahora se lleva la cuenta de este producto.' : `Hoy quedan ${formatDose(fertilizer.stock_ml)} ml.`}
       size="sm"
       footer={
-        <>
-          <button type="button" className="btn btn-ghost" onClick={onClose}>Cancelar</button>
-          <button type="submit" form="restock-form" className="btn btn-primary" disabled={saving}>
-            {saving && <Loader2 size={16} className="animate-spin" aria-hidden="true" />}
-            Sumar al stock
-          </button>
-        </>
+        <FormActions form="restock-form" onCancel={onClose} icon={ShoppingCart} pending={saving} submitLabel="Sumar al stock" />
       }
     >
-      <form id="restock-form" onSubmit={save} className="space-y-3">
-        <div className="field">
-          <label htmlFor="restock-ml" className="field-label">Cantidad (ml)</label>
-          <input id="restock-ml" data-autofocus type="text" inputMode="decimal" className="field-input" value={ml} onChange={(e) => setMl(e.target.value)} placeholder="1000" />
-        </div>
-        {error && <p className="field-error" role="alert">{error}</p>}
+      <form id="restock-form" onSubmit={save} className="space-y-4" noValidate>
+        <Field
+          label="Cuánto compraste"
+          error={error}
+          below={
+            fertilizer.container_ml !== null && fertilizer.container_ml > 0 ? (
+              <div className="flex flex-wrap gap-1.5" role="group" aria-label="Envases">
+                {[1, 2, 3].map((n) => {
+                  const amount = String(fertilizer.container_ml! * n)
+                  return (
+                    <button key={n} type="button" className="choice choice-sm" aria-pressed={ml === amount} onClick={() => setMl(amount)}>
+                      {n === 1 ? '1 envase' : `${n} envases`}
+                    </button>
+                  )
+                })}
+              </div>
+            ) : undefined
+          }
+        >
+          <Input data-autofocus type="text" inputMode="decimal" suffix="ml" className="metric text-lg" value={ml} onChange={(e) => setMl(e.target.value)} placeholder="1000" />
+        </Field>
       </form>
     </Modal>
   )

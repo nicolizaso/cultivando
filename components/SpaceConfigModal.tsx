@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, useTransition, useId } from "react";
+import { Field, FormActions, FormSection, Input } from "@/components/ui/form";
 import { Space } from "@/app/lib/types";
 import { updateSpace } from "@/app/actions/spaces";
-import { Maximize, Sun, Wind, Save, Loader2 } from "lucide-react";
+import { Maximize, Sun, Wind, Save } from "lucide-react";
 import { useRouter } from "next/navigation";
 import Modal from "@/components/ui/Modal";
 import { useToast } from "@/app/context/ToastContext";
@@ -32,6 +33,7 @@ export default function SpaceConfigModal({ isOpen, onClose, space }: SpaceConfig
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
   const { showToast } = useToast();
+  const listId = useId();
 
   if (!space) return null;
 
@@ -62,104 +64,113 @@ export default function SpaceConfigModal({ isOpen, onClose, space }: SpaceConfig
     });
   };
 
+  // El área sale del ancho por el largo: se ofrece, no se impone.
+  const num = (v: unknown) => {
+    const n = Number(String(v ?? '').replace(',', '.'));
+    return String(v ?? '').trim() !== '' && Number.isFinite(n) ? n : null;
+  };
+  const w = num(formData.width);
+  const l = num(formData.length);
+  const computedArea = w !== null && l !== null ? Math.round(w * l * 100) / 100 : null;
+  const areaText = computedArea !== null ? computedArea.toLocaleString('es-AR') : null;
+  const areaMatches = computedArea !== null && num(formData.area_m2) === computedArea;
+
   return (
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title="Configuración técnica"
+      title="Ficha técnica"
       description={space.name}
       size="xl"
       dismissOnBackdrop={false}
       footer={
-        <>
-          <button type="button" className="btn btn-ghost" onClick={onClose}>
-            Cancelar
-          </button>
-          <button type="button" onClick={handleSave} disabled={isPending} className="btn btn-primary">
-            {isPending ? (
-              <Loader2 size={16} className="animate-spin" aria-hidden="true" />
-            ) : (
-              <Save size={16} aria-hidden="true" />
-            )}
-            {isPending ? "Guardando..." : "Guardar configuración"}
-          </button>
-        </>
+        <FormActions onSubmit={handleSave} onCancel={onClose} icon={Save} pending={isPending} submitLabel="Guardar ficha" />
       }
     >
-      <div className="space-y-8">
-        <Section icon={<Maximize size={18} aria-hidden="true" />} title="Dimensiones">
-          <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-            <InputGroup label="Ancho (m)" type="number" value={formData.width} onChange={(v) => handleChange('width', v)} step="0.01" autoFocus />
-            <InputGroup label="Largo (m)" type="number" value={formData.length} onChange={(v) => handleChange('length', v)} step="0.01" />
-            <InputGroup label="Alto (m)" type="number" value={formData.height} onChange={(v) => handleChange('height', v)} step="0.01" />
-            <InputGroup label="Área (m²)" type="number" value={formData.area_m2} onChange={(v) => handleChange('area_m2', v)} step="0.01" />
+      <div className="space-y-6">
+        <FormSection icon={<Maximize size={17} />} title="Medidas" description="Todo opcional: cargá lo que sepas.">
+          <div className="grid grid-cols-3 gap-3">
+            <InputGroup label="Ancho" suffix="m" value={formData.width} onChange={(v) => handleChange('width', v)} placeholder="0,8" />
+            <InputGroup label="Largo" suffix="m" value={formData.length} onChange={(v) => handleChange('length', v)} placeholder="0,8" />
+            <InputGroup label="Alto" suffix="m" value={formData.height} onChange={(v) => handleChange('height', v)} placeholder="1,6" />
           </div>
-        </Section>
+          <InputGroup
+            label="Superficie"
+            suffix="m²"
+            value={formData.area_m2}
+            onChange={(v) => handleChange('area_m2', v)}
+            hint={areaText && !areaMatches ? `Ancho por largo da ${areaText} m².` : undefined}
+            below={
+              areaText && !areaMatches ? (
+                <div>
+                  <button type="button" className="choice choice-sm" onClick={() => handleChange('area_m2', areaText)}>
+                    Usar {areaText} m²
+                  </button>
+                </div>
+              ) : undefined
+            }
+          />
+        </FormSection>
 
-        <Section icon={<Sun size={18} aria-hidden="true" />} title="Iluminación">
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <InputGroup label="Tipo de luz" type="text" value={formData.light_type} onChange={(v) => handleChange('light_type', v)} placeholder="Ej: LED, HPS" />
-            <InputGroup label="Marca o modelo" type="text" value={formData.light_brand_model} onChange={(v) => handleChange('light_brand_model', v)} />
-            <InputGroup label="Potencia (watts)" type="number" value={formData.light_watts} onChange={(v) => handleChange('light_watts', v)} />
-            <InputGroup label="PPFD promedio" type="number" value={formData.light_ppfd} onChange={(v) => handleChange('light_ppfd', v)} />
+        <FormSection icon={<Sun size={17} />} title="Luz">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <InputGroup
+              label="Tipo"
+              numeric={false}
+              value={formData.light_type}
+              onChange={(v) => handleChange('light_type', v)}
+              placeholder="LED, HPS, CMH…"
+              list={`${listId}-light`}
+            />
+            <InputGroup label="Marca o modelo" numeric={false} value={formData.light_brand_model} onChange={(v) => handleChange('light_brand_model', v)} />
+            <InputGroup label="Potencia" suffix="W" value={formData.light_watts} onChange={(v) => handleChange('light_watts', v)} placeholder="240" />
+            <InputGroup label="PPFD promedio" suffix="µmol" value={formData.light_ppfd} onChange={(v) => handleChange('light_ppfd', v)} placeholder="700" />
           </div>
-        </Section>
+          <datalist id={`${listId}-light`}>
+            {['LED', 'HPS', 'CMH', 'CFL', 'Sol'].map((option) => <option key={option} value={option} />)}
+          </datalist>
+        </FormSection>
 
-        <Section icon={<Wind size={18} aria-hidden="true" />} title="Clima y capacidad">
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <InputGroup label="Extracción (m³/h)" type="number" value={formData.vent_extraction} onChange={(v) => handleChange('vent_extraction', v)} />
-            <InputGroup label="Intracción (m³/h)" type="number" value={formData.vent_intraction} onChange={(v) => handleChange('vent_intraction', v)} />
-            <InputGroup label="Filtro de carbón" type="text" value={formData.vent_filter_brand} onChange={(v) => handleChange('vent_filter_brand', v)} placeholder="Marca o modelo" />
-            <InputGroup label="Equipamiento extra" type="text" value={formData.vent_extra_equipment} onChange={(v) => handleChange('vent_extra_equipment', v)} placeholder="Humidificador, aire acondicionado" />
-            <div className="md:col-span-2">
-              <InputGroup label="Capacidad de macetas" type="number" value={formData.pot_capacity} onChange={(v) => handleChange('pot_capacity', v)} />
-            </div>
+        <FormSection icon={<Wind size={17} />} title="Aire y capacidad">
+          <div className="grid grid-cols-2 gap-3">
+            <InputGroup label="Extracción" suffix="m³/h" value={formData.vent_extraction} onChange={(v) => handleChange('vent_extraction', v)} />
+            <InputGroup label="Intracción" suffix="m³/h" value={formData.vent_intraction} onChange={(v) => handleChange('vent_intraction', v)} />
           </div>
-        </Section>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <InputGroup label="Filtro de carbón" numeric={false} value={formData.vent_filter_brand} onChange={(v) => handleChange('vent_filter_brand', v)} placeholder="Marca o modelo" />
+            <InputGroup label="Equipamiento extra" numeric={false} value={formData.vent_extra_equipment} onChange={(v) => handleChange('vent_extra_equipment', v)} placeholder="Humidificador, aire…" />
+          </div>
+          <InputGroup label="Entran" suffix="macetas" value={formData.pot_capacity} onChange={(v) => handleChange('pot_capacity', v)} placeholder="4" />
+        </FormSection>
       </div>
     </Modal>
   );
 }
 
-function Section({ icon, title, children }: { icon: React.ReactNode; title: string; children: React.ReactNode }) {
-  return (
-    <section>
-      <h3 className="mb-4 flex items-center gap-2 font-title text-base font-semibold text-fg">
-        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-soft text-[color:var(--brand-text)]">
-          {icon}
-        </span>
-        {title}
-      </h3>
-      {children}
-    </section>
-  );
-}
-
-function InputGroup({ label, type, value, onChange, placeholder, step, autoFocus }: {
+function InputGroup({ label, value, onChange, placeholder, suffix, numeric = true, hint, below, list }: {
   label: string;
-  type: "text" | "number";
   value: string | number | undefined | null;
   onChange: (val: string) => void;
   placeholder?: string;
-  step?: string;
-  autoFocus?: boolean;
+  suffix?: string;
+  /** Las medidas aceptan coma decimal: se escriben como texto y el guardado las convierte. */
+  numeric?: boolean;
+  hint?: string;
+  below?: React.ReactNode;
+  list?: string;
 }) {
-  const id = useId();
-
   return (
-    <div className="field">
-      <label htmlFor={id} className="field-label">{label}</label>
-      <input
-        id={id}
-        data-autofocus={autoFocus || undefined}
-        type={type}
-        inputMode={type === "number" ? "decimal" : undefined}
-        value={value ?? ""}
+    <Field label={label} hint={hint} below={below}>
+      <Input
+        type="text"
+        inputMode={numeric ? "decimal" : undefined}
+        autoComplete="off"
+        suffix={suffix}
+        value={value == null ? "" : String(value).replace(/^(-?\d+)\.(\d+)$/, "$1,$2")}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        step={step}
-        className="field-input"
+        list={list}
       />
-    </div>
+    </Field>
   );
 }

@@ -7,6 +7,7 @@ import { DEFAULT_PREFS, PREF_LABELS } from '@/app/lib/notifications'
 import type { NotificationPrefs } from '@/app/lib/notifications'
 import { useToast } from '@/app/context/ToastContext'
 import Modal from '@/components/ui/Modal'
+import { Switch } from '@/components/ui/form'
 
 const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY
 
@@ -145,14 +146,13 @@ export default function NotificationSettings({ isOpen, onClose }: { isOpen: bool
         </div>
       ) : (
         <div className="space-y-4">
-          <fieldset className="space-y-2">
+          <fieldset>
             <legend className="field-label mb-1">Qué avisar</legend>
-            {(Object.keys(PREF_LABELS) as (keyof NotificationPrefs)[]).map((key) => (
-              <label key={key} className="flex items-center gap-2 text-sm text-fg">
-                <input type="checkbox" className="h-4 w-4 accent-[color:var(--brand)]" checked={prefs[key]} onChange={() => togglePref(key)} />
-                {PREF_LABELS[key]}
-              </label>
-            ))}
+            <div className="divide-y divide-[color:var(--border)]">
+              {(Object.keys(PREF_LABELS) as (keyof NotificationPrefs)[]).map((key) => (
+                <Switch key={key} checked={prefs[key]} onChange={() => togglePref(key)} label={PREF_LABELS[key]} />
+              ))}
+            </div>
           </fieldset>
           <div className="flex flex-wrap gap-2">
             <button type="button" className="btn btn-sm btn-secondary" onClick={test} disabled={busy}>

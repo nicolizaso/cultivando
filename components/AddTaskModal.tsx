@@ -1,16 +1,19 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
-import {
-  X, Sprout, FileText, Check, ChevronDown, Loader2, RefreshCw, AlertTriangle, GitBranch
-} from 'lucide-react'
+import { useMemo, useRef, useState } from 'react'
+import { CalendarPlus, GitBranch, Layers, Repeat, Search, Sprout, Warehouse, X } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { createTask } from '@/app/actions/tasks'
-import DatePicker from './DatePicker'
 import { useToast } from '@/app/context/ToastContext'
-import { addDaysToKey, todayKey } from '@/app/lib/dates'
+import { addDaysToKey, formatInAppTz, todayKey } from '@/app/lib/dates'
 import { TASK_TYPES } from '@/app/lib/constants'
+import { STAGE_NAMES } from '@/app/lib/stage-logic'
+import { buildOccurrenceDates, type Frequency } from '@/app/lib/recurrence'
 import Modal from '@/components/ui/Modal'
+import {
+  APPLICATION_OPTIONS, ChoiceGroup, DateField, Field, FieldGroup, FormActions, FormAlert, FormSection,
+  Input, MultiChoice, Select, Switch, Textarea, stageOptions, taskTypeOptions, useFieldErrors,
+} from '@/components/ui/form'
 
 // Interfaces
 import { Fertilizer, FertilizerCombo } from '@/app/lib/types'
@@ -19,10 +22,12 @@ import { averageDays, buildRecipe, recipeItems, weekInStage, withRecipe } from '
 
 interface Plant { id: string; name: string; days_in_stage?: number | null; space_id?: number; cycle_id?: number | null; }
 interface CycleOption { id: number; name: string; space_id?: number | null; days_in_stage?: number | null }
+type TargetType = 'plant' | 'space' | 'cycle'
+type Target = { id: string | number; name: string; type: TargetType }
 
 /** Días en la etapa de un objetivo: los de la planta, o el promedio del ciclo o del espacio. */
 function targetDaysInStage(
-  target: { id: string | number; type: 'plant' | 'space' | 'cycle' },
+  target: { id: string | number; type: TargetType },
   plants: Plant[],
   cycles: CycleOption[]
 ): number | null {
@@ -42,12 +47,35 @@ interface AddTaskModalProps {
   initialDay?: string
 }
 
+const FREQUENCY_OPTIONS: { value: Frequency; label: string }[] = [
+  { value: 'daily', label: 'Todos los días' },
+  { value: 'every2days', label: 'Cada 2 días' },
+  { value: 'weekly', label: 'Semanal' },
+  { value: 'biweekly', label: 'Cada 15 días' },
+  { value: 'monthly', label: 'Mensual' },
+]
+
+const TARGET_TABS: { type: TargetType; label: string; icon: React.ReactNode }[] = [
+  { type: 'cycle', label: 'Ciclos', icon: <Layers size={15} /> },
+  { type: 'space', label: 'Espacios', icon: <Warehouse size={15} /> },
+  { type: 'plant', label: 'Plantas', icon: <Sprout size={15} /> },
+]
+
+/** Con más opciones que esto, la lista de objetivos suma un buscador. */
+const SEARCH_THRESHOLD = 10
+
+const TYPE_OPTIONS = taskTypeOptions()
+const STAGE_OPTIONS = stageOptions(STAGE_NAMES)
+
 export default function AddTaskModal({ isOpen, onClose, plants, spaces, cycles = [], initialDay }: AddTaskModalProps) {
   const router = useRouter()
   const { showToast } = useToast()
+  const formRef = useRef<HTMLFormElement>(null)
+  const { errors, validate, clear } = useFieldErrors<'type' | 'targets' | 'other' | 'space' | 'endDate'>()
 
-  const [selectedTargets, setSelectedTargets] = useState<{ id: string | number, name: string, type: 'plant' | 'space' | 'cycle' }[]>([])
-  const [selectedTaskType, setSelectedTaskType] = useState<typeof TASK_TYPES[0] | null>(null)
+  const [selectedTargets, setSelectedTargets] = useState<Target[]>([])
+  const [taskTypeId, setTaskTypeId] = useState<string | null>(null)
+  const selectedTaskType = TASK_TYPES.find(t => t.id === taskTypeId) ?? null
   // Si cambia el día elegido en la agenda, quien lo abre cambia la `key` y el
   // formulario arranca de cero con el día nuevo.
   const [date, setDate] = useState(() => initialDay ?? todayKey())
@@ -58,6 +86,12 @@ export default function AddTaskModal({ isOpen, onClose, plants, spaces, cycles =
   const [targetStage, setTargetStage] = useState('Vegetativo')
   const [targetSpaceId, setTargetSpaceId] = useState<number | ''>('')
 
+  // Pestaña de objetivos: arranca en la que tiene algo para elegir.
+  const [targetTab, setTargetTab] = useState<TargetType>(() =>
+    cycles.length > 0 ? 'cycle' : plants.length > 0 ? 'plant' : 'space'
+  )
+  const [targetQuery, setTargetQuery] = useState('')
+
   // Nutrición (Fertilizantes)
   const [fertilizers, setFertilizers] = useState<Fertilizer[]>([])
   const [combos, setCombos] = useState<FertilizerCombo[]>([])
@@ -66,22 +100,10 @@ export default function AddTaskModal({ isOpen, onClose, plants, spaces, cycles =
 
   // Recurrencia
   const [isRecurring, setIsRecurring] = useState(false)
-  const [frequency, setFrequency] = useState('daily')
+  const [frequency, setFrequency] = useState<Frequency>('daily')
   const [endDate, setEndDate] = useState(() => addDaysToKey(initialDay ?? todayKey(), 30))
 
-  const [isTargetOpen, setIsTargetOpen] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
-
-  const targetRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    if (!isTargetOpen) return
-    function handleClickOutside(event: MouseEvent) {
-      if (targetRef.current && !targetRef.current.contains(event.target as Node)) setIsTargetOpen(false)
-    }
-    document.addEventListener("mousedown", handleClickOutside)
-    return () => document.removeEventListener("mousedown", handleClickOutside)
-  }, [isTargetOpen])
 
   // Los productos y combos se piden la primera vez que se elige
   // "Fertilizante", en el momento del cambio (antes, un efecto que miraba el
@@ -104,10 +126,13 @@ export default function AddTaskModal({ isOpen, onClose, plants, spaces, cycles =
     }
   }
 
-  const changeTaskType = (taskType: typeof TASK_TYPES[0] | null) => {
-    setSelectedTaskType(taskType)
-    if (taskType?.id === 'fertilizante') loadNutrition()
+  const changeTaskType = (id: string | null) => {
+    setTaskTypeId(id)
+    clear('type')
+    if (id === 'fertilizante') loadNutrition()
     else setSelectedNutrition(null)
+    // El esquejado se apunta al ciclo entero: se lleva a esa pestaña.
+    if (id === 'esquejado' && cycles.length > 0) setTargetTab('cycle')
   }
 
   /**
@@ -122,7 +147,7 @@ export default function AddTaskModal({ isOpen, onClose, plants, spaces, cycles =
    */
   const applyRecipe = (
     nutrition: { type: 'product' | 'combo'; id: number } | null,
-    targets: { id: string | number; type: 'plant' | 'space' | 'cycle' }[]
+    targets: { id: string | number; type: TargetType }[]
   ) => {
     if (!nutrition || targets.length === 0) return
     const week = weekInStage(targetDaysInStage(targets[0], plants, cycles))
@@ -130,44 +155,67 @@ export default function AddTaskModal({ isOpen, onClose, plants, spaces, cycles =
     setDescription(prev => withRecipe(prev, recipe))
   }
 
-  const toggleTarget = (item: { id: string | number, name: string, type: 'plant' | 'space' | 'cycle' }) => {
-    const exists = selectedTargets.find(t => t.id === item.id && t.type === item.type)
+  const toggleTarget = (item: Target) => {
+    const exists = selectedTargets.some(t => t.id === item.id && t.type === item.type)
     const next = exists
       ? selectedTargets.filter(t => !(t.id === item.id && t.type === item.type))
       : [...selectedTargets, item]
     setSelectedTargets(next)
+    clear('targets')
     applyRecipe(selectedNutrition, next)
   }
 
-  const removeTarget = (index: number) => {
-    const next = selectedTargets.filter((_, i) => i !== index)
-    setSelectedTargets(next)
-    applyRecipe(selectedNutrition, next)
+  const groups: Record<TargetType, { id: string | number; name: string }[]> = {
+    cycle: cycles,
+    space: spaces,
+    plant: plants,
   }
+  const tabs = TARGET_TABS.filter(tab => groups[tab.type].length > 0)
+  const activeItems = groups[targetTab] ?? []
+  const q = targetQuery.trim().toLowerCase()
+  const visibleItems = q ? activeItems.filter(item => item.name.toLowerCase().includes(q)) : activeItems
+  const countByType = (type: TargetType) => selectedTargets.filter(t => t.type === type).length
+
+  // Vista previa de la serie: cuántas tareas y cuándo cae la última.
+  const series = useMemo(
+    () => (isRecurring ? buildOccurrenceDates(date, endDate, frequency) : null),
+    [isRecurring, date, endDate, frequency]
+  )
+  const taskCount = series ? series.dates.length : 1
+
+  const targetAlreadyThere =
+    targetSpaceId !== '' &&
+    selectedTargets.some(t => {
+      if (t.type === 'plant') return plants.find(p => p.id === t.id)?.space_id === Number(targetSpaceId)
+      if (t.type === 'cycle') return cycles.find(c => c.id === t.id)?.space_id === Number(targetSpaceId)
+      return false
+    })
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    if (selectedTargets.length === 0) return showToast('Elegí al menos una planta, ciclo o espacio.', 'error')
-    if (!selectedTaskType) return showToast('Elegí un tipo de tarea.', 'error')
-    if (selectedTaskType.id === 'otro' && !otherText.trim()) return showToast('Escribí el nombre de la tarea personalizada.', 'error')
-    if (isRecurring && !endDate) return showToast('Elegí una fecha de fin para la repetición.', 'error')
+    const ok = validate({
+      type: !selectedTaskType && 'Elegí qué tarea es.',
+      targets: selectedTargets.length === 0 && 'Elegí al menos un ciclo, espacio o planta.',
+      other: selectedTaskType?.id === 'otro' && !otherText.trim() && 'Escribí el nombre de la tarea.',
+      space: selectedTaskType?.id === 'ambiente' && targetSpaceId === '' && 'Elegí a qué espacio se muda.',
+      endDate: isRecurring && !endDate && 'Elegí hasta cuándo se repite.',
+    }, formRef.current)
+    if (!ok || !selectedTaskType) return
 
     setIsSubmitting(true)
-
-    const cleanTaskType = {
-      id: selectedTaskType.id,
-      label: selectedTaskType.label
-    }
 
     const result = await createTask({
       targets: selectedTargets,
       // El servidor recalcula la receta para cada fecha de la serie: la
       // semana de la etapa avanza entre una repetición y la siguiente.
       nutrition: selectedTaskType.id === 'fertilizante' ? selectedNutrition : null,
-      taskType: cleanTaskType,
+      taskType: { id: selectedTaskType.id, label: selectedTaskType.label },
       applicationType,
       targetStage,
+      // Antes el destino no viajaba y "Cambiar ambiente" siempre volvía con
+      // "Elegí el espacio de destino", aunque estuviera elegido.
+      targetSpaceId: selectedTaskType.id === 'ambiente' ? targetSpaceId : null,
       date: `${date}T12:00:00`, // Mediodía para evitar desfases de zona horaria
       description,
       otherText,
@@ -199,345 +247,285 @@ export default function AddTaskModal({ isOpen, onClose, plants, spaces, cycles =
     }
   }
 
-  const targetGroups: Array<{ key: string; label: string; items: { id: string | number; name: string }[]; type: 'cycle' | 'space' | 'plant'; icon?: React.ReactNode }> = [
-    { key: 'cycles', label: 'Ciclos', items: cycles, type: 'cycle', icon: <RefreshCw size={14} aria-hidden="true" /> },
-    { key: 'spaces', label: 'Espacios', items: spaces, type: 'space' },
-    { key: 'plants', label: 'Plantas', items: plants, type: 'plant' },
-  ]
+  const nutritionValue = selectedNutrition ? `${selectedNutrition.type}-${selectedNutrition.id}` : ''
 
   return (
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title="Crear acción o evento"
+      title="Nueva tarea"
+      description="Qué hay que hacer, sobre qué y cuándo."
       dismissOnBackdrop={false}
       footer={
-        <button type="submit" form="add-task-form" className="btn btn-primary w-full" disabled={isSubmitting}>
-          {isSubmitting && <Loader2 size={16} className="animate-spin" aria-hidden="true" />}
-          {isSubmitting ? 'Guardando...' : 'Guardar evento'}
-        </button>
+        <FormActions
+          form="add-task-form"
+          onCancel={onClose}
+          icon={CalendarPlus}
+          pending={isSubmitting}
+          pendingLabel="Agendando…"
+          submitLabel={taskCount > 1 ? `Agendar ${taskCount} tareas` : 'Agendar tarea'}
+        />
       }
     >
-      <form id="add-task-form" onSubmit={handleSubmit} className="space-y-5">
-        {/* 1. OBJETIVO */}
-        <div className="field relative" ref={targetRef}>
-          <span className="field-label" id="target-label">Objetivo</span>
-
-          <button
-            type="button"
-            onClick={() => setIsTargetOpen(!isTargetOpen)}
-            aria-expanded={isTargetOpen}
-            aria-labelledby="target-label"
-            className="flex min-h-[3rem] w-full flex-wrap items-center gap-2 rounded-[var(--radius-md)] border border-line-strong bg-surface-2 px-3 py-2 text-left transition-colors hover:border-[color:var(--fg-subtle)]"
-          >
-            <Sprout className="shrink-0 text-fg-muted" size={18} aria-hidden="true" />
-
-            {selectedTargets.length === 0 ? (
-              <span className="text-sm text-fg-subtle">Seleccionar planta, ciclo o espacio</span>
-            ) : (
-              <span className="text-sm text-fg">
-                {selectedTargets.length} {selectedTargets.length === 1 ? 'objetivo' : 'objetivos'}
-              </span>
-            )}
-
-            <ChevronDown
-              size={16}
-              className={`ml-auto text-fg-muted transition-transform ${isTargetOpen ? 'rotate-180' : ''}`}
-              aria-hidden="true"
-            />
-          </button>
-
-          {/* Los objetivos elegidos viven fuera del disparador: así cada chip
-              conserva su propio botón de quitar sin anidar botones. */}
-          {selectedTargets.length > 0 && (
-            <ul className="flex flex-wrap gap-2">
-              {selectedTargets.map((target, idx) => (
-                <li key={`${target.type}-${target.id}`}>
-                  <span className="chip chip-brand">
-                    {target.name}
-                    <button
-                      type="button"
-                      onClick={() => removeTarget(idx)}
-                      className="-mr-1 rounded-full p-0.5 hover:bg-[color:var(--brand-soft-strong)]"
-                      aria-label={`Quitar ${target.name}`}
-                    >
-                      <X size={12} aria-hidden="true" />
-                    </button>
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-
-          {isTargetOpen && (
-            <div className="custom-scrollbar absolute top-full left-0 z-30 mt-2 max-h-64 w-full overflow-y-auto rounded-[var(--radius-md)] border border-line bg-surface p-2 shadow-[var(--shadow-lg)]">
-              {targetGroups.map((group) =>
-                group.items.length > 0 ? (
-                  <fieldset key={group.key} className="mb-2 last:mb-0">
-                    <legend className="px-2 py-1 text-[11px] font-bold text-fg-subtle">
-                      {group.label}
-                    </legend>
-                    {group.items.map((item) => {
-                      const isSelected = selectedTargets.some(t => t.id === item.id && t.type === group.type)
-                      return (
-                        <label
-                          key={`${group.type}-${item.id}`}
-                          className={`mb-1 flex cursor-pointer items-center justify-between gap-2 rounded-[var(--radius-sm)] p-2 text-sm transition-colors has-[:focus-visible]:outline has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-[color:var(--ring)] ${
-                            isSelected ? 'bg-brand-soft text-[color:var(--brand-text)]' : 'text-fg hover:bg-surface-3'
-                          }`}
-                        >
-                          <span className="flex min-w-0 items-center gap-2">
-                            {group.icon}
-                            <span className="truncate">{item.name}</span>
-                          </span>
-                          <input
-                            type="checkbox"
-                            checked={isSelected}
-                            onChange={() => toggleTarget({ id: item.id, name: item.name, type: group.type })}
-                            className="sr-only"
-                          />
-                          {isSelected && <Check size={14} aria-hidden="true" />}
-                        </label>
-                      )
-                    })}
-                  </fieldset>
-                ) : null
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* 2. TIPO DE TAREA */}
-        <div className="field">
-          <label htmlFor="task-type" className="field-label">Tarea o evento</label>
-
-          <div className="relative">
-            {selectedTaskType && (
-              <span
-                className={`pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 ${selectedTaskType.color}`}
-                aria-hidden="true"
-              >
-                <selectedTaskType.icon size={18} />
-              </span>
-            )}
-            {!selectedTaskType && (
-              <FileText
-                className="pointer-events-none absolute left-3 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-fg-muted"
-                aria-hidden="true"
-              />
-            )}
-            <select
-              id="task-type"
-              data-autofocus
-              value={selectedTaskType?.id ?? ''}
-              onChange={(e) => {
-                changeTaskType(TASK_TYPES.find(t => t.id === e.target.value) ?? null)
-              }}
-              className="field-input pl-10"
-            >
-              <option value="">Seleccionar tipo...</option>
-              {TASK_TYPES.map(type => (
-                <option key={type.id} value={type.id}>{type.label}</option>
-              ))}
-            </select>
-          </div>
-        </div>
+      <form id="add-task-form" ref={formRef} onSubmit={handleSubmit} className="space-y-6" noValidate>
+        {/* 1. QUÉ */}
+        <ChoiceGroup
+          legend="¿Qué hay que hacer?"
+          variant="compact"
+          options={TYPE_OPTIONS}
+          value={taskTypeId}
+          onChange={changeTaskType}
+          error={errors.type}
+          // 12 tipos en una grilla de 4×3; "Otro" cierra abajo a lo ancho.
+          layout="grid grid-cols-4 gap-2 [&>label:last-child]:col-span-4 [&>label:last-child]:min-h-[2.75rem] [&>label:last-child]:flex-row"
+        />
 
         {selectedTaskType?.id === 'otro' && (
-          <div className="field">
-            <label htmlFor="task-other" className="field-label">Nombre de la tarea</label>
-            <input
-              id="task-other"
-              type="text"
-              placeholder="Especificá la tarea"
-              value={otherText}
-              onChange={(e) => setOtherText(e.target.value)}
-              className="field-input"
-            />
+          <div className="form-reveal">
+            <Field label="Nombre de la tarea" error={errors.other}>
+              <Input
+                type="text"
+                placeholder="Ej: Revisar tricomas"
+                value={otherText}
+                onChange={(e) => { setOtherText(e.target.value); clear('other') }}
+                autoComplete="off"
+              />
+            </Field>
           </div>
         )}
 
         {selectedTaskType?.id === 'esquejado' && (
-          <p className="flex items-start gap-2 rounded-[var(--radius-md)] border border-line bg-surface-2 p-3 text-xs text-fg-muted">
-            <GitBranch size={14} className="mt-0.5 shrink-0" aria-hidden="true" />
-            <span>
-              Apuntala al ciclo entero. Al marcarla completada vas a elegir de qué plantas
-              sacaste esquejes y cuántos de cada una, y con eso se crean las plantas nuevas
-              en Enraizamiento.
+          <FormAlert tone="info">
+            <span className="flex items-start gap-2">
+              <GitBranch size={15} className="mt-0.5 shrink-0 text-[color:var(--brand-text)]" aria-hidden="true" />
+              Apuntala al ciclo entero. Al completarla vas a elegir de qué plantas sacaste
+              esquejes y cuántos, y se crean como plantas nuevas en Enraizamiento.
             </span>
-          </p>
+          </FormAlert>
         )}
 
         {selectedTaskType?.id === 'fertilizante' && (
-          <div className="space-y-4 rounded-[var(--radius-lg)] border border-line bg-surface-2 p-4">
-            <div className="field">
-              <label htmlFor="task-nutrition" className="field-label">Combo o producto (opcional)</label>
-              <div className="relative">
-                <select
-                  id="task-nutrition"
-                  value={selectedNutrition ? `${selectedNutrition.type}-${selectedNutrition.id}` : ''}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    if (!val) {
-                      setSelectedNutrition(null);
-                    } else {
-                      const [type, id] = val.split('-');
-                      const next = { type: type as 'product' | 'combo', id: parseInt(id) };
-                      setSelectedNutrition(next);
-                      applyRecipe(next, selectedTargets);
-                    }
-                  }}
-                  className="field-input"
-                  aria-busy={isNutritionLoading}
-                >
-                  <option value="">Seleccionar...</option>
-                  {combos.length > 0 && <optgroup label="Combos nutricionales">
-                    {combos.map(c => <option key={`combo-${c.id}`} value={`combo-${c.id}`}>{c.name}</option>)}
-                  </optgroup>}
-                  {fertilizers.length > 0 && <optgroup label="Productos individuales">
-                    {fertilizers.map(f => <option key={`product-${f.id}`} value={`product-${f.id}`}>{f.name}</option>)}
-                  </optgroup>}
-                </select>
-                {isNutritionLoading && (
-                  <Loader2
-                    size={16}
-                    className="pointer-events-none absolute right-8 top-1/2 -translate-y-1/2 animate-spin text-fg-muted"
-                    aria-hidden="true"
-                  />
-                )}
-              </div>
-              <p className="field-hint">Al elegirlo se calcula la receta y se agrega a los detalles.</p>
-            </div>
-
-            <div className="field">
-              <label htmlFor="task-application" className="field-label">Tipo de aplicación</label>
-              <select
-                id="task-application"
-                value={applicationType}
-                onChange={(e) => setApplicationType(e.target.value)}
-                className="field-input"
+          <div className="form-reveal space-y-5">
+            <Field
+              label="Combo o producto"
+              optional
+              hint="Calcula la receta para la semana de la etapa y la suma a los detalles."
+            >
+              <Select
+                value={nutritionValue}
+                onChange={(e) => {
+                  const val = e.target.value
+                  if (!val) {
+                    setSelectedNutrition(null)
+                  } else {
+                    const [type, id] = val.split('-')
+                    const next = { type: type as 'product' | 'combo', id: parseInt(id) }
+                    setSelectedNutrition(next)
+                    applyRecipe(next, selectedTargets)
+                  }
+                }}
+                aria-busy={isNutritionLoading}
               >
-                <option value="Riego">Riego</option>
-                <option value="Foliar">Foliar</option>
-                <option value="Directo al Sustrato">Directo al sustrato</option>
-              </select>
-            </div>
+                <option value="">{isNutritionLoading ? 'Cargando productos…' : 'Sin receta'}</option>
+                {combos.length > 0 && <optgroup label="Combos">
+                  {combos.map(c => <option key={`combo-${c.id}`} value={`combo-${c.id}`}>{c.name}</option>)}
+                </optgroup>}
+                {fertilizers.length > 0 && <optgroup label="Productos">
+                  {fertilizers.map(f => <option key={`product-${f.id}`} value={`product-${f.id}`}>{f.name}</option>)}
+                </optgroup>}
+              </Select>
+            </Field>
+
+            <ChoiceGroup
+              legend="Cómo se aplica"
+              options={APPLICATION_OPTIONS}
+              value={applicationType}
+              onChange={setApplicationType}
+              size="sm"
+            />
           </div>
         )}
 
         {selectedTaskType?.id === 'cambio_etapa' && (
-          <div className="field">
-            <label htmlFor="task-stage" className="field-label">Etapa destino</label>
-            <select
-              id="task-stage"
+          <div className="form-reveal">
+            <ChoiceGroup
+              legend="Pasa a"
+              options={STAGE_OPTIONS}
               value={targetStage}
-              onChange={(e) => setTargetStage(e.target.value)}
-              className="field-input"
-            >
-              <option value="Germinación">Germinación</option>
-              <option value="Plántula">Plántula</option>
-              <option value="Vegetativo">Vegetativo</option>
-              <option value="Enraizamiento">Enraizamiento</option>
-              <option value="Floración">Floración</option>
-              <option value="Secado">Secado</option>
-              <option value="Curado">Curado</option>
-            </select>
+              onChange={setTargetStage}
+              size="sm"
+            />
           </div>
         )}
 
         {selectedTaskType?.id === 'ambiente' && (
-          <div className="field">
-            <label htmlFor="task-space" className="field-label">Espacio destino</label>
-            <select
-              id="task-space"
-              value={targetSpaceId}
-              onChange={(e) => setTargetSpaceId(e.target.value ? Number(e.target.value) : '')}
-              className="field-input"
-            >
-              <option value="">Seleccionar espacio...</option>
-              {spaces.map(space => (
-                <option key={`target-space-${space.id}`} value={space.id}>{space.name}</option>
-              ))}
-            </select>
-
-            {targetSpaceId !== '' && selectedTargets.some(t => {
-              if (t.type === 'plant') {
-                const p = plants.find(plant => plant.id === t.id);
-                return p?.space_id === Number(targetSpaceId);
-              }
-              if (t.type === 'cycle') {
-                const c = cycles.find(cycle => cycle.id === t.id);
-                return c?.space_id === Number(targetSpaceId);
-              }
-              return false;
-            }) && (
-              <p className="flex items-center gap-1.5 text-xs font-semibold text-[color:var(--warning)]" role="status">
-                <AlertTriangle size={14} aria-hidden="true" />
-                El objetivo ya está en este espacio.
-              </p>
+          <div className="form-reveal">
+            <ChoiceGroup
+              legend="Se muda a"
+              options={spaces.map(space => ({ value: space.id, label: space.name, icon: <Warehouse size={15} /> }))}
+              value={targetSpaceId === '' ? null : targetSpaceId}
+              onChange={(id) => { setTargetSpaceId(id); clear('space') }}
+              error={errors.space}
+              size="sm"
+            />
+            {targetAlreadyThere && !errors.space && (
+              <FormAlert tone="warning" className="mt-3">El objetivo ya está en este espacio.</FormAlert>
             )}
           </div>
         )}
 
-        {/* 3. FECHA */}
-        <div className="field">
-          <label htmlFor="task-date" className="field-label">Fecha</label>
-          <DatePicker id="task-date" selectedDate={date} onChange={setDate} />
-        </div>
+        {/* 2. SOBRE QUÉ */}
+        <FieldGroup
+          legend="¿Sobre qué?"
+          error={errors.targets}
+          aside={
+            selectedTargets.length > 0 ? (
+              <button
+                type="button"
+                className="text-[0.8125rem] font-semibold text-[color:var(--brand-text)] hover:underline"
+                onClick={() => setSelectedTargets([])}
+              >
+                Quitar todo
+              </button>
+            ) : undefined
+          }
+        >
+          {tabs.length === 0 ? (
+            <p className="text-sm text-fg-muted">Todavía no hay ciclos, espacios ni plantas para elegir.</p>
+          ) : (
+            <div className="space-y-3">
+              {tabs.length > 1 && (
+                <div role="tablist" aria-label="Tipo de objetivo" className="segmented segmented-block">
+                  {tabs.map(tab => {
+                    const count = countByType(tab.type)
+                    return (
+                      <button
+                        key={tab.type}
+                        type="button"
+                        role="tab"
+                        aria-selected={targetTab === tab.type}
+                        onClick={() => { setTargetTab(tab.type); setTargetQuery('') }}
+                        className="segmented-item"
+                      >
+                        <span aria-hidden="true" className="hidden sm:inline-flex">{tab.icon}</span>
+                        {tab.label}
+                        {count > 0 && (
+                          <span className="mono rounded-full bg-brand px-1.5 text-[0.6875rem] leading-[1.125rem] text-[color:var(--brand-fg)]">
+                            {count}
+                          </span>
+                        )}
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
 
-        <div className="rounded-[var(--radius-md)] border border-line bg-surface-2 p-3">
-          <label className="flex cursor-pointer items-center justify-between gap-3">
-            <span className="text-sm font-semibold text-fg">Repetir</span>
-            <input
-              type="checkbox"
-              checked={isRecurring}
-              onChange={(e) => setIsRecurring(e.target.checked)}
-              className="peer sr-only"
-            />
-            {/* Interruptor: el input real queda debajo, así conserva foco y estado */}
-            <span
-              className="relative h-6 w-11 shrink-0 rounded-full bg-[color:var(--surface-3)] transition-colors after:absolute after:left-0.5 after:top-0.5 after:h-5 after:w-5 after:rounded-full after:bg-surface after:shadow-[var(--shadow-sm)] after:transition-transform peer-checked:bg-brand peer-checked:after:translate-x-5 peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-[color:var(--ring)]"
-              aria-hidden="true"
-            />
-          </label>
+              {activeItems.length > SEARCH_THRESHOLD && (
+                <Input
+                  type="search"
+                  leading={<Search size={17} />}
+                  placeholder={`Buscar ${TARGET_TABS.find(t => t.type === targetTab)?.label.toLowerCase()}`}
+                  aria-label="Buscar objetivos"
+                  value={targetQuery}
+                  onChange={(e) => setTargetQuery(e.target.value)}
+                />
+              )}
 
-          {isRecurring && (
-            <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div className="field">
-                <label htmlFor="task-frequency" className="field-label">Frecuencia</label>
-                <select
-                  id="task-frequency"
-                  value={frequency}
-                  onChange={(e) => setFrequency(e.target.value)}
-                  className="field-input"
-                >
-                  <option value="daily">Diario</option>
-                  <option value="every2days">Cada 2 días</option>
-                  <option value="weekly">Semanal</option>
-                  <option value="biweekly">Quincenal</option>
-                  <option value="monthly">Mensual</option>
-                </select>
-              </div>
-              <div className="field">
-                <label htmlFor="task-end-date" className="field-label">Termina el</label>
-                <DatePicker id="task-end-date" selectedDate={endDate} onChange={setEndDate} />
-              </div>
+              <MultiChoice
+                legend={TARGET_TABS.find(t => t.type === targetTab)?.label ?? ''}
+                hideLegend
+                size="sm"
+                layout="custom-scrollbar flex max-h-52 flex-wrap content-start gap-2 overflow-y-auto p-0.5"
+                options={visibleItems.map(item => ({ value: String(item.id), label: item.name }))}
+                values={selectedTargets.filter(t => t.type === targetTab).map(t => String(t.id))}
+                onToggle={(id) => {
+                  const item = activeItems.find(i => String(i.id) === id)
+                  if (item) toggleTarget({ id: item.id, name: item.name, type: targetTab })
+                }}
+              />
+              {visibleItems.length === 0 && (
+                <p className="text-sm text-fg-muted">Nada coincide con “{targetQuery}”.</p>
+              )}
+
+              {/* Lo elegido en otras pestañas sigue a la vista y se puede quitar. */}
+              {selectedTargets.some(t => t.type !== targetTab) && (
+                <ul className="flex flex-wrap gap-1.5" aria-label="Otros objetivos elegidos">
+                  {selectedTargets.filter(t => t.type !== targetTab).map(target => (
+                    <li key={`${target.type}-${target.id}`}>
+                      <span className="chip chip-brand py-1 pl-2.5 text-xs">
+                        {target.name}
+                        <button
+                          type="button"
+                          onClick={() => toggleTarget(target)}
+                          className="-mr-1 rounded-full p-0.5 hover:bg-[color:var(--brand-soft-strong)]"
+                          aria-label={`Quitar ${target.name}`}
+                        >
+                          <X size={13} aria-hidden="true" />
+                        </button>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           )}
-        </div>
+        </FieldGroup>
+
+        {/* 3. CUÁNDO */}
+        <FormSection title="Cuándo">
+          <DateField label="Día" value={date} onChange={setDate} quick="future" />
+
+          <div className="rounded-[var(--radius-lg)] border border-line px-4 py-1">
+            <Switch
+              checked={isRecurring}
+              onChange={setIsRecurring}
+              icon={<Repeat size={17} />}
+              label="Repetir"
+              description={isRecurring ? undefined : 'Para riegos o controles que vuelven cada tantos días.'}
+            />
+
+            {isRecurring && (
+              <div className="space-y-5 border-t border-line pb-4 pt-4 animate-fade-in">
+                <ChoiceGroup
+                  legend="Cada cuánto"
+                  options={FREQUENCY_OPTIONS}
+                  value={frequency}
+                  onChange={setFrequency}
+                  size="sm"
+                />
+                <DateField
+                  label="Hasta"
+                  value={endDate}
+                  onChange={(v) => { setEndDate(v); clear('endDate') }}
+                  min={date}
+                  error={errors.endDate}
+                  quick={[
+                    { label: '2 semanas', value: addDaysToKey(date, 14) },
+                    { label: '1 mes', value: addDaysToKey(date, 30) },
+                    { label: '2 meses', value: addDaysToKey(date, 60) },
+                  ]}
+                />
+                {series && series.dates.length > 0 && (
+                  <p className="rounded-[var(--radius-md)] bg-brand-soft px-3 py-2 text-sm text-fg" role="status">
+                    Se agendan <strong className="mono">{series.dates.length}</strong>{' '}
+                    {series.dates.length === 1 ? 'tarea' : 'tareas'}, la última el{' '}
+                    <strong>{formatInAppTz(series.dates[series.dates.length - 1], { weekday: 'short', day: 'numeric', month: 'short' })}</strong>.
+                    {series.truncated && ' Es el máximo para una serie.'}
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+        </FormSection>
 
         {/* 4. DETALLES */}
-        <div className="field">
-          <label htmlFor="task-description" className="field-label">Detalles</label>
-          <textarea
-            id="task-description"
-            placeholder="Descripción adicional"
+        <Field label="Detalles" optional>
+          <Textarea
+            placeholder="Dosis, observaciones, lo que haga falta recordar"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            rows={3}
-            className="field-input resize-none"
           />
-        </div>
+        </Field>
       </form>
     </Modal>
   )
