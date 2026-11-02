@@ -199,7 +199,7 @@ export default function Modal({
           </button>
         </header>
 
-        <div className="custom-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-6 pt-2">
+        <div className="custom-scrollbar min-h-0 flex-1 overflow-y-auto overflow-x-clip overscroll-contain px-5 pb-6 pt-2">
           <div ref={sentinelRef} className="h-px" aria-hidden="true" />
           {children}
         </div>
