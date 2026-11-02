@@ -3,7 +3,8 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
-import { AlertCircle, ArrowRight, CalendarCheck, FlaskConical, Loader2, Lock, Mail, MailCheck, RefreshCw, User } from 'lucide-react'
+import { AlertCircle, ArrowRight, CalendarCheck, Eye, EyeOff, FlaskConical, Loader2, Lock, Mail, MailCheck, RefreshCw, User } from 'lucide-react'
+import { Field, Input } from '@/components/ui/form'
 import { login, signup } from './actions'
 import Logo from '@/components/Logo'
 import { BRAND_NAME, BRAND_TAGLINE } from '@/components/Brand'
@@ -18,6 +19,7 @@ export default function LoginPage() {
   const router = useRouter()
   const [isLogin, setIsLogin] = useState(true)
   const [loading, setLoading] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
   const [msg, setMsg] = useState<{ type: 'error' | 'success'; text: string } | null>(null)
 
   const handleOnSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -178,90 +180,80 @@ export default function LoginPage() {
             </p>
           )}
 
-          <form onSubmit={handleOnSubmit} className="space-y-4">
+          <form onSubmit={handleOnSubmit} className="space-y-5">
             {!isLogin && (
-              <div className="field">
-                <label htmlFor="login-username" className="field-label">Usuario</label>
-                <div className="relative">
-                  <User className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-fg-subtle" aria-hidden="true" />
-                  <input
-                    id="login-username"
-                    name="username"
-                    type="text"
-                    autoComplete="username"
-                    required={!isLogin}
-                    minLength={3}
-                    maxLength={30}
-                    pattern="[A-Za-z0-9._\-]{3,30}"
-                    aria-describedby="login-username-hint"
-                    placeholder="Cómo querés que te llamemos"
-                    className="field-input pl-10"
-                  />
-                </div>
-                <p id="login-username-hint" className="text-xs text-fg-muted">
-                  Entre 3 y 30 caracteres: letras, números, punto, guion o guion bajo.
-                </p>
-              </div>
-            )}
-
-            <div className="field">
-              <label htmlFor="login-email" className="field-label">
-                {isLogin ? 'Email o usuario' : 'Email'}
-              </label>
-              <div className="relative">
-                <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-fg-subtle" aria-hidden="true" />
-                <input
-                  id="login-email"
-                  name="email"
+              <Field
+                label="Usuario"
+                id="login-username"
+                hint="De 3 a 30 letras, números, punto o guiones. Sirve para entrar sin el email."
+              >
+                <Input
+                  name="username"
                   type="text"
-                  autoComplete={isLogin ? 'username' : 'email'}
-                  required
-                  placeholder={isLogin ? 'Email o usuario' : 'tu@email.com'}
-                  className="field-input pl-10"
+                  leading={<User size={17} />}
+                  autoComplete="username"
+                  autoCapitalize="none"
+                  spellCheck={false}
+                  required={!isLogin}
+                  minLength={3}
+                  maxLength={30}
+                  pattern="[A-Za-z0-9._\-]{3,30}"
+                  placeholder="Ej: cultiva.dora"
                 />
-              </div>
-            </div>
-
-            <div className="field">
-              <label htmlFor="login-password" className="field-label">Contraseña</label>
-              <div className="relative">
-                <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-fg-subtle" aria-hidden="true" />
-                <input
-                  id="login-password"
-                  name="password"
-                  type="password"
-                  autoComplete={isLogin ? 'current-password' : 'new-password'}
-                  required
-                  minLength={isLogin ? undefined : 8}
-                  aria-describedby={isLogin ? undefined : 'login-password-hint'}
-                  placeholder="Tu contraseña"
-                  className="field-input pl-10"
-                />
-              </div>
-              {!isLogin && (
-                <p id="login-password-hint" className="text-xs text-fg-muted">Al menos 8 caracteres.</p>
-              )}
-            </div>
-
-            {!isLogin && (
-              <div className="field">
-                <label htmlFor="login-confirm" className="field-label">Repetir contraseña</label>
-                <div className="relative">
-                  <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-fg-subtle" aria-hidden="true" />
-                  <input
-                    id="login-confirm"
-                    name="confirmPassword"
-                    type="password"
-                    autoComplete="new-password"
-                    required={!isLogin}
-                    placeholder="Repetí la contraseña"
-                    className="field-input pl-10"
-                  />
-                </div>
-              </div>
+              </Field>
             )}
 
-            <button type="submit" disabled={loading} className="btn btn-primary mt-2 w-full">
+            <Field label={isLogin ? 'Email o usuario' : 'Email'} id="login-email">
+              <Input
+                name="email"
+                type={isLogin ? 'text' : 'email'}
+                inputMode="email"
+                leading={<Mail size={17} />}
+                autoComplete={isLogin ? 'username' : 'email'}
+                autoCapitalize="none"
+                spellCheck={false}
+                required
+                placeholder={isLogin ? 'tu@email.com o tu usuario' : 'tu@email.com'}
+              />
+            </Field>
+
+            <Field label="Contraseña" id="login-password" hint={isLogin ? undefined : 'Al menos 8 caracteres.'}>
+              <Input
+                name="password"
+                type={showPassword ? 'text' : 'password'}
+                leading={<Lock size={17} />}
+                autoComplete={isLogin ? 'current-password' : 'new-password'}
+                required
+                minLength={isLogin ? undefined : 8}
+                placeholder={isLogin ? 'Tu contraseña' : 'Elegí una contraseña'}
+                action={
+                  <button
+                    type="button"
+                    className="btn-icon"
+                    onClick={() => setShowPassword((v) => !v)}
+                    aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                    aria-pressed={showPassword}
+                  >
+                    {showPassword ? <EyeOff size={18} aria-hidden="true" /> : <Eye size={18} aria-hidden="true" />}
+                  </button>
+                }
+              />
+            </Field>
+
+            {!isLogin && (
+              <Field label="Repetir contraseña" id="login-confirm">
+                <Input
+                  name="confirmPassword"
+                  type={showPassword ? 'text' : 'password'}
+                  leading={<Lock size={17} />}
+                  autoComplete="new-password"
+                  required={!isLogin}
+                  placeholder="La misma de arriba"
+                />
+              </Field>
+            )}
+
+            <button type="submit" disabled={loading} className="btn btn-primary mt-1 min-h-[3rem] w-full">
               {loading ? (
                 <Loader2 className="animate-spin" size={18} aria-hidden="true" />
               ) : (

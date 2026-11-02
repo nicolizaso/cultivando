@@ -1,10 +1,28 @@
 'use client'
 
-import { useState } from 'react'
-import { AlertCircle, Loader2, Plus, Trash2 } from 'lucide-react'
+import { useRef, useState } from 'react'
+import { Package, Plus, Trash2 } from 'lucide-react'
 import { Fertilizer } from '@/app/lib/types'
 import type { FertilizerStage } from '@/app/lib/nutrition'
 import Modal from '@/components/ui/Modal'
+import { getStageColor } from '@/app/lib/utils'
+import {
+  ChoiceGroup, Field, FieldGroup, FormActions, FormAlert, FormSection, Input, Switch, useFieldErrors,
+} from '@/components/ui/form'
+import type { ChoiceOption } from '@/components/ui/form'
+
+const stageChoice = (value: FertilizerStage, label: string, stageName?: string): ChoiceOption<FertilizerStage> => {
+  const style = stageName ? getStageColor(stageName) : null
+  return { value, label, icon: style?.icon, accent: style?.accent }
+}
+
+const STAGE_CHOICES: ChoiceOption<FertilizerStage>[] = [
+  stageChoice('todo', 'Todo el ciclo'),
+  stageChoice('enraizamiento', 'Enraizamiento', 'Enraizamiento'),
+  stageChoice('vegetativo', 'Vegetativo', 'Vegetativo'),
+  stageChoice('floracion', 'Floración', 'Floración'),
+  { value: 'lavado', label: 'Lavado de raíces' },
+]
 
 interface AddFertilizerModalProps {
   isOpen: boolean
@@ -26,7 +44,7 @@ export default function AddFertilizerModal({ isOpen, onClose, onSave, initialDat
   const [doseFixed, setDoseFixed] = useState(
     initialData?.fixed_dosage != null ? String(initialData.fixed_dosage).replace('.', ',') : ''
   )
-  const [doseWeekly, setDoseWeekly] = useState<{ week: number; dose: number }[]>(
+  const [doseWeekly, setDoseWeekly] = useState<{ week: number; dose: number; text?: string }[]>(
     initialData?.weekly_dosages?.length ? initialData.weekly_dosages : [{ week: 1, dose: 1 }]
   )
   // Stock (opcional): cuánto queda, tamaño del envase y desde cuánto avisar.
@@ -34,11 +52,19 @@ export default function AddFertilizerModal({ isOpen, onClose, onSave, initialDat
   const [stock, setStock] = useState(toText(initialData?.stock_ml))
   const [container, setContainer] = useState(toText(initialData?.container_ml))
   const [lowStock, setLowStock] = useState(toText(initialData?.low_stock_ml))
+  const [trackStock, setTrackStock] = useState(
+    initialData?.stock_ml != null || initialData?.container_ml != null || initialData?.low_stock_ml != null
+  )
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const formRef = useRef<HTMLFormElement>(null)
+  const { errors, validate, clear } = useFieldErrors<'name' | 'dose'>()
 
+  // La semana nueva arranca con la dosis de la anterior: casi siempre sube
+  // de a poco, y es más fácil corregir un número que escribirlo de cero.
   const handleAddWeek = () => {
-    setDoseWeekly([...doseWeekly, { week: doseWeekly.length + 1, dose: 1 }])
+    const last = doseWeekly[doseWeekly.length - 1]?.dose ?? 1
+    setDoseWeekly([...doseWeekly, { week: doseWeekly.length + 1, dose: last, text: undefined }])
   }
 
   const handleRemoveWeek = (index: number) => {
@@ -49,20 +75,19 @@ export default function AddFertilizerModal({ isOpen, onClose, onSave, initialDat
 
   const handleWeeklyDoseChange = (index: number, value: string) => {
     const newWeekly = [...doseWeekly]
-    newWeekly[index].dose = parseFloat(value) || 0
+    // Se guarda también lo escrito: si no, "1," se volvía "1" al tipear y no
+    // había forma de cargar un decimal.
+    newWeekly[index] = { ...newWeekly[index], dose: parseFloat(value.replace(',', '.')) || 0, text: value }
     setDoseWeekly(newWeekly)
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!name.trim()) {
-      setError('Completá el nombre del producto.')
-      return
-    }
-    if (doseType === 'fija' && !doseFixed.trim()) {
-      setError('Cargá la dosis en ml por litro.')
-      return
-    }
+    const ok = validate({
+      name: !name.trim() && 'Ponele un nombre al producto.',
+      dose: doseType === 'fija' && !doseFixed.trim() && 'Cargá cuántos ml van por litro.',
+    }, formRef.current)
+    if (!ok) return
 
     setIsSubmitting(true)
     setError(null)
@@ -74,11 +99,11 @@ export default function AddFertilizerModal({ isOpen, onClose, onSave, initialDat
       stage_category: stage,
       dosage_type: doseType,
       fixed_dosage: doseType === 'fija' ? Number(doseFixed.replace(',', '.')) : null,
-      weekly_dosages: doseType === 'semanal' ? doseWeekly : null,
+      weekly_dosages: doseType === 'semanal' ? doseWeekly.map(({ week, dose }) => ({ week, dose })) : null,
       // Vacío = no llevar la cuenta. El servidor valida los números.
-      stock_ml: stock.trim() || null,
-      container_ml: container.trim() || null,
-      low_stock_ml: lowStock.trim() || null,
+      stock_ml: trackStock ? stock.trim() || null : null,
+      container_ml: trackStock ? container.trim() || null : null,
+      low_stock_ml: trackStock ? lowStock.trim() || null : null,
     }
 
     const res = await onSave(formData)
@@ -92,179 +117,141 @@ export default function AddFertilizerModal({ isOpen, onClose, onSave, initialDat
   }
 
   const doseOptions: Array<{ value: 'fija' | 'semanal'; label: string }> = [
-    { value: 'fija', label: 'Dosis fija' },
-    { value: 'semanal', label: 'Tabla por semanas' },
+    { value: 'fija', label: 'Siempre igual' },
+    { value: 'semanal', label: 'Cambia por semana' },
   ]
 
   return (
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={initialData ? 'Editar producto' : 'Agregar producto'}
-      size="md"
+      title={initialData ? 'Editar producto' : 'Nuevo producto'}
+      description="Su dosis por litro, para calcular cada riego."
       dismissOnBackdrop={false}
       footer={
-        <>
-          <button type="button" className="btn btn-ghost" onClick={onClose}>
-            Cancelar
-          </button>
-          <button type="submit" form="fertilizer-form" className="btn btn-primary" disabled={isSubmitting}>
-            {isSubmitting && <Loader2 size={16} className="animate-spin" aria-hidden="true" />}
-            {isSubmitting ? 'Guardando...' : 'Guardar producto'}
-          </button>
-        </>
+        <FormActions
+          form="fertilizer-form"
+          onCancel={onClose}
+          pending={isSubmitting}
+          submitLabel={initialData ? 'Guardar cambios' : 'Agregar producto'}
+        />
       }
     >
-      <form id="fertilizer-form" onSubmit={handleSubmit} className="space-y-5">
-        {error && (
-          <p className="field-error" role="alert">
-            <AlertCircle size={14} aria-hidden="true" />
-            {error}
-          </p>
-        )}
+      <form id="fertilizer-form" ref={formRef} onSubmit={handleSubmit} className="space-y-6" noValidate>
+        {error && <FormAlert>{error}</FormAlert>}
 
-        <div className="field">
-          <label htmlFor="fert-name" className="field-label">Nombre del producto</label>
-          <input
-            id="fert-name"
-            data-autofocus
-            type="text"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            className="field-input"
-            placeholder="Ej: Top Candy"
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <Field label="Nombre" error={errors.name}>
+            <Input
+              data-autofocus
+              type="text"
+              autoComplete="off"
+              value={name}
+              onChange={(e) => { setName(e.target.value); clear('name') }}
+              placeholder="Ej: Top Candy"
+            />
+          </Field>
+          <Field label="Marca" optional>
+            <Input
+              type="text"
+              autoComplete="off"
+              value={brand}
+              onChange={(e) => setBrand(e.target.value)}
+              placeholder="Ej: Top Crop"
+            />
+          </Field>
+        </div>
+
+        <ChoiceGroup
+          legend="Para qué etapa"
+          options={STAGE_CHOICES}
+          value={stage}
+          onChange={setStage}
+          size="sm"
+        />
+
+        <FormSection title="Dosis">
+          <ChoiceGroup
+            legend="Cómo se dosifica"
+            hideLegend
+            variant="segment"
+            options={doseOptions}
+            value={doseType}
+            onChange={(value) => { setDoseType(value); clear('dose') }}
           />
-        </div>
-
-        <div className="field">
-          <label htmlFor="fert-brand" className="field-label">Marca</label>
-          <input
-            id="fert-brand"
-            type="text"
-            value={brand}
-            onChange={(e) => setBrand(e.target.value)}
-            className="field-input"
-            placeholder="Ej: Top Crop"
-          />
-        </div>
-
-        <div className="field">
-          <label htmlFor="fert-stage" className="field-label">Etapa recomendada</label>
-          <select
-            id="fert-stage"
-            value={stage}
-            onChange={(e) => setStage(e.target.value as FertilizerStage)}
-            className="field-input"
-          >
-            <option value="todo">Todo el ciclo</option>
-            <option value="enraizamiento">Enraizamiento</option>
-            <option value="vegetativo">Vegetativo</option>
-            <option value="floracion">Floración</option>
-            <option value="lavado">Lavado de raíces</option>
-          </select>
-        </div>
-
-        <fieldset className="border-t border-line pt-5">
-          <legend className="field-label mb-3">Lógica de dosificación</legend>
-
-          <div className="mb-4 flex gap-2 rounded-[var(--radius-md)] border border-line bg-surface-2 p-1">
-            {doseOptions.map((option) => {
-              const checked = doseType === option.value
-              return (
-                <label
-                  key={option.value}
-                  className={`flex flex-1 cursor-pointer items-center justify-center rounded-[var(--radius-sm)] px-3 py-2 text-sm font-semibold transition-colors has-[:focus-visible]:outline has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-[color:var(--ring)] ${
-                    checked ? 'bg-brand text-[color:var(--brand-fg)]' : 'text-fg-muted hover:text-fg'
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name="dose_type"
-                    value={option.value}
-                    checked={checked}
-                    onChange={() => setDoseType(option.value)}
-                    className="sr-only"
-                  />
-                  {option.label}
-                </label>
-              )
-            })}
-          </div>
 
           {doseType === 'fija' ? (
-            <div className="field">
-              <label htmlFor="fert-dose-fixed" className="field-label">Cantidad (ml por litro)</label>
-              <input
-                id="fert-dose-fixed"
-                type="number"
+            <Field label="Por litro de agua" error={errors.dose}>
+              <Input
+                type="text"
                 inputMode="decimal"
-                step="0.1"
-                min="0"
+                suffix="ml/L"
+                className="metric text-lg"
                 value={doseFixed}
-                onChange={(e) => setDoseFixed(e.target.value)}
-                className="field-input"
-                placeholder="Ej: 2.0"
+                onChange={(e) => { setDoseFixed(e.target.value); clear('dose') }}
+                placeholder="2"
               />
-            </div>
+            </Field>
           ) : (
-            <div className="space-y-3">
-              <p className="field-hint">Dosis en ml por litro para cada semana de la etapa.</p>
-
-              {doseWeekly.map((item, index) => (
-                <div key={index} className="flex items-center gap-2">
-                  <label htmlFor={`fert-week-${index}`} className="w-24 shrink-0 text-sm text-fg-muted">
-                    Semana {item.week}
-                  </label>
-                  <input
-                    id={`fert-week-${index}`}
-                    type="number"
-                    inputMode="decimal"
-                    step="0.1"
-                    min="0"
-                    value={item.dose}
-                    onChange={(e) => handleWeeklyDoseChange(index, e.target.value)}
-                    className="field-input flex-1"
-                    placeholder="ml/L"
-                  />
-                  {doseWeekly.length > 1 && (
+            <FieldGroup legend="Por litro, en cada semana de la etapa">
+              <ol className="space-y-2">
+                {doseWeekly.map((item, index) => (
+                  <li key={index} className="flex items-center gap-2">
+                    <label htmlFor={`fert-week-${index}`} className="w-20 shrink-0 text-sm font-semibold text-fg-muted">
+                      Semana {item.week}
+                    </label>
+                    <div className="min-w-0 flex-1">
+                      <Input
+                        id={`fert-week-${index}`}
+                        type="text"
+                        inputMode="decimal"
+                        suffix="ml/L"
+                        value={item.text ?? String(item.dose).replace('.', ',')}
+                        onChange={(e) => handleWeeklyDoseChange(index, e.target.value)}
+                      />
+                    </div>
                     <button
                       type="button"
                       onClick={() => handleRemoveWeek(index)}
-                      className="btn-icon shrink-0 text-[color:var(--danger)]"
+                      disabled={doseWeekly.length <= 1}
+                      className="btn-icon shrink-0 hover:text-[color:var(--danger)]"
                       aria-label={`Quitar semana ${item.week}`}
                     >
-                      <Trash2 size={16} aria-hidden="true" />
+                      <Trash2 size={17} aria-hidden="true" />
                     </button>
-                  )}
-                </div>
-              ))}
-
+                  </li>
+                ))}
+              </ol>
               <button type="button" onClick={handleAddWeek} className="btn btn-secondary w-full">
                 <Plus size={16} aria-hidden="true" />
-                Agregar semana
+                Agregar semana {doseWeekly.length + 1}
               </button>
+            </FieldGroup>
+          )}
+        </FormSection>
+
+        <FormSection title="Stock">
+          <Switch
+            checked={trackStock}
+            onChange={setTrackStock}
+            icon={<Package size={17} />}
+            label="Llevar la cuenta de lo que queda"
+            description="Cada riego con la calculadora lo descuenta solo y avisa cuando queda poco."
+          />
+          {trackStock && (
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 animate-fade-in">
+              <Field label="Queda">
+                <Input type="text" inputMode="decimal" suffix="ml" value={stock} onChange={(e) => setStock(e.target.value)} placeholder="500" />
+              </Field>
+              <Field label="Envase">
+                <Input type="text" inputMode="decimal" suffix="ml" value={container} onChange={(e) => setContainer(e.target.value)} placeholder="1000" />
+              </Field>
+              <Field label="Avisar con" className="col-span-2 sm:col-span-1">
+                <Input type="text" inputMode="decimal" suffix="ml" value={lowStock} onChange={(e) => setLowStock(e.target.value)} placeholder="100" />
+              </Field>
             </div>
           )}
-        </fieldset>
-
-        <fieldset className="space-y-3">
-          <legend className="field-label">Stock <span className="font-normal text-fg-muted">(opcional)</span></legend>
-          <div className="grid grid-cols-3 gap-3">
-            <div className="field">
-              <label htmlFor="fert-stock" className="field-label">Queda (ml)</label>
-              <input id="fert-stock" type="text" inputMode="decimal" className="field-input" value={stock} onChange={(e) => setStock(e.target.value)} placeholder="500" />
-            </div>
-            <div className="field">
-              <label htmlFor="fert-container" className="field-label">Envase (ml)</label>
-              <input id="fert-container" type="text" inputMode="decimal" className="field-input" value={container} onChange={(e) => setContainer(e.target.value)} placeholder="1000" />
-            </div>
-            <div className="field">
-              <label htmlFor="fert-low" className="field-label">Avisar con</label>
-              <input id="fert-low" type="text" inputMode="decimal" className="field-input" value={lowStock} onChange={(e) => setLowStock(e.target.value)} placeholder="100" />
-            </div>
-          </div>
-          <p className="field-hint">Al registrar un riego con la calculadora se descuenta solo. Vacío: no se lleva la cuenta.</p>
-        </fieldset>
+        </FormSection>
       </form>
     </Modal>
   )

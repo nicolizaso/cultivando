@@ -8,7 +8,8 @@ import Link from "next/link";
 import imageCompression from 'browser-image-compression';
 import {
   ArrowRight, ArrowUpRight, Camera, CloudRain, Droplets, LayoutGrid, Leaf,
-  List as ListIcon, Loader2, Archive, Thermometer, Trash2, Gauge
+  List as ListIcon, Loader2, Archive, Thermometer, Trash2, Gauge,
+  CalendarDays,
 } from "lucide-react";
 
 import { Plant, CycleImage, Measurement } from "@/app/lib/types";
@@ -24,6 +25,7 @@ import BulkStageModal from "./BulkStageModal";
 import BulkArchiveModal from "./BulkArchiveModal";
 import BulkWaterModal from "./BulkWaterModal";
 import MeasurementModal from "./MeasurementModal";
+import { Field, FormActions, Input, Textarea } from "@/components/ui/form";
 import { useToast } from "@/app/context/ToastContext";
 import Modal from "@/components/ui/Modal";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
@@ -561,9 +563,7 @@ export default function CycleDetailView({ cycle, plants, lastMeasurement, histor
         title="Detalles de la foto"
         size="xl"
         footer={
-          <button type="submit" form="image-details-form" className="btn btn-primary">
-            Guardar cambios
-          </button>
+          <FormActions form="image-details-form" onCancel={() => setSelectedImage(null)} submitLabel="Guardar cambios" />
         }
       >
         {selectedImage && (
@@ -579,29 +579,22 @@ export default function CycleDetailView({ cycle, plants, lastMeasurement, histor
             </div>
 
             <form id="image-details-form" onSubmit={handleSaveImageDetails} className="space-y-5">
-              <div className="field">
-                <label htmlFor="image-date" className="field-label">Fecha</label>
-                <input
-                  id="image-date"
+              <Field label="Fecha de la foto">
+                <Input
                   type="date"
                   name="date"
-                  data-autofocus
+                  leading={<CalendarDays size={18} />}
                   defaultValue={dateKey(selectedImage.taken_at ?? selectedImage.created_at) ?? ''}
-                  className="field-input"
                 />
-              </div>
+              </Field>
 
-              <div className="field">
-                <label htmlFor="image-description" className="field-label">Notas</label>
-                <textarea
-                  id="image-description"
+              <Field label="Nota" optional>
+                <Textarea
                   name="description"
                   defaultValue={selectedImage.description || ''}
-                  placeholder="Escribí una nota sobre esta foto"
-                  rows={3}
-                  className="field-input resize-none"
+                  placeholder="Qué se ve, qué cambió desde la anterior"
                 />
-              </div>
+              </Field>
             </form>
           </div>
         )}
@@ -673,7 +666,7 @@ export default function CycleDetailView({ cycle, plants, lastMeasurement, histor
         onSuccess={handleBulkSuccess}
         defaultWeek={weekInStage(averageDays(plants.filter((p) => selectedPlants.includes(p.id)).map((p) => getPlantMetrics(p).daysInCurrentStage)))}
       />
-      <MeasurementModal isOpen={isMeasureModalOpen} onClose={() => setIsMeasureModalOpen(false)} cycleId={cycle.id} />
+      <MeasurementModal isOpen={isMeasureModalOpen} onClose={() => setIsMeasureModalOpen(false)} cycleId={cycle.id} vpdRange={vpdRange} stage={climate ? cycleStage : null} />
     </div>
   );
 }

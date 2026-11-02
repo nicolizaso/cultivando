@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { GitBranch, Loader2, Minus, Plus, Search } from 'lucide-react'
+import { GitBranch, Loader2, Plus, Search } from 'lucide-react'
 import { completeEsquejado, getEsquejadoCandidates } from '@/app/actions/tasks'
 import { describeCloneBatch, MAX_CLONES_PER_MOTHER } from '@/app/lib/clones'
 import type { CloneEntry } from '@/app/lib/clones'
@@ -11,7 +11,7 @@ import { useToast } from '@/app/context/ToastContext'
 import { formatInAppTz, todayForInput } from '@/app/lib/dates'
 import Modal from '@/components/ui/Modal'
 import ConfirmDialog from '@/components/ui/ConfirmDialog'
-import DatePicker from './DatePicker'
+import { ChoiceOrSelect, DateField, Field, FieldGroup, FormActions, Input, Select, Stepper } from '@/components/ui/form'
 
 interface Candidate {
   id: number
@@ -115,13 +115,6 @@ export default function EsquejarModal({ isOpen, onClose, task }: EsquejarModalPr
     )
   }, [candidates, query])
 
-  const bump = (plantId: number, delta: number) => {
-    setCounts((prev) => {
-      const next = Math.min(MAX_CLONES_PER_MOTHER, Math.max(0, (prev[plantId] ?? 0) + delta))
-      return { ...prev, [plantId]: next }
-    })
-  }
-
   const setCount = (plantId: number, value: string) => {
     const parsed = Math.floor(Number(value))
     const next = Number.isFinite(parsed)
@@ -180,24 +173,17 @@ export default function EsquejarModal({ isOpen, onClose, task }: EsquejarModalPr
   }
 
   const footer = alreadyRegistered ? (
-    <>
-      <button type="button" className="btn btn-ghost" onClick={onClose}>Cancelar</button>
-      <button type="button" className="btn btn-primary" onClick={save} disabled={isSubmitting}>
-        {isSubmitting && <Loader2 size={16} className="animate-spin" aria-hidden="true" />}
-        Marcar completada
-      </button>
-    </>
+    <FormActions onSubmit={save} onCancel={onClose} pending={isSubmitting} submitLabel="Marcar completada" />
   ) : (
-    <>
-      <span className="mr-auto text-sm text-fg-muted" role="status">
-        {describeCloneBatch(entries)}
-      </span>
-      <button type="button" className="btn btn-ghost" onClick={onClose}>Cancelar</button>
-      <button type="submit" form="esquejar-form" className="btn btn-primary" disabled={isSubmitting || isLoading}>
-        {isSubmitting && <Loader2 size={16} className="animate-spin" aria-hidden="true" />}
-        {total > 0 ? `Crear ${total} ${total === 1 ? 'esqueje' : 'esquejes'}` : 'Completar tarea'}
-      </button>
-    </>
+    <FormActions
+      form="esquejar-form"
+      onCancel={onClose}
+      icon={GitBranch}
+      pending={isSubmitting}
+      disabled={isLoading}
+      status={total > 0 ? describeCloneBatch(entries) : undefined}
+      submitLabel={total > 0 ? `Crear ${total} ${total === 1 ? 'esqueje' : 'esquejes'}` : 'Completar sin esquejes'}
+    />
   )
 
   return (
@@ -242,29 +228,20 @@ export default function EsquejarModal({ isOpen, onClose, task }: EsquejarModalPr
             La tarea no alcanza ninguna planta activa. Editala para apuntarla a un ciclo con plantas.
           </p>
         ) : (
-          <form id="esquejar-form" onSubmit={handleSubmit} className="space-y-5">
-            <div className="field">
-              <label htmlFor="esquejado-date" className="field-label">Fecha del corte</label>
-              <DatePicker id="esquejado-date" selectedDate={date} onChange={setDate} />
-              <p className="field-hint">Es el día 0 de los esquejes: nacen en Enraizamiento con esta fecha.</p>
-            </div>
-
-            <fieldset className="field">
-              <legend className="field-label mb-2">Plantas madre</legend>
-
+          <form id="esquejar-form" onSubmit={handleSubmit} className="space-y-6" noValidate>
+            <FieldGroup
+              legend="¿Cuántos sacaste de cada una?"
+              hint="Cada esqueje hereda genética, banco y madre de la planta de la que sale."
+            >
               {candidates.length > 6 && (
-                <div className="relative mb-3">
-                  <Search
-                    className="pointer-events-none absolute left-3 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-fg-muted"
-                    aria-hidden="true"
-                  />
-                  <input
+                <div className="mb-3">
+                  <Input
                     type="search"
+                    leading={<Search size={17} />}
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
                     placeholder="Buscar por nombre o genética"
                     aria-label="Buscar entre las plantas de la tarea"
-                    className="field-input pl-10"
                   />
                 </div>
               )}
@@ -275,10 +252,10 @@ export default function EsquejarModal({ isOpen, onClose, task }: EsquejarModalPr
                   return (
                     <li
                       key={plant.id}
-                      className={`flex items-center justify-between gap-3 rounded-[var(--radius-md)] border px-3 py-2 transition-colors ${
+                      className={`flex items-center justify-between gap-3 rounded-[var(--radius-md)] border py-2 pl-3 pr-2 transition-colors ${
                         count > 0
-                          ? 'border-[color:color-mix(in_srgb,var(--brand)_40%,transparent)] bg-brand-soft'
-                          : 'border-line bg-surface-2'
+                          ? 'border-[color:color-mix(in_srgb,var(--brand)_45%,transparent)] bg-brand-soft'
+                          : 'border-line bg-surface'
                       }`}
                     >
                       <div className="min-w-0">
@@ -288,35 +265,15 @@ export default function EsquejarModal({ isOpen, onClose, task }: EsquejarModalPr
                         </p>
                       </div>
 
-                      <div className="flex shrink-0 items-center gap-1.5">
-                        <button
-                          type="button"
-                          className="btn-icon-sm"
-                          onClick={() => bump(plant.id, -1)}
-                          disabled={count === 0}
-                          aria-label={`Un esqueje menos de ${plant.name}`}
-                        >
-                          <Minus size={16} aria-hidden="true" />
-                        </button>
-                        <input
-                          type="number"
-                          inputMode="numeric"
-                          min={0}
-                          max={MAX_CLONES_PER_MOTHER}
-                          value={count}
-                          onChange={(e) => setCount(plant.id, e.target.value)}
-                          aria-label={`Esquejes de ${plant.name}`}
-                          className="field-input mono w-16 px-2 text-center"
-                        />
-                        <button
-                          type="button"
-                          className="btn-icon-sm"
-                          onClick={() => bump(plant.id, 1)}
-                          aria-label={`Un esqueje más de ${plant.name}`}
-                        >
-                          <Plus size={16} aria-hidden="true" />
-                        </button>
-                      </div>
+                      <Stepper
+                        className="w-36 shrink-0 bg-surface"
+                        value={count}
+                        onChange={(n) => setCount(plant.id, String(n))}
+                        min={0}
+                        max={MAX_CLONES_PER_MOTHER}
+                        aria-label={`Esquejes de ${plant.name}`}
+                        unitName={`esqueje de ${plant.name}`}
+                      />
                     </li>
                   )
                 })}
@@ -325,60 +282,49 @@ export default function EsquejarModal({ isOpen, onClose, task }: EsquejarModalPr
               {visibleCandidates.length === 0 && (
                 <p className="py-4 text-center text-sm text-fg-muted">Ninguna planta coincide con la búsqueda.</p>
               )}
-            </fieldset>
+            </FieldGroup>
 
-            <div className="space-y-3 rounded-[var(--radius-lg)] border border-line bg-surface-2 p-4">
-              <div className="field">
-                <label htmlFor="esquejado-cycle" className="field-label">Ciclo destino</label>
-                <select
-                  id="esquejado-cycle"
-                  value={cycleChoice}
-                  onChange={(e) => setCycleChoice(e.target.value)}
-                  className="field-input"
-                >
-                  <option value="">Seleccionar ciclo...</option>
-                  {cycles.map((cycle) => (
-                    <option key={cycle.id} value={cycle.id}>{cycle.name}</option>
-                  ))}
-                  <option value={NEW_CYCLE}>+ Crear ciclo nuevo</option>
-                </select>
-                <p className="field-hint">Los esquejes se crean como plantas de este ciclo.</p>
+            <DateField
+              label="Día del corte"
+              value={date}
+              onChange={setDate}
+              hint="Es el día 0 de los esquejes, en Enraizamiento."
+            />
+
+            <ChoiceOrSelect
+              legend="¿A qué ciclo van?"
+              placeholder="Elegir ciclo…"
+              options={[
+                ...cycles.map((cycle) => ({ value: String(cycle.id), label: cycle.name })),
+                { value: NEW_CYCLE, label: 'Ciclo nuevo', icon: <Plus size={15} /> },
+              ]}
+              value={cycleChoice || null}
+              onChange={setCycleChoice}
+            />
+
+            {cycleChoice === NEW_CYCLE && (
+              <div className="form-reveal grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <Field label="Nombre del ciclo nuevo">
+                  <Input
+                    type="text"
+                    autoComplete="off"
+                    value={newCycleName}
+                    onChange={(e) => setNewCycleName(e.target.value)}
+                  />
+                </Field>
+                <Field label="En qué espacio">
+                  <Select
+                    value={newCycleSpaceId}
+                    onChange={(e) => setNewCycleSpaceId(e.target.value ? Number(e.target.value) : '')}
+                  >
+                    <option value="">Elegir espacio…</option>
+                    {spaces.map((space) => (
+                      <option key={space.id} value={space.id}>{space.name}</option>
+                    ))}
+                  </Select>
+                </Field>
               </div>
-
-              {cycleChoice === NEW_CYCLE && (
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  <div className="field">
-                    <label htmlFor="esquejado-new-cycle" className="field-label">Nombre del ciclo</label>
-                    <input
-                      id="esquejado-new-cycle"
-                      type="text"
-                      value={newCycleName}
-                      onChange={(e) => setNewCycleName(e.target.value)}
-                      className="field-input"
-                    />
-                  </div>
-                  <div className="field">
-                    <label htmlFor="esquejado-new-space" className="field-label">Espacio</label>
-                    <select
-                      id="esquejado-new-space"
-                      value={newCycleSpaceId}
-                      onChange={(e) => setNewCycleSpaceId(e.target.value ? Number(e.target.value) : '')}
-                      className="field-input"
-                    >
-                      <option value="">Seleccionar espacio...</option>
-                      {spaces.map((space) => (
-                        <option key={space.id} value={space.id}>{space.name}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <p className="flex items-center gap-2 text-xs text-fg-muted">
-              <GitBranch size={14} aria-hidden="true" />
-              Cada esqueje hereda genética, banco y madre de la planta de la que sale.
-            </p>
+            )}
           </form>
         )}
       </Modal>

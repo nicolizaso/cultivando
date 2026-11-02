@@ -1,15 +1,22 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Loader2, Repeat, Trash2, AlertTriangle } from 'lucide-react'
 import { updateTask, deleteTask, deleteTaskSeries } from '@/app/actions/tasks'
 import { Task } from '@/app/lib/types'
 import { useToast } from '@/app/context/ToastContext'
 import { dateKey, todayKey } from '@/app/lib/dates'
-import DatePicker from './DatePicker'
 import { useRouter } from 'next/navigation'
 import Modal from '@/components/ui/Modal'
 import ConfirmDialog from '@/components/ui/ConfirmDialog'
+import { getTaskType } from '@/app/lib/constants'
+import { STAGE_NAMES } from '@/app/lib/stage-logic'
+import {
+  APPLICATION_OPTIONS, ChoiceGroup, DateField, Field, FormActions, Input, Textarea, stageOptions, useFieldErrors,
+} from '@/components/ui/form'
+import type { ChoiceOption } from '@/components/ui/form'
+
+const STAGE_OPTIONS = stageOptions(STAGE_NAMES)
 
 interface EditTaskModalProps {
   isOpen: boolean
@@ -37,15 +44,14 @@ export default function EditTaskModal({ isOpen, onClose, task }: EditTaskModalPr
   const [isDeleting, setIsDeleting] = useState(false)
   const [showDeleteOptions, setShowDeleteOptions] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const formRef = useRef<HTMLFormElement>(null)
+  const { errors, validate, clear } = useFieldErrors<'title'>()
 
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    if (!title.trim()) {
-      showToast('El título es obligatorio', 'error')
-      return
-    }
+    if (!validate({ title: !title.trim() && 'La tarea necesita un título.' }, formRef.current)) return
 
     setIsSubmitting(true)
 
@@ -106,9 +112,9 @@ export default function EditTaskModal({ isOpen, onClose, task }: EditTaskModalPr
     }
   }
 
-  const scopeOptions: Array<{ value: 'single' | 'all_future'; label: string; hint?: string }> = [
-    { value: 'single', label: 'Solo esta tarea' },
-    { value: 'all_future', label: 'Esta y todas las futuras', hint: 'Mueve las fechas proporcionalmente' },
+  const scopeOptions: ChoiceOption<'single' | 'all_future'>[] = [
+    { value: 'single', label: 'Sólo esta', description: 'Las demás quedan como están' },
+    { value: 'all_future', label: 'Esta y las que siguen', description: 'Corre las fechas en la misma medida' },
   ]
 
   if (showDeleteOptions) {
@@ -166,6 +172,8 @@ export default function EditTaskModal({ isOpen, onClose, task }: EditTaskModalPr
     )
   }
 
+  const typeDef = getTaskType(task.type)
+
   return (
     <>
       <Modal
@@ -174,148 +182,88 @@ export default function EditTaskModal({ isOpen, onClose, task }: EditTaskModalPr
         title="Editar tarea"
         dismissOnBackdrop={false}
         footer={
-          <>
-            <button
-              type="button"
-              onClick={handleDeleteClick}
-              disabled={isSubmitting || isDeleting}
-              className="btn btn-danger mr-auto"
-            >
-              {isDeleting ? (
-                <Loader2 size={16} className="animate-spin" aria-hidden="true" />
-              ) : (
-                <Trash2 size={16} aria-hidden="true" />
-              )}
-              Eliminar
-            </button>
-            <button type="button" className="btn btn-ghost" onClick={onClose}>
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              form="edit-task-form"
-              disabled={isSubmitting || isDeleting}
-              className="btn btn-primary"
-            >
-              {isSubmitting && <Loader2 size={16} className="animate-spin" aria-hidden="true" />}
-              {isSubmitting ? 'Guardando...' : 'Guardar cambios'}
-            </button>
-          </>
+          <FormActions
+            form="edit-task-form"
+            onCancel={onClose}
+            pending={isSubmitting}
+            disabled={isDeleting}
+            submitLabel="Guardar cambios"
+            extra={
+              <button
+                type="button"
+                onClick={handleDeleteClick}
+                disabled={isSubmitting || isDeleting}
+                className="btn btn-danger"
+                aria-label="Eliminar tarea"
+              >
+                {isDeleting ? (
+                  <Loader2 size={16} className="animate-spin" aria-hidden="true" />
+                ) : (
+                  <Trash2 size={16} aria-hidden="true" />
+                )}
+                <span className="hidden sm:inline">Eliminar</span>
+              </button>
+            }
+          />
         }
       >
-        <form id="edit-task-form" onSubmit={handleSubmit} className="space-y-5">
-          <div className="field">
-            <label htmlFor="edit-task-title" className="field-label">Título</label>
-            <input
-              id="edit-task-title"
+        <form id="edit-task-form" ref={formRef} onSubmit={handleSubmit} className="space-y-6" noValidate>
+          <Field label="Título" error={errors.title}>
+            <Input
               data-autofocus
               type="text"
+              autoComplete="off"
+              leading={<span className={typeDef.color}><typeDef.icon size={18} /></span>}
               value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              className="field-input"
+              onChange={(e) => { setTitle(e.target.value); clear('title') }}
               placeholder="Nombre de la tarea"
             />
-          </div>
+          </Field>
 
-          <div className="field">
-            <label htmlFor="edit-task-date" className="field-label">Fecha</label>
-            <DatePicker id="edit-task-date" selectedDate={date} onChange={setDate} />
-          </div>
+          <DateField label="Día" value={date} onChange={setDate} quick="future" />
 
           {task.type === 'fertilizante' && (
-            <div className="field">
-              <label htmlFor="edit-task-application" className="field-label">Tipo de aplicación</label>
-              <select
-                id="edit-task-application"
-                value={applicationType}
-                onChange={(e) => setApplicationType(e.target.value)}
-                className="field-input"
-              >
-                <option value="Riego">Riego</option>
-                <option value="Foliar">Foliar</option>
-                <option value="Directo al Sustrato">Directo al sustrato</option>
-              </select>
-            </div>
+            <ChoiceGroup
+              legend="Cómo se aplica"
+              options={APPLICATION_OPTIONS}
+              value={applicationType}
+              onChange={setApplicationType}
+              size="sm"
+            />
           )}
 
           {task.type === 'cambio_etapa' && (
-            <div className="field">
-              <label htmlFor="edit-task-stage" className="field-label">Etapa destino</label>
-              <select
-                id="edit-task-stage"
-                value={targetStage}
-                onChange={(e) => setTargetStage(e.target.value)}
-                className="field-input"
-              >
-                <option value="Germinación">Germinación</option>
-                <option value="Plántula">Plántula</option>
-                <option value="Vegetativo">Vegetativo</option>
-                <option value="Enraizamiento">Enraizamiento</option>
-                <option value="Floración">Floración</option>
-                <option value="Secado">Secado</option>
-                <option value="Curado">Curado</option>
-              </select>
-            </div>
+            <ChoiceGroup
+              legend="Pasa a"
+              options={STAGE_OPTIONS}
+              value={targetStage}
+              onChange={setTargetStage}
+              size="sm"
+            />
           )}
 
-          <div className="field">
-            <label htmlFor="edit-task-description" className="field-label">Detalles</label>
-            <textarea
-              id="edit-task-description"
+          <Field label="Detalles" optional>
+            <Textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              rows={3}
-              className="field-input resize-none"
               placeholder="Notas adicionales"
             />
-          </div>
+          </Field>
 
           {task.recurrence_id && (
-            <fieldset className="rounded-[var(--radius-lg)] border border-line bg-brand-soft p-4">
-              <legend className="flex items-center gap-2 px-1 text-sm font-semibold text-[color:var(--brand-text)]">
-                <Repeat size={16} aria-hidden="true" />
-                Serie recurrente
-              </legend>
-
-              <p className="mb-3 text-xs text-fg-muted">Elegí cómo aplicar los cambios.</p>
-
-              <div className="space-y-2">
-                {scopeOptions.map((option) => {
-                  const checked = scope === option.value
-                  return (
-                    <label
-                      key={option.value}
-                      className={`flex cursor-pointer items-center gap-3 rounded-[var(--radius-md)] border p-3 transition-colors has-[:focus-visible]:outline has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-[color:var(--ring)] ${
-                        checked
-                          ? 'border-[color:var(--brand)] bg-surface'
-                          : 'border-line bg-surface-2 hover:border-line-strong'
-                      }`}
-                    >
-                      <input
-                        type="radio"
-                        name="scope"
-                        value={option.value}
-                        checked={checked}
-                        onChange={() => setScope(option.value)}
-                        className="sr-only"
-                      />
-                      <span
-                        className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border ${
-                          checked ? 'border-[color:var(--brand)]' : 'border-line-strong'
-                        }`}
-                        aria-hidden="true"
-                      >
-                        {checked && <span className="h-2 w-2 rounded-full bg-brand" />}
-                      </span>
-                      <span className="flex flex-col">
-                        <span className={`text-sm ${checked ? 'font-semibold text-fg' : 'text-fg'}`}>{option.label}</span>
-                        {option.hint && <span className="text-xs text-fg-muted">{option.hint}</span>}
-                      </span>
-                    </label>
-                  )
-                })}
-              </div>
-            </fieldset>
+            <ChoiceGroup
+              legend={
+                <span className="inline-flex items-center gap-1.5">
+                  <Repeat size={15} className="text-[color:var(--brand-text)]" aria-hidden="true" />
+                  Es parte de una serie: ¿a cuáles se aplica?
+                </span>
+              }
+              variant="tile"
+              layout="grid grid-cols-1 gap-2 sm:grid-cols-2"
+              options={scopeOptions}
+              value={scope}
+              onChange={setScope}
+            />
           )}
         </form>
       </Modal>

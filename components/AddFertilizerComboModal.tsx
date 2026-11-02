@@ -1,9 +1,9 @@
 'use client'
 
-import { useState } from 'react'
-import { AlertCircle, Check, Loader2 } from 'lucide-react'
+import { useRef, useState } from 'react'
 import { Fertilizer, FertilizerCombo } from '@/app/lib/types'
 import Modal from '@/components/ui/Modal'
+import { Field, FormActions, FormAlert, Input, MultiChoice, useFieldErrors } from '@/components/ui/form'
 
 interface AddFertilizerComboModalProps {
   isOpen: boolean
@@ -20,6 +20,8 @@ export default function AddFertilizerComboModal({ isOpen, onClose, onSave, avail
   const [selectedProducts, setSelectedProducts] = useState<{ fertilizer_id: number; name: string }[]>(initialData?.products ?? [])
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const formRef = useRef<HTMLFormElement>(null)
+  const { errors, validate, clear } = useFieldErrors<'name' | 'products'>()
 
   const handleToggleProduct = (product: Fertilizer) => {
     const isSelected = selectedProducts.some(p => p.fertilizer_id === product.id)
@@ -32,14 +34,11 @@ export default function AddFertilizerComboModal({ isOpen, onClose, onSave, avail
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!name) {
-      setError('Completá el nombre del combo.')
-      return
-    }
-    if (selectedProducts.length === 0) {
-      setError('Elegí al menos un producto.')
-      return
-    }
+    const ok = validate({
+      name: !name.trim() && 'Ponele un nombre al combo.',
+      products: selectedProducts.length === 0 && 'Elegí al menos un producto.',
+    }, formRef.current)
+    if (!ok) return
 
     setIsSubmitting(true)
     setError(null)
@@ -63,103 +62,55 @@ export default function AddFertilizerComboModal({ isOpen, onClose, onSave, avail
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={initialData ? 'Editar combo' : 'Armar combo'}
-      description="Un combo agrupa los productos que aplicás juntos."
-      size="md"
+      title={initialData ? 'Editar combo' : 'Nuevo combo'}
+      description="Los productos que aplicás juntos en el mismo riego."
       dismissOnBackdrop={false}
       footer={
-        <>
-          <button type="button" className="btn btn-ghost" onClick={onClose}>
-            Cancelar
-          </button>
-          <button
-            type="submit"
-            form="combo-form"
-            className="btn btn-primary"
-            disabled={isSubmitting || selectedProducts.length === 0}
-          >
-            {isSubmitting && <Loader2 size={16} className="animate-spin" aria-hidden="true" />}
-            {isSubmitting ? 'Guardando...' : 'Guardar combo'}
-          </button>
-        </>
+        <FormActions
+          form="combo-form"
+          onCancel={onClose}
+          pending={isSubmitting}
+          submitLabel={initialData ? 'Guardar cambios' : 'Crear combo'}
+          status={selectedProducts.length > 0 ? `${selectedProducts.length} ${selectedProducts.length === 1 ? 'producto' : 'productos'}` : undefined}
+        />
       }
     >
-      <form id="combo-form" onSubmit={handleSubmit} className="space-y-5">
-        {error && (
-          <p className="field-error" role="alert">
-            <AlertCircle size={14} aria-hidden="true" />
-            {error}
-          </p>
-        )}
+      <form id="combo-form" ref={formRef} onSubmit={handleSubmit} className="space-y-6" noValidate>
+        {error && <FormAlert>{error}</FormAlert>}
 
-        <div className="field">
-          <label htmlFor="combo-name" className="field-label">Nombre del combo</label>
-          <input
-            id="combo-name"
+        <Field label="Nombre" error={errors.name}>
+          <Input
             data-autofocus
             type="text"
+            autoComplete="off"
             value={name}
-            onChange={(e) => setName(e.target.value)}
-            className="field-input"
-            placeholder="Ej: Pack floración Top Crop"
+            onChange={(e) => { setName(e.target.value); clear('name') }}
+            placeholder="Ej: Floración Top Crop"
           />
-        </div>
+        </Field>
 
-        <fieldset className="border-t border-line pt-5">
-          <legend className="field-label mb-3">Productos incluidos</legend>
-
-          {availableProducts.length === 0 ? (
-            <p className="text-sm text-fg-muted">
-              Todavía no hay productos cargados. Agregá productos antes de armar un combo.
-            </p>
-          ) : (
-            <ul className="custom-scrollbar max-h-64 space-y-2 overflow-y-auto pr-1">
-              {availableProducts.map(product => {
-                const isSelected = selectedProducts.some(p => p.fertilizer_id === product.id)
-                return (
-                  <li key={product.id}>
-                    {/* Checkbox real: operable con teclado y anunciado como casilla */}
-                    <label
-                      className={`flex cursor-pointer items-center justify-between gap-3 rounded-[var(--radius-md)] border p-3 transition-colors has-[:focus-visible]:outline has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-[color:var(--ring)] ${
-                        isSelected
-                          ? 'border-[color:var(--brand)] bg-brand-soft'
-                          : 'border-line bg-surface-2 hover:border-line-strong'
-                      }`}
-                    >
-                      <span className="min-w-0">
-                        <span
-                          className={`block truncate text-sm font-semibold ${
-                            isSelected ? 'text-[color:var(--brand-text)]' : 'text-fg'
-                          }`}
-                        >
-                          {product.name}
-                        </span>
-                        <span className="block truncate text-xs text-fg-muted">{product.brand}</span>
-                      </span>
-
-                      <input
-                        type="checkbox"
-                        checked={isSelected}
-                        onChange={() => handleToggleProduct(product)}
-                        className="sr-only"
-                      />
-                      <span
-                        className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border ${
-                          isSelected
-                            ? 'border-[color:var(--brand)] bg-brand text-[color:var(--brand-fg)]'
-                            : 'border-line-strong'
-                        }`}
-                        aria-hidden="true"
-                      >
-                        {isSelected && <Check size={12} strokeWidth={3} />}
-                      </span>
-                    </label>
-                  </li>
-                )
-              })}
-            </ul>
-          )}
-        </fieldset>
+        {availableProducts.length === 0 ? (
+          <FormAlert tone="info">
+            Todavía no hay productos cargados. Agregá productos antes de armar un combo.
+          </FormAlert>
+        ) : (
+          <MultiChoice
+            legend="Qué lleva"
+            variant="tile"
+            layout="grid grid-cols-1 gap-2 sm:grid-cols-2"
+            options={availableProducts.map(product => ({
+              value: product.id,
+              label: product.name,
+              description: product.brand || undefined,
+            }))}
+            values={selectedProducts.map(p => p.fertilizer_id)}
+            onToggle={(id) => {
+              const product = availableProducts.find(p => p.id === id)
+              if (product) { handleToggleProduct(product); clear('products') }
+            }}
+            error={errors.products}
+          />
+        )}
       </form>
     </Modal>
   )

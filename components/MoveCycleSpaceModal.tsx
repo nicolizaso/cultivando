@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { AlertCircle, ArrowRightLeft, Loader2, Plus, Warehouse } from "lucide-react";
+import { ArrowRightLeft, Plus, Warehouse } from "lucide-react";
 
 import { Space } from "@/app/lib/types";
 import { moveCycleToSpace } from "@/app/cycles/actions";
@@ -10,6 +10,8 @@ import { useToast } from "@/app/context/ToastContext";
 import CreateSpaceInlineModal from "./CreateSpaceInlineModal";
 import EmptyState from "./EmptyState";
 import Modal from "@/components/ui/Modal";
+import { ChoiceOrSelect, FormActions } from "@/components/ui/form";
+import SpaceTypeIcon from "./SpaceTypeIcon";
 
 interface MoveCycleSpaceModalProps {
   cycleId: number;
@@ -120,65 +122,54 @@ export default function MoveCycleSpaceModal({
       <Modal
         isOpen={isOpen}
         onClose={close}
-        title={cycleName ? `Mudar "${cycleName}" de espacio` : 'Cambiar el ciclo de espacio'}
-        description="El ciclo y sus plantas pasan a la nueva carpa o lugar de cultivo."
-        size="sm"
+        title={cycleName ? `Mudar “${cycleName}”` : 'Mudar el ciclo'}
+        description="El ciclo y sus plantas pasan a otro espacio."
         dismissOnBackdrop={!loading}
         footer={
           targets.length > 0 ? (
-            <>
-              <button type="button" className="btn btn-ghost" onClick={close} disabled={loading}>
-                Cancelar
-              </button>
-              <button type="submit" form="move-cycle-form" className="btn btn-primary" disabled={loading}>
-                {loading && <Loader2 size={16} className="animate-spin" aria-hidden="true" />}
-                {loading ? "Mudando..." : "Mudar ciclo"}
-              </button>
-            </>
+            <FormActions
+              form="move-cycle-form"
+              onCancel={close}
+              icon={ArrowRightLeft}
+              pending={loading}
+              pendingLabel="Mudando…"
+              submitLabel="Mudar ciclo"
+            />
           ) : (
-            <button type="button" className="btn btn-ghost" onClick={close}>
+            <button type="button" className="btn btn-secondary w-full sm:ml-auto sm:w-auto" onClick={close}>
               Cerrar
             </button>
           )
         }
       >
         {targets.length > 0 ? (
-          <form id="move-cycle-form" onSubmit={handleSubmit} className="space-y-5">
-            {error && (
-              <p className="field-error" role="alert">
-                <AlertCircle size={14} aria-hidden="true" />
-                {error}
-              </p>
-            )}
-
-            <div className="field">
-              <label htmlFor="move-cycle-space" className="field-label">Nuevo espacio</label>
-              <select
-                id="move-cycle-space"
-                data-autofocus
-                required
-                aria-invalid={error ? true : undefined}
-                className="field-input"
-                value={spaceId}
-                onChange={(e) => {
-                  setSpaceId(e.target.value);
-                  setError(null);
-                }}
-              >
-                <option value="">Seleccionar espacio...</option>
-                {targets.map(space => (
-                  <option key={space.id} value={space.id}>
-                    {space.name} ({space.type})
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <p className="text-sm leading-relaxed text-fg-muted">
-              {plantCount > 0
-                ? `Se mudan también las ${plantCount} plantas del ciclo. Las mediciones y fotos ya registradas quedan como están.`
-                : 'Las mediciones y fotos ya registradas quedan como están.'}
-            </p>
+          <form id="move-cycle-form" onSubmit={handleSubmit} className="space-y-5" noValidate>
+            <ChoiceOrSelect
+              legend="Nuevo espacio"
+              placeholder="Elegir espacio…"
+              options={targets.map(space => ({
+                value: String(space.id),
+                label: space.name,
+                icon: <SpaceTypeIcon type={space.type} />,
+              }))}
+              value={spaceId || null}
+              onChange={(value) => { setSpaceId(value); setError(null); }}
+              error={error}
+              hint={
+                plantCount > 0
+                  ? `Se mudan también sus ${plantCount} plantas. Las mediciones y fotos quedan como están.`
+                  : 'Las mediciones y fotos ya registradas quedan como están.'
+              }
+              aside={
+                <button
+                  type="button"
+                  className="text-[0.8125rem] font-semibold text-[color:var(--brand-text)] hover:underline"
+                  onClick={() => setShowInlineSpaceModal(true)}
+                >
+                  + Nuevo espacio
+                </button>
+              }
+            />
           </form>
         ) : (
           <EmptyState
@@ -193,7 +184,7 @@ export default function MoveCycleSpaceModal({
                 className="btn btn-secondary"
               >
                 <Plus size={16} aria-hidden="true" />
-                Crear espacio rápido
+                Crear espacio
               </button>
             }
           />

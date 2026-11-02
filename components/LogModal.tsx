@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/app/context/ToastContext";
 import imageCompression from 'browser-image-compression';
-import { Camera, Check, ImagePlus, Loader2 } from "lucide-react";
+import { Camera, RefreshCw, X } from "lucide-react";
 import Modal from "@/components/ui/Modal";
 import { addPlantLog } from "@/app/actions/logs";
+import { Field, FormActions, Textarea } from "@/components/ui/form";
 
 interface Props {
   plantId: number;
@@ -23,10 +24,21 @@ export default function LogModal({ plantId, plantName }: Props) {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // La vista previa es una URL local del archivo; se libera al cambiarlo.
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  useEffect(() => () => { if (previewUrl) URL.revokeObjectURL(previewUrl); }, [previewUrl]);
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      setFile(e.target.files[0]);
-    }
+    const picked = e.target.files?.[0];
+    if (!picked) return;
+    setFile(picked);
+    setPreviewUrl(URL.createObjectURL(picked));
+  };
+
+  const clearFile = () => {
+    setFile(null);
+    setPreviewUrl(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -66,7 +78,7 @@ export default function LogModal({ plantId, plantName }: Props) {
 
       setIsOpen(false);
       setNote("");
-      setFile(null);
+      clearFile();
       showToast(result?.photo ? 'Foto agregada a la bitácora' : 'Nota agregada a la bitácora', 'success');
       router.refresh();
     } catch (error) {
@@ -92,68 +104,69 @@ export default function LogModal({ plantId, plantName }: Props) {
         isOpen={isOpen}
         onClose={() => setIsOpen(false)}
         title="Bitácora"
-        description={`Nuevo registro para ${plantName}.`}
-        size="sm"
+        description={`Una foto, una nota o las dos, para ${plantName}.`}
         footer={
-          <>
-            <button type="button" className="btn btn-ghost" onClick={() => setIsOpen(false)}>
-              Cancelar
-            </button>
-            <button type="submit" form="log-form" className="btn btn-primary" disabled={loading}>
-              {loading && <Loader2 size={16} className="animate-spin" aria-hidden="true" />}
-              {loading ? "Subiendo..." : "Guardar"}
-            </button>
-          </>
+          <FormActions
+            form="log-form"
+            onCancel={() => setIsOpen(false)}
+            pending={loading}
+            pendingLabel={file ? "Subiendo…" : "Guardando…"}
+            submitLabel={file && note.trim() ? "Guardar foto y nota" : file ? "Guardar foto" : "Guardar nota"}
+            disabled={!file && !note.trim()}
+          />
         }
       >
-        <form id="log-form" onSubmit={handleSubmit} className="space-y-5">
-          <div className="field">
-            <span className="field-label">Foto</span>
-            {/* El input real conserva el foco y el teclado; el bloque es sólo la piel visual. */}
+        <form id="log-form" onSubmit={handleSubmit} className="space-y-6">
+          <input
+            id="log-file"
+            type="file"
+            ref={fileInputRef}
+            onChange={handleFileChange}
+            accept="image/*"
+            className="peer sr-only"
+            aria-label="Elegir foto"
+          />
+
+          {file && previewUrl ? (
+            <figure className="relative overflow-hidden rounded-[var(--radius-lg)] border border-line bg-surface-2 peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-[color:var(--ring)]">
+              {/* Vista previa local: todavía no se subió nada */}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={previewUrl} alt="Vista previa de la foto elegida" className="max-h-72 w-full object-cover" />
+              <figcaption className="flex items-center justify-between gap-2 px-3 py-2 text-xs text-fg-muted">
+                <span className="truncate">{file.name}</span>
+                <span className="flex shrink-0 gap-1">
+                  <label htmlFor="log-file" className="btn btn-sm btn-ghost cursor-pointer">
+                    <RefreshCw size={14} aria-hidden="true" />
+                    Cambiar
+                  </label>
+                  <button type="button" className="btn btn-sm btn-ghost" onClick={clearFile}>
+                    <X size={14} aria-hidden="true" />
+                    Quitar
+                  </button>
+                </span>
+              </figcaption>
+            </figure>
+          ) : (
+            /* El input real conserva el foco y el teclado; el bloque es sólo la piel visual. */
             <label
               htmlFor="log-file"
-              className={`flex cursor-pointer flex-col items-center justify-center gap-2 rounded-[var(--radius-lg)] border-2 border-dashed p-6 text-center transition-colors ${
-                file
-                  ? "border-[color:var(--brand)] bg-brand-soft"
-                  : "border-line-strong hover:border-[color:var(--brand)] hover:bg-surface-2"
-              }`}
+              className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-[var(--radius-lg)] border-2 border-dashed border-line-strong px-6 py-8 text-center transition-colors hover:border-[color:var(--brand)] hover:bg-brand-soft peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-[color:var(--ring)]"
             >
-              <input
-                id="log-file"
-                type="file"
-                ref={fileInputRef}
-                onChange={handleFileChange}
-                accept="image/*"
-                className="sr-only"
-              />
-
-              {file ? (
-                <>
-                  <Check className="h-6 w-6 text-[color:var(--brand-text)]" aria-hidden="true" />
-                  <span className="break-all text-xs font-semibold text-[color:var(--brand-text)]">{file.name}</span>
-                  <span className="text-xs text-fg-muted">Tocá para cambiarla</span>
-                </>
-              ) : (
-                <>
-                  <ImagePlus className="h-6 w-6 text-fg-muted" aria-hidden="true" />
-                  <span className="text-sm font-semibold text-fg">Subir foto</span>
-                  <span className="text-xs text-fg-muted">Se comprime antes de subirla</span>
-                </>
-              )}
+              <span className="flex h-12 w-12 items-center justify-center rounded-full bg-brand-soft text-[color:var(--brand-text)]" aria-hidden="true">
+                <Camera size={22} />
+              </span>
+              <span className="text-sm font-semibold text-fg">Sacar o elegir una foto</span>
+              <span className="text-xs text-fg-muted">Se achica antes de subirla</span>
             </label>
-          </div>
+          )}
 
-          <div className="field">
-            <label htmlFor="log-note" className="field-label">Nota (opcional)</label>
-            <textarea
-              id="log-note"
-              rows={3}
-              className="field-input resize-none"
-              placeholder="¿Cómo la ves hoy? Hojas amarillas, creció mucho..."
+          <Field label="Nota" optional>
+            <Textarea
+              placeholder="¿Cómo la ves hoy? Hojas amarillas, creció mucho…"
               value={note}
               onChange={(e) => setNote(e.target.value)}
             />
-          </div>
+          </Field>
         </form>
       </Modal>
     </>

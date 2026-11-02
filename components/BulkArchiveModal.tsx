@@ -1,12 +1,16 @@
 "use client";
 
 import { useState } from "react";
-import { Archive, ArchiveRestore, Loader2 } from "lucide-react";
+import { Archive, ArchiveRestore } from "lucide-react";
 
 import { bulkSetArchived } from "@/app/actions/plants";
 import { plantCountLabel, todayForInput } from "@/app/lib/utils";
 import Modal from "@/components/ui/Modal";
 import { useToast } from "@/app/context/ToastContext";
+import { DateField, Field, FormActions, Textarea } from "@/components/ui/form";
+
+/** Los motivos de siempre, a un toque. */
+const REASONS = ["Cosecha terminada", "Macho", "Murió", "Regalada"];
 
 interface BulkArchiveModalProps {
   isOpen: boolean;
@@ -57,54 +61,46 @@ export default function BulkArchiveModal({
       title={isArchiving ? "Archivar plantas" : "Restaurar plantas"}
       description={
         isArchiving
-          ? `Se archivará ${plantCountLabel(selectedIds.length)}. Podés consultarlas después en el historial.`
-          : `${plantCountLabel(selectedIds.length)} vuelven al listado de activas, con su historial intacto.`
+          ? `${plantCountLabel(selectedIds.length)} salen del listado. Siguen en el historial.`
+          : `${plantCountLabel(selectedIds.length)} vuelven al listado, con su historial intacto.`
       }
-      size="sm"
       footer={
-        <>
-          <button type="button" className="btn btn-ghost" onClick={onClose}>
-            Cancelar
-          </button>
-          <button type="submit" form="bulk-archive-form" className="btn btn-primary" disabled={loading}>
-            {loading ? (
-              <Loader2 size={16} className="animate-spin" aria-hidden="true" />
-            ) : isArchiving ? (
-              <Archive size={16} aria-hidden="true" />
-            ) : (
-              <ArchiveRestore size={16} aria-hidden="true" />
-            )}
-            {loading ? "Procesando..." : isArchiving ? "Archivar" : "Restaurar"}
-          </button>
-        </>
+        <FormActions
+          form="bulk-archive-form"
+          onCancel={onClose}
+          icon={isArchiving ? Archive : ArchiveRestore}
+          pending={loading}
+          pendingLabel={isArchiving ? "Archivando…" : "Restaurando…"}
+          submitLabel={isArchiving ? "Archivar" : "Restaurar"}
+        />
       }
     >
-      <form id="bulk-archive-form" onSubmit={handleSubmit} className="space-y-5">
-        <div className="field">
-          <label htmlFor="bulk-archive-notes" className="field-label">Motivo o notas</label>
-          <textarea
-            id="bulk-archive-notes"
-            data-autofocus
-            rows={3}
-            className="field-input resize-none"
+      <form id="bulk-archive-form" onSubmit={handleSubmit} className="space-y-6">
+        {isArchiving && (
+          <div className="flex flex-wrap gap-1.5" role="group" aria-label="Motivos frecuentes">
+            {REASONS.map((reason) => (
+              <button
+                key={reason}
+                type="button"
+                className="choice choice-sm"
+                aria-pressed={notes === reason}
+                onClick={() => setNotes(notes === reason ? "" : reason)}
+              >
+                {reason}
+              </button>
+            ))}
+          </div>
+        )}
+
+        <Field label={isArchiving ? "Motivo" : "Nota"} optional hint="Queda anotado en la bitácora de cada planta.">
+          <Textarea
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
-            placeholder={isArchiving ? "Ej: plantas macho, cosecha terminada" : "Ej: se archivaron por error"}
+            placeholder={isArchiving ? "Ej: cosecha terminada" : "Ej: se archivaron por error"}
           />
-          <p className="field-hint">Opcional. Queda en la bitácora de cada planta.</p>
-        </div>
+        </Field>
 
-        <div className="field">
-          <label htmlFor="bulk-archive-date" className="field-label">Fecha</label>
-          <input
-            id="bulk-archive-date"
-            type="date"
-            required
-            className="field-input"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-          />
-        </div>
+        <DateField label="Fecha" value={date} onChange={setDate} />
       </form>
     </Modal>
   );

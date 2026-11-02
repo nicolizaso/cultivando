@@ -64,6 +64,16 @@ compacto tiene que cambiar de alto, cambia en un sitio.
 JetBrains Mono sólo para números (días, °C, %, VPD), con cifras tabulares para
 que no bailen al actualizarse.
 
+**Formularios.** Todos salen del mismo kit (`components/ui/form`): etiqueta
+arriba, "opcional" escrito en palabras, la unidad dentro del campo (°C, ml, L) y
+el error debajo del campo que lo causó, no en un aviso flotante. Las opciones
+pocas se muestran todas a la vista (chips o tarjetas con el color de su etapa o
+tipo de tarea) y el desplegable queda para listas largas. Las fechas traen
+atajos ("Hoy", "Ayer") y dicen en palabras qué día quedó elegido; los números
+enteros se ajustan con − y +. En el teléfono los formularios suben como hoja
+desde abajo, no abren el teclado solos y el botón principal ocupa el ancho, al
+alcance del pulgar.
+
 ### Accesibilidad
 
 - Cada pareja de color está verificada a **WCAG AA**, incluido el caso real de

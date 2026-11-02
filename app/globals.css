@@ -522,23 +522,42 @@
   }
 
   /* --------------------------------------------------------- Formularios */
+  /* Reglas del kit (components/ui/form):
+       · La etiqueta va arriba, en el color del texto: es lo primero que se
+         lee, no una nota al margen en gris.
+       · Lo opcional se marca con palabras ("opcional"); lo obligatorio no
+         lleva marca, porque es la mayoría.
+       · La unidad vive dentro del campo (°C, ml, L), no en la etiqueta.
+       · Pocas opciones se muestran todas a la vista (chips o tarjetas); el
+         desplegable queda para listas largas.
+       · El error se dice debajo del campo, no en un aviso flotante. */
   .field {
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
+    min-width: 0;
   }
 
   .field-label {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    line-height: 1.3;
+    color: var(--fg);
+  }
+
+  .field-optional {
     font-size: 0.75rem;
-    font-weight: 700;
-    letter-spacing: 0.03em;
-    color: var(--fg-muted);
+    font-weight: 500;
+    color: var(--fg-subtle);
   }
 
   .field-input {
     width: 100%;
-    min-height: 2.75rem;
-    padding: 0.625rem 0.875rem;
+    min-height: 3rem;
+    padding: 0.6875rem 0.875rem;
     border-radius: var(--radius-md);
     border: 1px solid var(--border-strong);
     background-color: var(--surface-2);
@@ -546,6 +565,7 @@
     font-family: var(--font-body);
     /* 16px reales: por debajo de eso iOS hace zoom al enfocar el campo. */
     font-size: 1rem;
+    line-height: 1.4;
     transition:
       border-color var(--dur-fast) var(--ease-out),
       box-shadow var(--dur-fast) var(--ease-out),
@@ -557,6 +577,7 @@
      tamaño. */
   @media (pointer: fine) {
     .field-input {
+      min-height: 2.75rem;
       font-size: 0.9375rem;
     }
   }
@@ -566,7 +587,7 @@
     opacity: 1;
   }
 
-  .field-input:hover:not(:disabled) {
+  .field-input:hover:not(:disabled):not(:focus) {
     border-color: var(--fg-subtle);
   }
 
@@ -584,34 +605,86 @@
 
   .field-input[aria-invalid="true"] {
     border-color: var(--danger);
+    background-color: color-mix(in srgb, var(--danger-soft) 40%, var(--surface));
   }
 
   .field-input[aria-invalid="true"]:focus {
     box-shadow: 0 0 0 3px var(--danger-soft);
   }
 
+  /* Números y medidas en cifras tabulares, como en el resto de la app */
+  .field-input[inputmode="decimal"],
+  .field-input[inputmode="numeric"],
+  .field-input[type="number"] {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* El texto largo crece con lo que se escribe (donde el navegador lo
+     permite) en vez de esconderse detrás de una barra de scroll. */
+  textarea.field-input {
+    min-height: 5.5rem;
+    max-height: 16rem;
+    resize: none;
+    field-sizing: content;
+  }
+
+  /* Desplegable heredado: los nuevos usan <Select>, con su propio icono. */
   select.field-input {
     cursor: pointer;
     appearance: none;
-    padding-right: 2.25rem;
+    padding-right: 2.5rem;
     background-image: linear-gradient(45deg, transparent 50%, currentColor 50%),
       linear-gradient(135deg, currentColor 50%, transparent 50%);
-    background-position: calc(100% - 18px) 50%, calc(100% - 13px) 50%;
+    background-position: calc(100% - 20px) 50%, calc(100% - 15px) 50%;
     background-size: 5px 5px, 5px 5px;
     background-repeat: no-repeat;
   }
 
+  select.field-input.has-icon {
+    background-image: none;
+  }
+
+  /* Prefijo (icono) y sufijo (unidad o botón) dentro del mismo campo */
+  .input-affix {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    display: flex;
+    align-items: center;
+    color: var(--fg-muted);
+    pointer-events: none;
+  }
+
+  .input-affix-start {
+    left: 0.875rem;
+  }
+
+  .input-affix-end {
+    right: 0.875rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+  }
+
+  .input-affix-action {
+    position: absolute;
+    top: 50%;
+    right: 0.25rem;
+    transform: translateY(-50%);
+  }
+
   .field-hint {
-    font-size: 0.75rem;
-    color: var(--fg-subtle);
+    font-size: 0.8125rem;
+    line-height: 1.4;
+    color: var(--fg-muted);
   }
 
   .field-error {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     gap: 0.375rem;
-    font-size: 0.75rem;
+    font-size: 0.8125rem;
     font-weight: 600;
+    line-height: 1.4;
     color: var(--danger);
   }
 
@@ -621,6 +694,305 @@
     height: 1.125rem;
     accent-color: var(--brand);
     cursor: pointer;
+  }
+
+  /* -------------------------------------------------------- Opciones */
+  /* Una opción visible: chip (pastilla) para etiquetas cortas, tarjeta para
+     opciones con icono o descripción. El estado sale del input real que
+     llevan adentro (:has), así teclado, lector de pantalla y vista no se
+     pueden desincronizar.
+
+     El color se pasa con variables: marca por defecto, o el acento de la
+     taxonomía (tipo de tarea, etapa) para que cada opción conserve el color
+     con el que se la reconoce en el resto de la app. */
+  .choice {
+    --choice: var(--brand);
+    --choice-soft: var(--brand-soft);
+    --choice-text: var(--brand-text);
+
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    min-height: 2.75rem;
+    padding: 0.5rem 1rem;
+    border-radius: 999px;
+    border: 1px solid var(--border-strong);
+    background-color: var(--surface);
+    color: var(--fg);
+    font-size: 0.875rem;
+    font-weight: 600;
+    line-height: 1.2;
+    text-align: center;
+    cursor: pointer;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    transition:
+      background-color var(--dur-fast) var(--ease-out),
+      border-color var(--dur-fast) var(--ease-out),
+      color var(--dur-fast) var(--ease-out),
+      box-shadow var(--dur-fast) var(--ease-out),
+      transform var(--dur-fast) var(--ease-out);
+  }
+
+  .choice-sm {
+    min-height: 2.25rem;
+    padding: 0.375rem 0.75rem;
+    font-size: 0.8125rem;
+  }
+
+  .choice:hover {
+    background-color: var(--surface-2);
+    border-color: var(--fg-subtle);
+  }
+
+  .choice:active {
+    transform: scale(0.97);
+  }
+
+  .choice-icon {
+    display: inline-flex;
+    flex-shrink: 0;
+    color: var(--choice-text);
+  }
+
+  .choice:has(input:checked),
+  .choice[aria-pressed="true"] {
+    border-color: var(--choice);
+    background-color: var(--choice-soft);
+    color: var(--choice-text);
+    box-shadow: inset 0 0 0 1px var(--choice);
+  }
+
+  .choice:has(input:focus-visible),
+  .choice:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+
+  .choice:has(input:disabled),
+  .choice:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+  }
+
+  /* Marca de selección: visible sólo en la opción elegida, para que el estado
+     no dependa únicamente del color. */
+  .choice-check {
+    display: none;
+    flex-shrink: 0;
+  }
+
+  .choice:has(input:checked) .choice-check,
+  .choice[aria-pressed="true"] .choice-check {
+    display: inline-flex;
+  }
+
+  /* Tarjeta: icono arriba o al costado, título y una línea de contexto */
+  .choice-tile {
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: flex-start;
+    gap: 0.375rem;
+    min-height: 4.5rem;
+    padding: 0.75rem 0.875rem;
+    border-radius: var(--radius-md);
+    text-align: left;
+  }
+
+  .choice-tile .choice-check {
+    position: absolute;
+    top: 0.625rem;
+    right: 0.625rem;
+  }
+
+  .choice-tile-desc {
+    font-size: 0.75rem;
+    font-weight: 500;
+    line-height: 1.35;
+    color: var(--fg-muted);
+  }
+
+  /* Tarjeta compacta para grillas con muchas opciones (tipos de tarea) */
+  .choice-tile-compact {
+    align-items: center;
+    justify-content: center;
+    gap: 0.375rem;
+    min-height: 4.75rem;
+    padding: 0.625rem 0.25rem;
+    hyphens: auto;
+    text-align: center;
+    font-size: 0.75rem;
+  }
+
+  /* ------------------------------------------------------- Interruptor */
+  .switch-track {
+    position: relative;
+    flex-shrink: 0;
+    width: 2.875rem;
+    height: 1.75rem;
+    border-radius: 999px;
+    border: 1px solid var(--border-strong);
+    background-color: var(--surface-3);
+    transition:
+      background-color var(--dur-fast) var(--ease-out),
+      border-color var(--dur-fast) var(--ease-out);
+  }
+
+  .switch-track::after {
+    content: "";
+    position: absolute;
+    top: 0.1875rem;
+    left: 0.1875rem;
+    width: 1.25rem;
+    height: 1.25rem;
+    border-radius: 999px;
+    background-color: var(--surface);
+    box-shadow: var(--shadow-md);
+    transition: transform var(--dur-base) var(--ease-out);
+  }
+
+  input:checked + .switch-track {
+    background-color: var(--brand);
+    border-color: var(--brand);
+  }
+
+  input:checked + .switch-track::after {
+    transform: translateX(1.125rem);
+  }
+
+  input:focus-visible + .switch-track {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+
+  input:disabled + .switch-track {
+    opacity: 0.5;
+  }
+
+  /* ---------------------------------------------------------- Contador */
+  .stepper {
+    display: inline-flex;
+    align-items: stretch;
+    width: 100%;
+    min-height: 3rem;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-strong);
+    background-color: var(--surface-2);
+    transition:
+      border-color var(--dur-fast) var(--ease-out),
+      box-shadow var(--dur-fast) var(--ease-out);
+  }
+
+  .stepper:focus-within {
+    border-color: var(--brand);
+    box-shadow: 0 0 0 3px var(--brand-soft-strong);
+  }
+
+  .stepper[data-invalid="true"] {
+    border-color: var(--danger);
+  }
+
+  .stepper-btn {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: 3rem;
+    color: var(--fg);
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition:
+      background-color var(--dur-fast) var(--ease-out),
+      transform var(--dur-fast) var(--ease-out);
+  }
+
+  .stepper-btn:first-child {
+    border-radius: calc(var(--radius-md) - 1px) 0 0 calc(var(--radius-md) - 1px);
+  }
+
+  .stepper-btn:last-child {
+    border-radius: 0 calc(var(--radius-md) - 1px) calc(var(--radius-md) - 1px) 0;
+  }
+
+  .stepper-btn:hover:not(:disabled) {
+    background-color: var(--surface-3);
+  }
+
+  .stepper-btn:active:not(:disabled) {
+    transform: scale(0.92);
+  }
+
+  .stepper-btn:disabled {
+    color: var(--fg-subtle);
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .stepper-btn:focus-visible {
+    outline-offset: -2px;
+  }
+
+  .stepper-value {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.25rem;
+  }
+
+  .stepper-input {
+    width: 100%;
+    padding: 0;
+    line-height: 1;
+    min-width: 2ch;
+    max-width: 5ch;
+    border: 0;
+    background: transparent;
+    color: var(--fg);
+    text-align: center;
+    font-family: var(--font-title);
+    font-size: 1.25rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    outline: none;
+  }
+
+  .stepper-suffix {
+    padding-top: 0.25em;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--fg-muted);
+  }
+
+  /* --------------------------------------------------- Secciones */
+  /* Un formulario largo se parte en bloques con título, separados por aire
+     y una línea fina, no por tarjetas dentro de la tarjeta del modal. */
+  .form-section + .form-section {
+    border-top: 1px solid var(--border);
+    padding-top: 1.5rem;
+  }
+
+  .form-section-title {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-family: var(--font-title);
+    font-size: 1rem;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    color: var(--fg);
+  }
+
+  /* Bloque condicional: lo que aparece al elegir una opción se ve conectado
+     a ella con una barra lateral, en vez de flotar suelto debajo. */
+  .form-reveal {
+    border-left: 2px solid var(--brand);
+    padding-left: 1rem;
+    animation: fadeInUp var(--dur-base) var(--ease-out) both;
   }
 
   /* ------------------------------------------------------------------ Chips */
@@ -664,6 +1036,7 @@
   }
 
   .segmented-item {
+    position: relative;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -685,8 +1058,26 @@
     color: var(--fg);
   }
 
+  .segmented-item:has(input:focus-visible) {
+    outline: 2px solid var(--ring);
+    outline-offset: 1px;
+  }
+
+  /* Segmentado de formulario: ocupa el ancho y reparte partes iguales */
+  .segmented-block {
+    display: grid;
+    grid-auto-columns: minmax(0, 1fr);
+    grid-auto-flow: column;
+    width: 100%;
+  }
+
+  .segmented-block .segmented-item {
+    min-height: 2.5rem;
+  }
+
   .segmented-item[aria-selected="true"],
-  .segmented-item[aria-pressed="true"] {
+  .segmented-item[aria-pressed="true"],
+  .segmented-item:has(input:checked) {
     background-color: var(--surface);
     color: var(--fg);
     box-shadow: var(--shadow-sm);
@@ -969,7 +1360,9 @@ body {
   }
 
   .btn:active:not(:disabled),
-  .btn-icon:active:not(:disabled) {
+  .btn-icon:active:not(:disabled),
+  .choice:active,
+  .stepper-btn:active:not(:disabled) {
     transform: none;
   }
 }
@@ -983,7 +1376,10 @@ body {
 
   .btn-secondary,
   .field-input,
-  .segmented {
+  .segmented,
+  .choice,
+  .stepper,
+  .switch-track {
     border-color: var(--fg-muted);
   }
 }
