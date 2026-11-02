@@ -612,6 +612,25 @@
     box-shadow: 0 0 0 3px var(--danger-soft);
   }
 
+  /* Safari de iOS le da al campo de fecha un ancho mínimo propio y lo dibuja
+     como control nativo: ignora el 100% y se sale del modal, que entonces se
+     puede arrastrar de costado. Sin apariencia nativa y con mínimo cero
+     respeta el ancho del contenedor como cualquier otro campo. */
+  input[type="date"].field-input,
+  input[type="time"].field-input,
+  input[type="datetime-local"].field-input {
+    display: block;
+    min-width: 0;
+    max-width: 100%;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+
+  .field-input::-webkit-date-and-time-value {
+    min-height: 1.4em;
+    text-align: left;
+  }
+
   /* Números y medidas en cifras tabulares, como en el resto de la app */
   .field-input[inputmode="decimal"],
   .field-input[inputmode="numeric"],
