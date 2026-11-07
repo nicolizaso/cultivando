@@ -41,7 +41,7 @@ import {
   shouldApplyStage,
 } from "../lib/task-effects"
 import type { AmbienteMovePlan, TargetPlant, TaskTargets } from "../lib/task-effects"
-import { groupByValue, hasUndoableChanges, readLastEffect } from "../lib/task-undo"
+import { canRevertUnmarked, groupByValue, hasUndoableChanges, readLastEffect } from "../lib/task-undo"
 import type { LastEffect } from "../lib/task-undo"
 import { describeCompletion, describeReopen } from "../lib/task-outcome"
 import type { CompletionOutcome } from "../lib/task-outcome"
@@ -1162,7 +1162,7 @@ export async function reopenTask(rawTaskId: string | number): Promise<{ error: s
  * Revierte lo que guardó `last_effect`. Cada paso filtra por lo que escribió
  * la tarea (`waterSet`, `stage.set`, `to`): las filas que ya no coinciden
  * cambiaron después y se cuentan en `kept`. Los `last_effect` de antes, sin
- * esos datos, se revierten sin filtro, como antes.
+ * esos datos, se revierten sin filtro sólo en los primeros 30 minutos.
  */
 async function revertEffect(supabase: ServerSupabase, before: LastEffect, taskId: number): Promise<{ failures: number; kept: number }> {
   let failures = 0
@@ -1172,6 +1172,9 @@ async function revertEffect(supabase: ServerSupabase, before: LastEffect, taskId
     console.error(`No se pudo deshacer ${what}:`, error)
   }
   const count = (rows: unknown[] | null) => rows?.length ?? 0
+  // Lo guardado sin marcas (antes de este cambio) sólo se revierte en la
+  // ventana de siempre; pasado eso se deja como está.
+  const unmarkedOk = canRevertUnmarked(before)
 
   // Los registros de la tarea, y el stock que sacó.
   if (before.logs?.length) {
@@ -1188,6 +1191,7 @@ async function revertEffect(supabase: ServerSupabase, before: LastEffect, taskId
   }
 
   for (const group of groupByValue((before.water ?? []).map((row) => ({ id: row.id, value: row.last_water })))) {
+    if (!before.waterSet && !unmarkedOk) { kept += group.ids.length; continue }
     let query = supabase.from('plants').update({ last_water: group.value }).in('id', group.ids)
     if (before.waterSet) query = query.eq('last_water', before.waterSet)
     const { data, error } = await query.select('id')
@@ -1209,6 +1213,7 @@ async function revertEffect(supabase: ServerSupabase, before: LastEffect, taskId
       value: { stage: row.stage, stage_updated_at: row.stage_updated_at, date: row.date },
     }))
     for (const group of groupByValue(rows)) {
+      if (!set && !unmarkedOk) { kept += group.ids.length; continue }
       let query = supabase
         .from('plants')
         .update({ stage: group.value.stage, stage_updated_at: group.value.stage_updated_at, [stageColumn]: group.value.date })
@@ -1229,6 +1234,7 @@ async function revertEffect(supabase: ServerSupabase, before: LastEffect, taskId
 
   // Las mudanzas, directo: sus registros ya se borraron con los de la tarea.
   for (const group of groupByValue((before.plants ?? []).map((row) => ({ id: row.id, value: { back: row.cycle_id, to: row.to } })))) {
+    if (group.value.to === undefined && !unmarkedOk) { kept += group.ids.length; continue }
     let query = supabase.from('plants').update({ cycle_id: group.value.back }).in('id', group.ids)
     if (group.value.to !== undefined) query = group.value.to === null ? query.is('cycle_id', null) : query.eq('cycle_id', group.value.to)
     const { data, error } = await query.select('id')
@@ -1237,6 +1243,7 @@ async function revertEffect(supabase: ServerSupabase, before: LastEffect, taskId
   }
 
   for (const cycle of before.cycles ?? []) {
+    if (cycle.to === undefined && !unmarkedOk) { kept++; continue }
     let query = supabase.from('cycles').update({ space_id: cycle.space_id }).eq('id', cycle.id)
     if (cycle.to !== undefined) query = query.eq('space_id', cycle.to)
     const { data, error } = await query.select('id')

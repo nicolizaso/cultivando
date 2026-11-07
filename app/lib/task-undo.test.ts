@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { groupByValue, hasUndoableChanges, readLastEffect } from './task-undo.ts';
+import { canRevertUnmarked, groupByValue, hasUndoableChanges, readLastEffect } from './task-undo.ts';
 
 test('readLastEffect lee lo bien formado y descarta lo demás', () => {
   const effect = readLastEffect({
@@ -106,4 +106,11 @@ test('readLastEffect - registros de bitácora y stock de una mezcla', () => {
   assert.deepEqual(effect, { at: '2026-11-07T12:00:00Z', logs: [11, 12], stock: [{ fertilizer_id: 1, delta: -50 }] });
   assert.equal(hasUndoableChanges(effect), true);
   assert.equal(hasUndoableChanges({ at: 'x', logs: [], stock: [] }), false);
+});
+
+test('canRevertUnmarked: lo guardado sin marcas (antes de este cambio) sólo se revierte en los 30 minutos', () => {
+  const now = new Date('2026-11-07T12:00:00Z');
+  assert.equal(canRevertUnmarked({ at: '2026-11-07T11:45:00Z' }, now), true);
+  assert.equal(canRevertUnmarked({ at: '2026-11-06T00:08:23Z' }, now), false);
+  assert.equal(canRevertUnmarked({ at: 'no es fecha' }, now), false);
 });

@@ -78,6 +78,9 @@ seco), plantas pasadas de ciclo, ciclos mudados y el ciclo creado por la tarea
 (si quedó vacío). El stock descontado se devuelve. El esquejado no se deshace:
 los esquejes son plantas con su propia historia.
 
+Las tareas completadas antes de este cambio no guardaron qué escribieron: lo
+suyo se revierte como antes, sólo en los primeros 30 minutos.
+
 Desmarcar una tarea con cambios pide confirmación. El "Deshacer" del aviso hace
 lo mismo, sin preguntar.
 

@@ -159,6 +159,17 @@ export function hasUndoableChanges(effect: LastEffect | null): boolean {
 }
 
 /**
+ * Lo guardado antes de que `last_effect` anotara lo que escribió la tarea
+ * (sin `waterSet`, `stage.set` ni `to`) no se puede comparar con lo que hay
+ * hoy. Eso se revierte como antes, sólo en los primeros 30 minutos: después
+ * pudo haber cambios a mano que no hay que pisar.
+ */
+export function canRevertUnmarked(effect: { at: string }, now: Date = new Date()): boolean {
+  const at = new Date(effect.at).getTime();
+  return !isNaN(at) && now.getTime() - at <= 1000 * 60 * 30;
+}
+
+/**
  * Agrupa ids por el valor a restaurar: una consulta por valor distinto en vez
  * de una por planta (regar un ciclo entero deja casi siempre uno o dos).
  */
