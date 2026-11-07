@@ -3,6 +3,7 @@ import CalendarView from "@/components/CalendarView";
 import PageShell from "@/components/layout/PageShell";
 import { Plant, Task } from "../lib/types";
 import { mapTaskCycles } from "../lib/utils";
+import { taskIdOfLog } from "@/app/lib/logs";
 import { buildTaskTargetOptions } from "../lib/task-targets";
 import { addDaysToKey, todayKey } from "../lib/dates";
 
@@ -94,7 +95,8 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
         key={month}
         month={month}
         initialSelectedDay={dia && /^\d{4}-\d{2}-\d{2}$/.test(dia) ? dia : undefined}
-        logs={logs || []}
+        // Lo que anotó una tarea al completarse ya se ve como la tarea misma.
+        logs={(logs || []).filter((log) => !taskIdOfLog(log.data))}
         tasks={Array.from(tasksById.values())}
         plants={taskTargets.plants}
         spaces={allSpaces || []}
