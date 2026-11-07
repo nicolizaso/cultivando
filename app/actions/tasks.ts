@@ -6,7 +6,7 @@ import { TASK_TYPES, getTaskType } from "@/app/lib/constants"
 import { addDaysToKey, dateKey, daysBetweenKeys, todayKey } from "@/app/lib/dates"
 import {
   buildFeedLog, buildStoredMix, describeFeed, hasStoredMix, mixLabel, mixRecipe, parseMixInput, readStoredMix,
-  resolveMix, weekInStage, withRecipe,
+  resolveMix, stripRecipe, weekInStage, withRecipe,
 } from "@/app/lib/nutrition"
 import type { MixItem, StoredMix } from "@/app/lib/nutrition"
 import { loadMixSources, ownsAll } from "@/app/lib/nutrition-data"
@@ -28,21 +28,28 @@ import {
 import type { CloneEntry, CloneMother } from "../lib/clones"
 import type { EsquejadoMetadata, Task, TaskMetadata } from "../lib/types"
 import type { Json } from "../lib/database.types"
-import { moveCycleToSpace } from "../cycles/actions"
-import { bulkMoveToCycle } from "./plants"
 import { STAGE_DATE_COLUMNS, getStageDateColumn, isStageName } from "../lib/stage-logic"
 import {
-  getTaskCompletionEffect,
+  cycleMoveEntry,
+  getCompletionPlan,
   getTaskEffectDate,
   inferLegacyTargets,
+  logTitleFor,
   planAmbienteMove,
   readTaskTargets,
   resolveTaskPlants,
   shouldApplyStage,
 } from "../lib/task-effects"
-import type { TargetPlant, TaskEffect, TaskTargets } from "../lib/task-effects"
-import { canStillUndo, groupByValue, hasUndoableChanges, readLastEffect } from "../lib/task-undo"
+import type { AmbienteMovePlan, TargetPlant, TaskTargets } from "../lib/task-effects"
+import { groupByValue, hasUndoableChanges, readLastEffect } from "../lib/task-undo"
 import type { LastEffect } from "../lib/task-undo"
+import { describeCompletion, describeReopen } from "../lib/task-outcome"
+import type { CompletionOutcome } from "../lib/task-outcome"
+import {
+  setCycleSpace, setPlantsArchived, setPlantsCycle, setPlantsStage, setPlantsWatered, writeCycleLog, writePlantLogs,
+} from "../lib/plant-writes"
+import type { LogEntry, PlantRef } from "../lib/plant-writes"
+import { parseHarvestInput } from "../lib/harvest"
 
 /** Las siete columnas de fecha de etapa, para pedirlas en un select. */
 const STAGE_DATE_SELECT = Object.values(STAGE_DATE_COLUMNS).join(', ')
@@ -380,106 +387,585 @@ export async function deleteTasks(taskIds: (string | number)[]) {
 }
 
 const TASK_WITH_TARGETS = `
-  id, type, status, due_date, application_type, target_stage, target_space_id, metadata,
+  id, type, title, description, status, due_date, application_type, target_stage, target_space_id, metadata,
   task_plants ( plant_id, plants ( id, cycle_id, stage, is_archived ) ),
   task_cycles ( cycle_id )
 `
 
+type TaskWithTargets = {
+  metadata?: unknown
+  task_plants?: { plant_id: number; plants?: TargetPlant | null }[] | null
+  task_cycles?: { cycle_id: number }[] | null
+}
+
+/** Una planta alcanzada por la tarea, con lo necesario para aplicar y deshacer. */
+type EffectPlant = TargetPlant & {
+  name?: string
+  strain?: string | null
+  breeder?: string | null
+  cycle_id: number | null
+  last_water?: string | null
+  stage_updated_at?: string | null
+} & Partial<Record<string, unknown>>
+
+/** Lo que eligió la tarea: `metadata.targets`, o lo deducido si es vieja. */
+function getTaskTargets(task: TaskWithTargets): TaskTargets {
+  const linked = (task.task_plants ?? [])
+    .map((tp) => tp.plants)
+    .filter((plant): plant is TargetPlant => Boolean(plant))
+  const taskCycleIds = (task.task_cycles ?? []).map((tc) => Number(tc.cycle_id)).filter(Boolean)
+
+  return readTaskTargets(task.metadata) ?? inferLegacyTargets(linked, taskCycleIds)
+}
+
 /**
- * Marca una tarea como hecha o pendiente.
- *
- * El cambio de estado es condicional (sólo si el estado sigue siendo el que se
- * leyó): con un doble toque, o dos pestañas abiertas, una sola de las dos
- * llamadas aplica los efectos. Lo que cambió queda guardado en
- * `metadata.last_effect` para poder deshacerlo (`undoTaskCompletion`).
- *
- * El esquejado no pasa por acá para completarse: lo hace `completeEsquejado`,
- * que necesita saber de qué plantas salieron los esquejes y cuántos. Al
- * desmarcar una tarea los efectos se quedan: para revertirlos está "Deshacer".
+ * Las plantas a las que alcanza la tarea hoy: las elegidas una por una y las
+ * que están ahora en sus ciclos. Una planta que entró al ciclo después de
+ * agendar la tarea también cuenta, y una que se fue a otro ciclo ya no. Las
+ * archivadas quedan afuera.
  */
-export async function toggleTaskStatus(
-  rawTaskId: string | number,
-  newStatus: 'pending' | 'completed',
-  /** Sólo para un fertilizante: los litros que se prepararon y si se descuenta del stock. */
-  feedDetails?: { liters?: unknown; deductStock?: unknown }
-) {
+async function loadTaskPlants(supabase: ServerSupabase, task: TaskWithTargets): Promise<EffectPlant[]> {
+  const targets = getTaskTargets(task)
+
+  // Con lo que hace falta para deshacer: riego, fecha de etapa y las siete fechas.
+  const columns = `id, name, strain, breeder, cycle_id, stage, is_archived, last_water, stage_updated_at, ${STAGE_DATE_SELECT}`
+  const [byPlant, byCycle] = await Promise.all([
+    targets.plant_ids.length > 0
+      ? supabase.from('plants').select(columns).in('id', targets.plant_ids)
+      : Promise.resolve({ data: [] as EffectPlant[], error: null }),
+    targets.cycle_ids.length > 0
+      ? supabase.from('plants').select(columns).in('cycle_id', targets.cycle_ids)
+      : Promise.resolve({ data: [] as EffectPlant[], error: null }),
+  ])
+
+  if (byPlant.error) console.error('Error leyendo las plantas de la tarea:', byPlant.error)
+  if (byCycle.error) console.error('Error leyendo las plantas de los ciclos de la tarea:', byCycle.error)
+
+  return resolveTaskPlants(
+    targets,
+    (byPlant.data ?? []) as unknown as EffectPlant[],
+    (byCycle.data ?? []) as unknown as EffectPlant[]
+  ) as EffectPlant[]
+}
+
+function withoutLastEffect(metadata: unknown): Record<string, unknown> {
+  const copy = { ...((metadata as Record<string, unknown> | null) ?? {}) }
+  delete copy.last_effect
+  return copy
+}
+
+function revalidateTaskViews(stock = false) {
+  revalidatePath('/')
+  revalidatePath('/calendar')
+  revalidatePath('/plants')
+  revalidatePath('/plants/[id]', 'page')
+  revalidatePath('/cycles')
+  revalidatePath('/cycles/[id]', 'page')
+  revalidatePath('/spaces')
+  revalidatePath('/strains')
+  if (stock) revalidatePath('/fertilizers')
+}
+
+/* --------------------------------------------------------------------------
+ * Mudanzas ("Cambiar ambiente")
+ * ----------------------------------------------------------------------- */
+
+interface MovePreview {
+  plan: AmbienteMovePlan
+  spaceName: string
+  /** Nombre y espacio de cada ciclo involucrado, para la bitácora. */
+  cycles: Map<number, { name: string; space_id: number | null; spaceName: string }>
+  /** Las plantas elegidas sueltas, con su ciclo actual. */
+  plants: TargetPlant[]
+  /** Los ciclos activos del destino. */
+  activeInTarget: { id: number; name: string }[]
+}
+
+/** Lo que movería la tarea a `targetSpaceId`, sin escribir nada. */
+async function previewMove(
+  supabase: ServerSupabase,
+  task: TaskWithTargets,
+  targetSpaceId: number,
+  chosenCycleId: number | null
+): Promise<MovePreview | null> {
+  const targets = getTaskTargets(task)
+
+  const [spaceResult, plantsResult, activeResult] = await Promise.all([
+    supabase.from('spaces').select('id, name').eq('id', targetSpaceId).maybeSingle(),
+    targets.plant_ids.length > 0
+      ? supabase.from('plants').select('id, cycle_id, is_archived').in('id', targets.plant_ids)
+      : Promise.resolve({ data: [] as TargetPlant[], error: null }),
+    supabase.from('cycles').select('id, name').eq('space_id', targetSpaceId).eq('is_active', true).order('name'),
+  ])
+
+  if (spaceResult.error || !spaceResult.data) {
+    console.error('No se encontró el espacio destino de la tarea:', spaceResult.error)
+    return null
+  }
+
+  const plants = (plantsResult.data ?? []) as TargetPlant[]
+  const involvedIds = Array.from(new Set([
+    ...targets.cycle_ids,
+    ...plants.map((plant) => Number(plant.cycle_id)).filter(Boolean),
+  ]))
+
+  const [cyclesResult, activePlantsResult] = involvedIds.length > 0
+    ? await Promise.all([
+        supabase.from('cycles').select('id, name, space_id, spaces ( name )').in('id', involvedIds),
+        supabase.from('plants').select('id, cycle_id').in('cycle_id', involvedIds).or('is_archived.is.null,is_archived.eq.false'),
+      ])
+    : [{ data: [] }, { data: [] }]
+
+  const cycles = new Map<number, { name: string; space_id: number | null; spaceName: string }>()
+  for (const cycle of (cyclesResult.data ?? []) as { id: number; name: string; space_id: number | null; spaces: { name: string } | { name: string }[] | null }[]) {
+    const space = Array.isArray(cycle.spaces) ? cycle.spaces[0] : cycle.spaces
+    cycles.set(Number(cycle.id), {
+      name: cycle.name,
+      space_id: cycle.space_id == null ? null : Number(cycle.space_id),
+      spaceName: space?.name || 'Sin espacio',
+    })
+  }
+
+  const activePlantsByCycle = new Map<number, number[]>()
+  for (const plant of (activePlantsResult.data ?? []) as { id: number; cycle_id: number | null }[]) {
+    if (plant.cycle_id == null) continue
+    const list = activePlantsByCycle.get(Number(plant.cycle_id)) ?? []
+    list.push(Number(plant.id))
+    activePlantsByCycle.set(Number(plant.cycle_id), list)
+  }
+
+  const activeInTarget = ((activeResult.data ?? []) as { id: number; name: string }[]).map((cycle) => ({ id: Number(cycle.id), name: cycle.name }))
+  const plan = planAmbienteMove(
+    // Un ciclo que ya no existe no se puede mudar.
+    { ...targets, cycle_ids: targets.cycle_ids.filter((id) => cycles.has(id)) },
+    targetSpaceId,
+    plants,
+    new Map(Array.from(cycles.entries()).map(([id, cycle]) => [id, cycle.space_id])),
+    activeInTarget.map((cycle) => cycle.id),
+    activePlantsByCycle,
+    chosenCycleId
+  )
+
+  return { plan, spaceName: spaceResult.data.name, cycles, plants, activeInTarget }
+}
+
+/**
+ * Muda lo que dice el plan (ver `planAmbienteMove`). Si quedan plantas sin
+ * ciclo en el destino y se pidió uno nuevo, lo crea. Cada ciclo mudado deja
+ * un registro a nivel ciclo y cada planta pasada de ciclo, el suyo.
+ */
+async function applyMove(
+  supabase: ServerSupabase,
+  userId: string,
+  task: TaskWithTargets & { id: number },
+  targetSpaceId: number,
+  choice: { cycleId: number | null; newCycleName: string },
+  effectDate: string,
+  notes: string | null,
+  before: LastEffect,
+  problems: string[]
+): Promise<{ move: NonNullable<CompletionOutcome['move']>; logs: number } | null> {
+  let preview = await previewMove(supabase, task, targetSpaceId, choice.cycleId)
+  if (!preview) {
+    problems.push('No se encontró el espacio de destino.')
+    return null
+  }
+
+  if (preview.plan.unplacedPlantIds.length > 0 && choice.newCycleName) {
+    const { data: created, error } = await supabase
+      .from('cycles')
+      .insert({ name: choice.newCycleName, start_date: dateKey(effectDate), space_id: targetSpaceId, is_active: true, user_id: userId })
+      .select('id')
+      .single()
+    if (error || !created) {
+      console.error('No se pudo crear el ciclo del destino:', error)
+      problems.push('No se pudo crear el ciclo nuevo.')
+    } else {
+      before.createdCycle = Number(created.id)
+      preview = (await previewMove(supabase, task, targetSpaceId, Number(created.id))) ?? preview
+    }
+  }
+
+  const { plan, spaceName, cycles, plants } = preview
+  let logs = 0
+
+  const movedCycles: { id: number; space_id: number | null; to: number }[] = []
+  for (const cycleId of plan.cycleIds) {
+    const cycle = cycles.get(cycleId)
+    const { error } = await setCycleSpace(supabase, cycleId, targetSpaceId)
+    if (error) {
+      console.error(`No se pudo mudar el ciclo ${cycleId}:`, error)
+      problems.push(`No se pudo mudar ${cycle?.name ?? 'un ciclo'}.`)
+      continue
+    }
+    movedCycles.push({ id: cycleId, space_id: cycle?.space_id ?? null, to: targetSpaceId })
+    const entry = cycleMoveEntry(cycle?.spaceName ?? 'Sin espacio', spaceName)
+    const logId = await writeCycleLog(supabase, userId, cycleId, { ...entry, notes: [entry.notes, notes].filter(Boolean).join('\n') }, effectDate, task.id)
+    if (logId) {
+      before.logs = [...(before.logs ?? []), logId]
+      logs++
+    }
+  }
+  if (movedCycles.length > 0) before.cycles = movedCycles
+
+  let movedPlants = 0
+  if (plan.targetCycleId != null && plan.plantIds.length > 0) {
+    const { error } = await setPlantsCycle(supabase, plan.plantIds, plan.targetCycleId)
+    if (error) {
+      console.error('No se pudieron pasar las plantas al ciclo del espacio:', error)
+      problems.push('No se pudieron pasar las plantas al ciclo del destino.')
+    } else {
+      movedPlants = plan.plantIds.length
+      const previous = new Map(plants.map((plant) => [Number(plant.id), plant.cycle_id == null ? null : Number(plant.cycle_id)]))
+      before.plants = plan.plantIds.map((id) => ({ id, cycle_id: previous.get(id) ?? null, to: plan.targetCycleId }))
+      const cycleName = preview.activeInTarget.find((cycle) => cycle.id === plan.targetCycleId)?.name ?? choice.newCycleName
+      const ids = await writePlantLogs(
+        supabase,
+        userId,
+        plan.plantIds.map((id) => ({ id, cycle_id: plan.targetCycleId })),
+        { type: 'ambiente', title: `Movida a ${cycleName} (${spaceName})`, notes },
+        effectDate,
+        task.id
+      )
+      before.logs = [...(before.logs ?? []), ...ids]
+      logs += ids.length
+      if (ids.length < movedPlants) problems.push('No se pudo escribir la bitácora.')
+    }
+  }
+
+  return { move: { spaceName, cycles: movedCycles.length, plants: movedPlants, unplaced: plan.unplacedPlantIds.length }, logs }
+}
+
+/* --------------------------------------------------------------------------
+ * Completar
+ * ----------------------------------------------------------------------- */
+
+/** Lo que se pregunta al completar (todo opcional). */
+export interface CompleteTaskInput {
+  /** El día en que se hizo ("YYYY-MM-DD"); sin él, hoy. */
+  doneOn?: string | null
+  /** Fertilizante: litros preparados y si se descuenta del stock. */
+  liters?: string
+  deductStock?: boolean
+  /** Cosechar: peso húmedo en gramos por id de planta. */
+  weights?: Record<string, string>
+  /** Declarar muerta: el motivo. */
+  note?: string
+  /** Cambiar ambiente: destino (si la tarea no tiene) y ciclo del destino. */
+  spaceId?: number | null
+  cycleId?: number | null
+  newCycleName?: string
+}
+
+type CompleteResult =
+  | { error: string }
+  | { success: true; message: string; tone: 'success' | 'error'; canUndo: boolean }
+
+const LOG_PROBLEM = 'No se pudo escribir la bitácora.'
+
+const ALREADY_DONE = { success: true as const, message: 'La tarea ya estaba completada.', tone: 'success' as const, canUndo: false }
+
+/**
+ * Completa una tarea y aplica lo que hace su tipo (ver `getCompletionPlan`):
+ * etapa, riego, archivado, ficha de cosecha, mudanza o mezcla, y siempre un
+ * registro en la bitácora de cada planta, con el id de la tarea. Todo queda
+ * fechado el día en que se hizo y anotado en `metadata.last_effect` para
+ * poder deshacerlo (`reopenTask`).
+ *
+ * El cambio de estado es condicional: con un doble toque, o dos pestañas, una
+ * sola de las llamadas aplica los efectos. Si un paso falla, la tarea queda
+ * completada (sí se hizo) y el aviso dice qué falló.
+ */
+export async function completeTask(rawTaskId: string | number, rawInput?: CompleteTaskInput): Promise<CompleteResult> {
   const taskId = parseId(rawTaskId)
   if (!taskId) return { error: 'Esa tarea no es válida.' }
-  if (newStatus !== 'pending' && newStatus !== 'completed') return { error: 'Estado inválido.' }
 
   const session = await requireUser()
   if ('error' in session) return { error: session.error }
   const { supabase, user } = session
+  const input = (rawInput ?? {}) as Record<string, unknown>
 
   const { data: task, error: fetchError } = await supabase
     .from('tasks')
     .select(TASK_WITH_TARGETS)
     .eq('id', taskId)
     .maybeSingle()
-
   if (fetchError || !task) return { error: friendlyDbError(fetchError, 'No se encontró la tarea.', {}, 'Error leyendo la tarea:') }
+  if (task.status === 'completed') return ALREADY_DONE
 
-  const unchanged = { success: true as const, effects: null, ambiente: null, feed: null, canUndo: false }
-  if (task.status === newStatus) return unchanged
+  const plan = getCompletionPlan(task)
+  if (!plan) return { error: 'Completá el esquejado desde su ventana.' }
+  if (task.type === 'cambio_etapa' && !plan.stage) return { error: 'Elegí la etapa de destino desde Editar.' }
+
+  // El día en que se hizo: hoy, o el que se eligió (nunca después de hoy).
+  let doneOn: string | null = null
+  if (input.doneOn != null && input.doneOn !== '') {
+    doneOn = readDay(input.doneOn)
+    if (!doneOn) return { error: 'El día no es válido.' }
+    if (doneOn > todayKey()) return { error: 'El día no puede ser después de hoy.' }
+  }
+  const effectDate = getTaskEffectDate(doneOn)
+  const effectDay = dateKey(effectDate) ?? todayKey()
+
+  // Mudanza: sin destino no se completa.
+  let targetSpaceId = task.target_space_id ? Number(task.target_space_id) : null
+  if (plan.move && !targetSpaceId) {
+    const chosen = parseId(input.spaceId)
+    if (!chosen) return { error: 'Elegí a qué espacio se muda.' }
+    const { data: space } = await supabase.from('spaces').select('id').eq('id', chosen).maybeSingle()
+    if (!space) return { error: 'No se encontró el espacio de destino.' }
+    targetSpaceId = chosen
+  }
+
+  // Cosecha: pesos húmedos opcionales, validados antes de escribir nada.
+  const weights = new Map<number, number>()
+  if (plan.harvest && input.weights && typeof input.weights === 'object') {
+    for (const [key, value] of Object.entries(input.weights as Record<string, unknown>)) {
+      const plantId = parseId(key)
+      if (!plantId || value === '' || value == null) continue
+      const parsed = parseHarvestInput({ harvested_on: effectDay, wet_g: value })
+      if (parsed.error !== null) return { error: parsed.error }
+      if (parsed.data.wet_g !== null) weights.set(plantId, parsed.data.wet_g)
+    }
+  }
 
   const metadata = withoutLastEffect(task.metadata)
   const { data: changed, error } = await supabase
     .from('tasks')
     .update({
-      status: newStatus,
-      completed_at: newStatus === 'completed' ? new Date().toISOString() : null,
+      status: 'completed',
+      completed_at: effectDate,
       metadata: metadata as Json,
+      ...(targetSpaceId !== (task.target_space_id ?? null) ? { target_space_id: targetSpaceId } : {}),
     })
     .eq('id', taskId)
-    .eq('status', task.status)
+    .eq('status', 'pending')
     .select('id')
 
-  if (error) return { error: friendlyDbError(error, 'No se pudo actualizar la tarea.', {}, 'Error cambiando el estado de la tarea:') }
-  // Otra llamada cambió el estado primero: los efectos ya los aplicó ella.
-  if (!changed || changed.length === 0) return unchanged
+  if (error) return { error: friendlyDbError(error, 'No se pudo completar la tarea.', {}, 'Error completando la tarea:') }
+  // Otra llamada la completó primero: los efectos ya los aplicó ella.
+  if (!changed || changed.length === 0) return ALREADY_DONE
 
-  let effects: TaskCompletionEffects | null = null
-  let ambiente: AmbienteMoveResult | null = null
-  let feed: FeedResult | null = null
   const before: LastEffect = { at: new Date().toISOString() }
+  const plants = await loadTaskPlants(supabase, task)
+  const outcome: CompletionOutcome = { plants: plants.length, water: 0, archived: 0, harvests: 0, logs: 0, problems: [] }
+  const ids = plants.map((plant) => plant.id)
 
-  if (newStatus === 'completed') {
-    // El efecto lleva la fecha en que la tarea estaba agendada.
-    const effectDate = getTaskEffectDate(task.due_date)
-    const effect = getTaskCompletionEffect(task)
-    let plants: EffectPlant[] | null = null
-    if (effect) {
-      plants = await loadTaskPlants(supabase, task)
-      if (plants.length > 0) {
-        effects = await applyTaskCompletionEffect(supabase, effect, plants, effectDate, before)
+  const note = typeof input.note === 'string' ? input.note.trim().slice(0, 500) : ''
+  const description = task.type === 'fertilizante' && hasStoredMix(task.metadata) ? stripRecipe(task.description) : task.description ?? ''
+  const notes = [description.trim(), note ? `Motivo: ${note}` : ''].filter(Boolean).join('\n') || null
+  const title = logTitleFor(plan.logType, task.title, plan.stage?.stage)
+
+  const log = async (targets: PlantRef[], entry: LogEntry) => {
+    const written = await writePlantLogs(supabase, user.id, targets, entry, effectDate, taskId)
+    before.logs = [...(before.logs ?? []), ...written]
+    outcome.logs += written.length
+    if (written.length < targets.length && !outcome.problems.includes(LOG_PROBLEM)) outcome.problems.push(LOG_PROBLEM)
+  }
+
+  // 1. Etapa: sólo las que no están ya ahí (o más adelante, si sólo avanza).
+  if (plan.stage && plants.length > 0) {
+    const stage = plan.stage.stage
+    const changing = plants.filter((plant) => shouldApplyStage(plant.stage, plan.stage!))
+    const column = getStageDateColumn(stage)!
+    outcome.stage = { stage, changed: 0 }
+    if (changing.length > 0) {
+      const { error: stageError } = await setPlantsStage(supabase, changing.map((plant) => plant.id), stage, effectDate)
+      if (stageError) {
+        console.error('Error cambiando la etapa al completar la tarea:', stageError)
+        outcome.problems.push('No se pudo cambiar la etapa.')
+      } else {
+        outcome.stage.changed = changing.length
+        before.stage = {
+          column,
+          plants: changing.map((plant) => ({
+            id: plant.id,
+            stage: plant.stage ?? null,
+            stage_updated_at: plant.stage_updated_at ?? null,
+            date: (plant[column] as string | null | undefined) ?? null,
+          })),
+          set: { stage, at: effectDate },
+        }
+        // El registro del cambio de etapa, sólo en las que cambiaron.
+        if (task.type === 'cambio_etapa') await log(changing, { type: plan.logType, title, notes })
       }
-    }
-
-    if (task.type === 'ambiente' && task.target_space_id) {
-      ambiente = await applyAmbienteMove(supabase, task, Number(task.target_space_id), before)
-    }
-
-    // Un fertilizante con mezcla queda en la bitácora de cada planta (y, si
-    // se pide, sale del stock). Antes sólo marcaba el riego.
-    if (task.type === 'fertilizante' && hasStoredMix(task.metadata)) {
-      plants ??= await loadTaskPlants(supabase, task)
-      feed = await applyFeed(supabase, user.id, { id: taskId, metadata: task.metadata }, plants, feedDetails, effectDate, before)
-    }
-
-    if (hasUndoableChanges(before)) {
-      const { error: metaError } = await supabase
-        .from('tasks')
-        .update({ metadata: { ...metadata, last_effect: before } as unknown as Json })
-        .eq('id', taskId)
-      if (metaError) console.error('No se pudo guardar cómo deshacer la tarea:', metaError)
     }
   }
 
-  revalidatePath('/')
-  revalidatePath('/calendar')
-  if (effects || ambiente || feed) revalidatePlantsAndCycles()
-  if (feed?.deducted) revalidatePath('/fertilizers')
-  return { success: true as const, effects, ambiente, feed, canUndo: hasUndoableChanges(before) }
+  // 2. Riego.
+  if (plan.water && ids.length > 0) {
+    const { error: waterError } = await setPlantsWatered(supabase, ids, effectDay)
+    if (waterError) {
+      console.error('Error anotando el riego al completar la tarea:', waterError)
+      outcome.problems.push('No se pudo anotar el riego.')
+    } else {
+      before.water = plants.map((plant) => ({ id: plant.id, last_water: plant.last_water ?? null }))
+      before.waterSet = effectDay
+      outcome.water = ids.length
+    }
+  }
+
+  // 3. Archivado: `loadTaskPlants` ya dejó afuera las archivadas.
+  if (plan.archive && ids.length > 0) {
+    const { error: archiveError } = await setPlantsArchived(supabase, ids, true)
+    if (archiveError) {
+      console.error('Error archivando plantas al completar la tarea:', archiveError)
+      outcome.problems.push('No se pudieron archivar las plantas.')
+    } else {
+      before.archived = ids
+      outcome.archived = ids.length
+    }
+  }
+
+  // 4. Ficha de cosecha, sólo para las que no tienen una.
+  if (plan.harvest && ids.length > 0) {
+    const { data: existing } = await supabase.from('harvests').select('plant_id').in('plant_id', ids)
+    const already = new Set((existing ?? []).map((row) => Number(row.plant_id)))
+    const rows = plants.filter((plant) => !already.has(plant.id)).map((plant) => ({
+      plant_id: plant.id,
+      cycle_id: plant.cycle_id ?? null,
+      harvested_on: effectDay,
+      wet_g: weights.get(plant.id) ?? null,
+    }))
+    if (rows.length > 0) {
+      const { error: harvestError } = await supabase.from('harvests').insert(rows)
+      if (harvestError) {
+        console.error('Error creando las fichas de cosecha:', harvestError)
+        outcome.problems.push('No se pudo crear la ficha de cosecha.')
+      } else {
+        before.harvests = rows.map((row) => row.plant_id)
+        outcome.harvests = rows.length
+      }
+    }
+  }
+
+  // 5. Mudanza.
+  if (plan.move && targetSpaceId) {
+    const moved = await applyMove(
+      supabase,
+      user.id,
+      { ...task, id: taskId },
+      targetSpaceId,
+      { cycleId: parseId(input.cycleId), newCycleName: typeof input.newCycleName === 'string' ? input.newCycleName.trim().slice(0, 80) : '' },
+      effectDate,
+      notes,
+      before,
+      outcome.problems
+    )
+    if (moved) {
+      outcome.move = moved.move
+      outcome.logs += moved.logs
+    }
+  }
+
+  // 6. La mezcla de un fertilizante, con su propio registro (y el stock).
+  let feedLogged = false
+  if (plan.feed && hasStoredMix(task.metadata) && plants.length > 0) {
+    const feed = await applyFeed(supabase, user.id, { id: taskId, metadata: task.metadata }, plants, input, effectDate, before)
+    if (feed) {
+      feedLogged = true
+      outcome.feed = { plants: feed.plants, lowStock: feed.lowStock }
+      outcome.logs += feed.plants
+    } else {
+      outcome.problems.push('No se pudo anotar la mezcla.')
+    }
+  }
+
+  // 7. El registro de todo lo demás: uno por planta alcanzada.
+  if (!plan.move && task.type !== 'cambio_etapa' && !feedLogged && plants.length > 0) {
+    if (plan.harvest && weights.size > 0) {
+      for (const plant of plants) {
+        const grams = weights.get(plant.id)
+        const withWeight = grams != null ? [notes, `Peso húmedo: ${grams.toLocaleString('es-AR')} g`].filter(Boolean).join('\n') : notes
+        await log([plant], { type: plan.logType, title, notes: withWeight })
+      }
+    } else {
+      await log(plants, { type: plan.logType, title, notes })
+    }
+  }
+
+  if (hasUndoableChanges(before)) {
+    const { error: metaError } = await supabase
+      .from('tasks')
+      .update({ metadata: { ...metadata, last_effect: before } as unknown as Json })
+      .eq('id', taskId)
+    if (metaError) console.error('No se pudo guardar cómo deshacer la tarea:', metaError)
+  }
+
+  revalidateTaskViews(Boolean(before.stock?.length))
+  const notice = describeCompletion(task.type ?? 'otro', outcome)
+  return { success: true, ...notice, canUndo: hasUndoableChanges(before) }
+}
+
+
+/**
+ * Para la hoja de completar: las plantas que alcanza la tarea (y si ya tienen
+ * ficha de cosecha) y, en una mudanza, si hace falta elegir un ciclo del
+ * destino. `rawSpaceId` sirve para preguntar por otro destino antes de
+ * completarla (cuando la tarea no tiene uno).
+ */
+export async function getCompletionContext(rawTaskId: string | number, rawSpaceId?: number | null): Promise<
+  | { error: string }
+  | {
+      plants: { id: number; name: string; hasHarvest: boolean }[]
+      ambiente: null | {
+        spaceId: number | null
+        spaceName: string | null
+        spaces: { id: number; name: string }[]
+        needsCycle: boolean
+        cycles: { id: number; name: string }[]
+        suggestedCycleName: string
+      }
+    }
+> {
+  const taskId = parseId(rawTaskId)
+  if (!taskId) return { error: 'Esa tarea no es válida.' }
+
+  const session = await requireUser()
+  if ('error' in session) return { error: session.error }
+  const { supabase } = session
+
+  const { data: task } = await supabase.from('tasks').select(TASK_WITH_TARGETS).eq('id', taskId).maybeSingle()
+  if (!task) return { error: 'No se encontró la tarea.' }
+
+  const plants = await loadTaskPlants(supabase, task)
+  let withHarvest = new Set<number>()
+  if (task.type === 'cosechar' && plants.length > 0) {
+    const { data } = await supabase.from('harvests').select('plant_id').in('plant_id', plants.map((plant) => plant.id))
+    withHarvest = new Set((data ?? []).map((row) => Number(row.plant_id)))
+  }
+  const plantList = plants
+    .map((plant) => ({ id: plant.id, name: plant.name ?? 'Planta', hasHarvest: withHarvest.has(plant.id) }))
+    .sort((a, b) => a.name.localeCompare(b.name, 'es', { numeric: true }))
+
+  if (task.type !== 'ambiente') return { plants: plantList, ambiente: null }
+
+  const spaces = await getSpaceOptions()
+  const spaceId = (task.target_space_id ? Number(task.target_space_id) : null) ?? parseId(rawSpaceId)
+  if (!spaceId) {
+    return { plants: plantList, ambiente: { spaceId: null, spaceName: null, spaces, needsCycle: false, cycles: [], suggestedCycleName: '' } }
+  }
+
+  const preview = await previewMove(supabase, task, spaceId, null)
+  return {
+    plants: plantList,
+    ambiente: {
+      spaceId: task.target_space_id ? spaceId : null,
+      spaceName: preview?.spaceName ?? null,
+      spaces,
+      needsCycle: Boolean(preview && preview.plan.unplacedPlantIds.length > 0),
+      cycles: preview?.activeInTarget ?? [],
+      suggestedCycleName: preview ? `Ciclo en ${preview.spaceName}` : '',
+    },
+  }
+}
+
+/** Los espacios del usuario, para elegir el destino de una mudanza. */
+export async function getSpaceOptions(): Promise<{ id: number; name: string }[]> {
+  const session = await requireUser()
+  if ('error' in session) return []
+  const { data } = await session.supabase.from('spaces').select('id, name').order('name')
+  return ((data ?? []) as { id: number; name: string }[]).map((space) => ({ id: Number(space.id), name: space.name }))
 }
 
 /**
@@ -498,9 +984,9 @@ export async function getTaskFeedContext(rawTaskId: string | number): Promise<{ 
   const { data: task } = await session.supabase.from('tasks').select(TASK_WITH_TARGETS).eq('id', taskId).maybeSingle()
   if (!task) return empty
 
-  const plants = (await loadTaskPlants(session.supabase, task)).filter((plant) => !plant.is_archived)
+  const plants = await loadTaskPlants(session.supabase, task)
   if (plants.length === 0) return empty
-  const metrics = plants.map((plant) => getPlantMetrics(plant as PlantDates))
+  const metrics = plants.map((plant) => getPlantMetrics(plant as unknown as PlantDates))
   return {
     stageDaysToday: Math.min(...metrics.map((metric) => metric.daysInCurrentStage)),
     stages: Array.from(new Set(metrics.map((metric) => metric.currentStage).filter(Boolean))),
@@ -508,30 +994,26 @@ export async function getTaskFeedContext(rawTaskId: string | number): Promise<{ 
 }
 
 /** Lo que dejó en la bitácora (y en el stock) un fertilizante al completarse. */
-export interface FeedResult {
+interface FeedResult {
   /** Plantas a las que se les anotó la mezcla. */
   plants: number
-  /** Productos a los que se les descontó stock. */
-  deducted: number
   lowStock: { name: string; stock_ml: number | null }[]
 }
 
 /**
  * Anota la mezcla de la tarea en la bitácora de cada planta (con la parte de
  * cada producto que le tocó) y, si se pidió, descuenta del stock lo que se
- * usó. Todo queda en `before` para que "Deshacer" lo pueda revertir.
+ * usó. Todo queda en `before` para poder deshacerlo.
  */
 async function applyFeed(
   supabase: ServerSupabase,
   userId: string,
   task: { id: number; metadata: unknown },
   plants: EffectPlant[],
-  details: { liters?: unknown; deductStock?: unknown } | undefined,
+  details: { liters?: unknown; deductStock?: unknown },
   effectDate: string,
   before: LastEffect
 ): Promise<FeedResult | null> {
-  if (plants.length === 0) return null
-
   const sources = await loadMixSources(supabase, userId)
   if ('error' in sources) return null
   const stored = readStoredMix(task.metadata, sources.combos, sources.fertilizers)
@@ -542,34 +1024,26 @@ async function applyFeed(
   const resolved = stored.resolved ?? resolveMix(stored.items, sources.fertilizers, week)
   const label = stored.label || mixLabel(stored.items, sources.combos)
 
-  const rawLiters = parseDecimal(details?.liters)
+  const rawLiters = parseDecimal(details.liters)
   const liters = rawLiters !== undefined && Number.isFinite(rawLiters) && rawLiters > 0 && rawLiters <= 10000 ? rawLiters : null
   const { feed, totals } = buildFeedLog({ label, week, resolved }, liters, plants.length)
 
-  const { data: logs, error: logError } = await supabase
-    .from('logs')
-    .insert(plants.map((plant) => ({
-      plant_id: plant.id,
-      cycle_id: plant.cycle_id ?? null,
-      user_id: userId,
-      type: 'fertilizante',
-      title: 'Fertilizante',
-      notes: describeFeed(feed),
-      data: { task_id: task.id, feed } as unknown as Json,
-      created_at: effectDate,
-    })))
-    .select('id')
-  if (logError) {
-    console.error('No se pudo anotar el fertilizante en la bitácora:', logError)
-    return null
-  }
-  before.logs = (logs ?? []).map((row) => Number(row.id))
+  const logs = await writePlantLogs(
+    supabase,
+    userId,
+    plants,
+    { type: 'fertilizante', title: 'Fertilizante', notes: describeFeed(feed), data: { feed } },
+    effectDate,
+    task.id
+  )
+  if (logs.length === 0) return null
+  before.logs = [...(before.logs ?? []), ...logs]
 
   let lowStock: FeedResult['lowStock'] = []
   const changes = totals
     .filter((line) => line.total !== null && line.total > 0)
     .map((line) => ({ fertilizer_id: line.fertilizer_id, delta_ml: -(line.total as number) }))
-  if (details?.deductStock === true && changes.length > 0) {
+  if (details.deductStock === true && changes.length > 0) {
     const { data: moved, error: stockError } = await supabase.rpc('move_fertilizer_stock', {
       p_changes: changes,
       p_reason: 'uso',
@@ -585,16 +1059,21 @@ async function applyFeed(
     }
   }
 
-  return { plants: before.logs.length, deducted: before.stock?.length ?? 0, lowStock }
+  return { plants: logs.length, lowStock }
 }
 
+/* --------------------------------------------------------------------------
+ * Desmarcar (deshacer)
+ * ----------------------------------------------------------------------- */
+
 /**
- * Deshace lo que hizo completar una tarea y la deja pendiente otra vez:
- * devuelve el riego, la etapa, el archivado o el espacio que tenían las
- * plantas y los ciclos. Sólo dentro de `UNDO_WINDOW_MS`: después pudieron
- * pasar otras cosas y volver atrás pisaría cambios nuevos.
+ * Vuelve una tarea a pendiente y deshace lo que hizo al completarse: borra
+ * sus registros, devuelve el stock y revierte cada cambio **sólo si sigue
+ * como lo dejó la tarea** (lo que se cambió a mano después no se pisa). Sin
+ * límite de tiempo. El esquejado no se deshace: los esquejes son plantas con
+ * su propia historia. El "Deshacer" del aviso usa esta misma acción.
  */
-export async function undoTaskCompletion(rawTaskId: string | number) {
+export async function reopenTask(rawTaskId: string | number): Promise<{ error: string } | { success: true; message: string; tone: 'success' | 'error' }> {
   const taskId = parseId(rawTaskId)
   if (!taskId) return { error: 'Esa tarea no es válida.' }
 
@@ -604,15 +1083,13 @@ export async function undoTaskCompletion(rawTaskId: string | number) {
 
   const { data: task, error: fetchError } = await supabase
     .from('tasks')
-    .select('id, status, metadata')
+    .select('id, type, status, metadata')
     .eq('id', taskId)
     .maybeSingle()
-
   if (fetchError || !task) return { error: friendlyDbError(fetchError, 'No se encontró la tarea.', {}, 'Error leyendo la tarea:') }
-  if (task.status !== 'completed') return { error: 'La tarea ya no está completada.' }
 
-  const before = readLastEffect(task.metadata)
-  if (before && !canStillUndo(before)) return { error: 'Ya pasó mucho tiempo: corregí las plantas desde su ficha.' }
+  const pending = { success: true as const, message: 'Tarea marcada como pendiente.', tone: 'success' as const }
+  if (task.status !== 'completed') return pending
 
   const { data: changed, error } = await supabase
     .from('tasks')
@@ -622,78 +1099,33 @@ export async function undoTaskCompletion(rawTaskId: string | number) {
     .select('id')
 
   if (error) return { error: friendlyDbError(error, 'No se pudo deshacer.', {}, 'Error deshaciendo la tarea:') }
-  if (!changed || changed.length === 0) return { success: true, partial: false }
+  if (!changed || changed.length === 0) return pending
 
-  const failures = before ? await restoreBefore(supabase, before, taskId) : 0
+  const before = readLastEffect(task.metadata)
+  const undone = hasUndoableChanges(before)
+  const { failures, kept } = before && undone ? await revertEffect(supabase, before, taskId) : { failures: 0, kept: 0 }
+  const esquejes = task.type === 'esquejado' ? Number((task.metadata as TaskMetadata | null)?.esquejado?.total ?? 0) : 0
 
-  revalidatePath('/')
-  revalidatePath('/calendar')
-  revalidatePlantsAndCycles()
-  if (before?.stock?.length) revalidatePath('/fertilizers')
-  return { success: true, partial: failures > 0 }
+  revalidateTaskViews(Boolean(before?.stock?.length))
+  return { success: true, ...describeReopen({ undone, kept, failures, esquejes }) }
 }
 
-function withoutLastEffect(metadata: unknown): Record<string, unknown> {
-  const copy = { ...((metadata as Record<string, unknown> | null) ?? {}) }
-  delete copy.last_effect
-  return copy
-}
-
-/** Vuelve a poner lo que guardó `last_effect`. Devuelve cuántos pasos fallaron. */
-async function restoreBefore(supabase: ServerSupabase, before: LastEffect, taskId: number): Promise<number> {
+/**
+ * Revierte lo que guardó `last_effect`. Cada paso filtra por lo que escribió
+ * la tarea (`waterSet`, `stage.set`, `to`): las filas que ya no coinciden
+ * cambiaron después y se cuentan en `kept`. Los `last_effect` de antes, sin
+ * esos datos, se revierten sin filtro, como antes.
+ */
+async function revertEffect(supabase: ServerSupabase, before: LastEffect, taskId: number): Promise<{ failures: number; kept: number }> {
   let failures = 0
+  let kept = 0
   const fail = (what: string, error: unknown) => {
     failures++
     console.error(`No se pudo deshacer ${what}:`, error)
   }
+  const count = (rows: unknown[] | null) => rows?.length ?? 0
 
-  for (const group of groupByValue((before.water ?? []).map((row) => ({ id: row.id, value: row.last_water })))) {
-    const { error } = await supabase.from('plants').update({ last_water: group.value }).in('id', group.ids)
-    if (error) fail('el riego', error)
-  }
-
-  if (before.archived?.length) {
-    const { error } = await supabase.from('plants').update({ is_archived: false }).in('id', before.archived)
-    if (error) fail('el archivado', error)
-  }
-
-  // La columna viene de la metadata: sólo se escribe si es una de las siete.
-  const stageColumn = before.stage?.column
-  if (stageColumn && STAGE_DATE_COLUMN_SET.has(stageColumn)) {
-    const rows = before.stage!.plants.map((row) => ({
-      id: row.id,
-      value: { stage: row.stage, stage_updated_at: row.stage_updated_at, date: row.date },
-    }))
-    for (const group of groupByValue(rows)) {
-      const { error } = await supabase
-        .from('plants')
-        .update({
-          stage: group.value.stage,
-          stage_updated_at: group.value.stage_updated_at,
-          [stageColumn]: group.value.date,
-        })
-        .in('id', group.ids)
-      if (error) fail('la etapa', error)
-    }
-  }
-
-  // Las mudanzas se deshacen con las mismas acciones, que dejan la bitácora.
-  for (const cycle of before.cycles ?? []) {
-    if (cycle.space_id != null) {
-      const result = await moveCycleToSpace(cycle.id, cycle.space_id)
-      if (!result.success) fail(`la mudanza del ciclo ${cycle.id}`, result.error)
-    } else {
-      const { error } = await supabase.from('cycles').update({ space_id: null }).eq('id', cycle.id)
-      if (error) fail(`la mudanza del ciclo ${cycle.id}`, error)
-    }
-  }
-
-  for (const group of groupByValue((before.plants ?? []).map((row) => ({ id: row.id, value: row.cycle_id })))) {
-    const result = await bulkMoveToCycle(group.ids, group.value)
-    if (!result.success) fail('el cambio de ciclo', result.error)
-  }
-
-  // Lo que anotó un fertilizante en la bitácora, y lo que sacó del stock.
+  // Los registros de la tarea, y el stock que sacó.
   if (before.logs?.length) {
     const { error } = await supabase.rpc('delete_task_logs', { p_task_id: taskId, p_log_ids: before.logs })
     if (error) fail('la bitácora', error)
@@ -707,243 +1139,80 @@ async function restoreBefore(supabase: ServerSupabase, before: LastEffect, taskI
     if (error) fail('el stock', error)
   }
 
-  return failures
-}
-
-function revalidatePlantsAndCycles() {
-  revalidatePath('/plants')
-  revalidatePath('/plants/[id]', 'page')
-  revalidatePath('/cycles')
-  revalidatePath('/cycles/[id]', 'page')
-  revalidatePath('/spaces')
-}
-
-/** Lo que cambió en las plantas al completar una tarea, para contárselo al usuario. */
-export interface TaskCompletionEffects {
-  kind: TaskEffect['kind']
-  /** Plantas que efectivamente cambiaron. */
-  count: number
-  /** La etapa nueva, cuando el efecto es un cambio de etapa. */
-  stage?: string
-}
-
-type TaskWithTargets = {
-  metadata?: unknown
-  task_plants?: { plant_id: number; plants?: TargetPlant | null }[] | null
-  task_cycles?: { cycle_id: number }[] | null
-}
-
-/** Una planta alcanzada por la tarea, con lo necesario para deshacer el efecto. */
-type EffectPlant = TargetPlant & {
-  last_water?: string | null
-  stage_updated_at?: string | null
-} & Partial<Record<string, unknown>>
-
-/** Lo que eligió la tarea: `metadata.targets`, o lo deducido si es vieja. */
-function getTaskTargets(task: TaskWithTargets): TaskTargets {
-  const linked = (task.task_plants ?? [])
-    .map((tp) => tp.plants)
-    .filter((plant): plant is TargetPlant => Boolean(plant))
-  const taskCycleIds = (task.task_cycles ?? []).map((tc) => Number(tc.cycle_id)).filter(Boolean)
-
-  return readTaskTargets(task.metadata) ?? inferLegacyTargets(linked, taskCycleIds)
-}
-
-/** Lo que mudó una tarea de "Cambiar ambiente", para contárselo al usuario. */
-export interface AmbienteMoveResult {
-  spaceName: string
-  /** Ciclos mudados al espacio. */
-  cycles: number
-  /** Plantas sueltas pasadas al ciclo del espacio. */
-  plants: number
-  /** Plantas sueltas que no se movieron porque el espacio no tiene un único ciclo activo. */
-  unplaced: number
-}
-
-/**
- * Muda al espacio destino los ciclos elegidos enteros y pasa las plantas
- * elegidas sueltas al ciclo activo de ese espacio (ver `planAmbienteMove`).
- * Un ciclo enlazado sólo porque una de sus plantas era el objetivo no se muda.
- */
-async function applyAmbienteMove(
-  supabase: ServerSupabase,
-  task: TaskWithTargets,
-  targetSpaceId: number,
-  before: LastEffect
-): Promise<AmbienteMoveResult | null> {
-  const targets = getTaskTargets(task)
-
-  const [spaceResult, plantsResult, activeResult] = await Promise.all([
-    supabase.from('spaces').select('id, name').eq('id', targetSpaceId).single(),
-    targets.plant_ids.length > 0
-      ? supabase.from('plants').select('id, cycle_id, is_archived').in('id', targets.plant_ids)
-      : Promise.resolve({ data: [] as TargetPlant[], error: null }),
-    supabase.from('cycles').select('id').eq('space_id', targetSpaceId).eq('is_active', true),
-  ])
-
-  if (spaceResult.error || !spaceResult.data) {
-    console.error('No se encontró el espacio destino de la tarea:', spaceResult.error)
-    return null
+  for (const group of groupByValue((before.water ?? []).map((row) => ({ id: row.id, value: row.last_water })))) {
+    let query = supabase.from('plants').update({ last_water: group.value }).in('id', group.ids)
+    if (before.waterSet) query = query.eq('last_water', before.waterSet)
+    const { data, error } = await query.select('id')
+    if (error) fail('el riego', error)
+    else if (before.waterSet) kept += group.ids.length - count(data)
   }
 
-  const plants = (plantsResult.data ?? []) as TargetPlant[]
-  const involvedCycleIds = Array.from(new Set([
-    ...targets.cycle_ids,
-    ...plants.map((plant) => Number(plant.cycle_id)).filter(Boolean),
-  ]))
+  if (before.archived?.length) {
+    const { error } = await supabase.from('plants').update({ is_archived: false }).in('id', before.archived).eq('is_archived', true)
+    if (error) fail('el archivado', error)
+  }
 
-  const { data: involvedCycles } = involvedCycleIds.length > 0
-    ? await supabase.from('cycles').select('id, space_id').in('id', involvedCycleIds)
-    : { data: [] as { id: number; space_id: number | null }[] }
+  // La columna viene de la metadata: sólo se escribe si es una de las siete.
+  const stageColumn = before.stage?.column
+  if (stageColumn && STAGE_DATE_COLUMN_SET.has(stageColumn)) {
+    const set = before.stage!.set
+    const rows = before.stage!.plants.map((row) => ({
+      id: row.id,
+      value: { stage: row.stage, stage_updated_at: row.stage_updated_at, date: row.date },
+    }))
+    for (const group of groupByValue(rows)) {
+      let query = supabase
+        .from('plants')
+        .update({ stage: group.value.stage, stage_updated_at: group.value.stage_updated_at, [stageColumn]: group.value.date })
+        .in('id', group.ids)
+      if (set) query = query.eq('stage', set.stage).eq('stage_updated_at', set.at)
+      const { data, error } = await query.select('id')
+      if (error) fail('la etapa', error)
+      else if (set) kept += group.ids.length - count(data)
+    }
+  }
 
-  const cycleSpaces = new Map<number, number | null>(
-    (involvedCycles ?? []).map((cycle: { id: number; space_id: number | null }) => [
-      Number(cycle.id),
-      cycle.space_id == null ? null : Number(cycle.space_id),
+  // Las fichas de cosecha que creó, si no se les cargó el peso seco después.
+  if (before.harvests?.length) {
+    const { data, error } = await supabase.from('harvests').delete().in('plant_id', before.harvests).is('dry_g', null).select('plant_id')
+    if (error) fail('la ficha de cosecha', error)
+    else kept += before.harvests.length - count(data)
+  }
+
+  // Las mudanzas, directo: sus registros ya se borraron con los de la tarea.
+  for (const group of groupByValue((before.plants ?? []).map((row) => ({ id: row.id, value: { back: row.cycle_id, to: row.to } })))) {
+    let query = supabase.from('plants').update({ cycle_id: group.value.back }).in('id', group.ids)
+    if (group.value.to !== undefined) query = group.value.to === null ? query.is('cycle_id', null) : query.eq('cycle_id', group.value.to)
+    const { data, error } = await query.select('id')
+    if (error) fail('el cambio de ciclo', error)
+    else if (group.value.to !== undefined) kept += group.ids.length - count(data)
+  }
+
+  for (const cycle of before.cycles ?? []) {
+    let query = supabase.from('cycles').update({ space_id: cycle.space_id }).eq('id', cycle.id)
+    if (cycle.to !== undefined) query = query.eq('space_id', cycle.to)
+    const { data, error } = await query.select('id')
+    if (error) fail(`la mudanza del ciclo ${cycle.id}`, error)
+    else if (cycle.to !== undefined) kept += 1 - count(data)
+  }
+
+  // El ciclo que creó la mudanza, si quedó vacío.
+  if (before.createdCycle) {
+    const id = before.createdCycle
+    const [plantsLeft, images, measurements] = await Promise.all([
+      supabase.from('plants').select('id', { count: 'exact', head: true }).eq('cycle_id', id),
+      supabase.from('cycle_images').select('id', { count: 'exact', head: true }).eq('cycle_id', id),
+      supabase.from('measurements').select('id', { count: 'exact', head: true }).eq('cycle_id', id),
     ])
-  )
-
-  const plan = planAmbienteMove(
-    // Un ciclo que ya no existe no se puede mudar.
-    { ...targets, cycle_ids: targets.cycle_ids.filter((id) => cycleSpaces.has(id)) },
-    targetSpaceId,
-    plants,
-    cycleSpaces,
-    (activeResult.data ?? []).map((cycle: { id: number }) => Number(cycle.id))
-  )
-
-  // Se reusan las mudanzas de siempre, que además dejan la bitácora.
-  const movedCycles: { id: number; space_id: number | null }[] = []
-  for (const cycleId of plan.cycleIds) {
-    const result = await moveCycleToSpace(cycleId, targetSpaceId)
-    if (result.success) movedCycles.push({ id: cycleId, space_id: cycleSpaces.get(cycleId) ?? null })
-    else console.error(`No se pudo mudar el ciclo ${cycleId}:`, result.error)
-  }
-
-  let movedPlants = 0
-  if (plan.targetCycleId != null && plan.plantIds.length > 0) {
-    const result = await bulkMoveToCycle(plan.plantIds, plan.targetCycleId)
-    if (result.success) {
-      movedPlants = plan.plantIds.length
-      const previous = new Map(plants.map((plant) => [Number(plant.id), plant.cycle_id == null ? null : Number(plant.cycle_id)]))
-      before.plants = plan.plantIds.map((id) => ({ id, cycle_id: previous.get(id) ?? null }))
+    if ((plantsLeft.count ?? 0) + (images.count ?? 0) + (measurements.count ?? 0) === 0) {
+      const { error } = await supabase.from('cycles').delete().eq('id', id)
+      if (error) fail('el ciclo nuevo', error)
     } else {
-      console.error('No se pudieron pasar las plantas al ciclo del espacio:', result.error)
-    }
-  }
-  if (movedCycles.length > 0) before.cycles = movedCycles
-
-  return {
-    spaceName: spaceResult.data.name,
-    cycles: movedCycles.length,
-    plants: movedPlants,
-    unplaced: plan.unplacedPlantIds.length,
-  }
-}
-
-/**
- * Las plantas a las que alcanza la tarea hoy: las elegidas una por una y las
- * que están ahora en sus ciclos. Una planta que entró al ciclo después de
- * agendar la tarea también cuenta, y una que se fue a otro ciclo ya no.
- */
-async function loadTaskPlants(supabase: ServerSupabase, task: TaskWithTargets): Promise<EffectPlant[]> {
-  const targets = getTaskTargets(task)
-
-  // Con lo que hace falta para deshacer: riego, fecha de etapa y las siete fechas.
-  const columns = `id, cycle_id, stage, is_archived, last_water, stage_updated_at, ${STAGE_DATE_SELECT}`
-  const [byPlant, byCycle] = await Promise.all([
-    targets.plant_ids.length > 0
-      ? supabase.from('plants').select(columns).in('id', targets.plant_ids)
-      : Promise.resolve({ data: [] as EffectPlant[], error: null }),
-    targets.cycle_ids.length > 0
-      ? supabase.from('plants').select(columns).in('cycle_id', targets.cycle_ids)
-      : Promise.resolve({ data: [] as EffectPlant[], error: null }),
-  ])
-
-  if (byPlant.error) console.error('Error leyendo las plantas de la tarea:', byPlant.error)
-  if (byCycle.error) console.error('Error leyendo las plantas de los ciclos de la tarea:', byCycle.error)
-
-  return resolveTaskPlants(
-    targets,
-    (byPlant.data ?? []) as EffectPlant[],
-    (byCycle.data ?? []) as EffectPlant[]
-  ) as EffectPlant[]
-}
-
-/**
- * Aplica sobre las plantas de la tarea el efecto de haberla completado, y
- * anota en `before` cómo estaban para poder deshacerlo.
- *
- * Si algo falla no se revierte el completado: la tarea sí se hizo, y queda
- * en el log del servidor.
- */
-async function applyTaskCompletionEffect(
-  supabase: ServerSupabase,
-  effect: TaskEffect,
-  plants: EffectPlant[],
-  effectDate: string,
-  before: LastEffect
-): Promise<TaskCompletionEffects | null> {
-  if (effect.kind === 'water') {
-    const ids = plants.map((plant) => plant.id)
-    // `last_water` guarda el día de calendario, como el riego en lote.
-    const { error } = await supabase.from('plants').update({ last_water: dateKey(effectDate) }).in('id', ids)
-    if (error) {
-      console.error('Error updating last_water:', error)
-      return null
-    }
-    before.water = plants.map((plant) => ({ id: plant.id, last_water: plant.last_water ?? null }))
-    return { kind: 'water', count: ids.length }
-  }
-
-  if (effect.kind === 'archive') {
-    // `resolveTaskPlants` ya dejó afuera las archivadas: todas estaban activas.
-    const ids = plants.map((plant) => plant.id)
-    const { error } = await supabase.from('plants').update({ is_archived: true }).in('id', ids)
-    if (error) {
-      console.error('Error archivando plantas al completar la tarea:', error)
-      return null
-    }
-    before.archived = ids
-    return { kind: 'archive', count: ids.length }
-  }
-
-  // Cambio de etapa: sólo las plantas que no están ya ahí (o más adelante,
-  // si el efecto sólo avanza).
-  const dateColumn = getStageDateColumn(effect.stage)
-  if (!dateColumn) return null
-
-  const changing = plants.filter((plant) => shouldApplyStage(plant.stage, effect))
-  const ids = changing.map((plant) => plant.id)
-
-  if (ids.length > 0) {
-    const { error } = await supabase
-      .from('plants')
-      .update({
-        stage: effect.stage,
-        stage_updated_at: effectDate,
-        // La columna sale del mapa de etapas, nunca del cliente.
-        [dateColumn]: effectDate,
-      })
-      .in('id', ids)
-
-    if (error) {
-      console.error('Error cambiando la etapa al completar la tarea:', error)
-      return null
-    }
-
-    before.stage = {
-      column: dateColumn,
-      plants: changing.map((plant) => ({
-        id: plant.id,
-        stage: plant.stage ?? null,
-        stage_updated_at: plant.stage_updated_at ?? null,
-        date: (plant[dateColumn] as string | null | undefined) ?? null,
-      })),
+      kept++
     }
   }
 
-  return { kind: 'stage', count: ids.length, stage: effect.stage }
+  return { failures, kept }
 }
 
 export async function deleteTask(taskId: string | number) {
@@ -1039,42 +1308,37 @@ export async function getEsquejadoCandidates(rawTaskId: string | number) {
 
   const { data: task, error: taskError } = await supabase
     .from('tasks')
-    .select('id, user_id, type, status, due_date, metadata, task_plants(plant_id), task_cycles(cycle_id)')
+    .select(`${TASK_WITH_TARGETS}, user_id`)
     .eq('id', taskId)
     .single()
 
   if (taskError || !task) return { error: 'No se encontró la tarea.' }
   if (task.user_id && task.user_id !== user.id) return { error: 'No autorizado.' }
 
-  const cycleIds: number[] = (task.task_cycles ?? []).map((tc: { cycle_id: number }) => tc.cycle_id).filter(Boolean)
-  const plantIds: number[] = (task.task_plants ?? []).map((tp: { plant_id: number }) => tp.plant_id).filter(Boolean)
-
-  const columns = 'id, name, strain, breeder, stage, cycle_id, is_archived'
-  const [byPlant, byCycle, cyclesResult, spacesResult] = await Promise.all([
-    plantIds.length > 0
-      ? supabase.from('plants').select(columns).in('id', plantIds)
-      : Promise.resolve({ data: [] as CandidatePlantRow[] }),
-    cycleIds.length > 0
-      ? supabase.from('plants').select(columns).in('cycle_id', cycleIds)
-      : Promise.resolve({ data: [] as CandidatePlantRow[] }),
+  // Las madres posibles: las plantas que la tarea alcanza hoy (las elegidas y
+  // las de sus ciclos enteros). Antes se tomaba todo ciclo enlazado, y una
+  // tarea de una sola planta ofrecía a todo su ciclo.
+  const targets = getTaskTargets(task)
+  const [taskPlants, cyclesResult, spacesResult] = await Promise.all([
+    loadTaskPlants(supabase, task),
     supabase.from('cycles').select('id, name, space_id').eq('is_active', true).order('name'),
     supabase.from('spaces').select('id, name').order('name'),
   ])
 
-  // Una planta puede venir por los dos lados (enlazada y por su ciclo).
-  const candidatesById = new Map<number, CandidatePlantRow>()
-  for (const plant of [...(byPlant.data ?? []), ...(byCycle.data ?? [])] as CandidatePlantRow[]) {
-    if (plant?.is_archived) continue
-    candidatesById.set(Number(plant.id), plant)
-  }
-
-  const candidates = Array.from(candidatesById.values()).sort((a, b) =>
-    String(a.name ?? '').localeCompare(String(b.name ?? ''), 'es')
-  )
+  const candidates: CandidatePlantRow[] = taskPlants
+    .map((plant) => ({
+      id: plant.id,
+      name: plant.name ?? 'Planta',
+      strain: plant.strain ?? null,
+      breeder: plant.breeder ?? null,
+      stage: plant.stage ?? null,
+      cycle_id: plant.cycle_id ?? null,
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name, 'es', { numeric: true }))
 
   const activeCycles: CycleRow[] = cyclesResult.data ?? []
   const defaultCycleId =
-    cycleIds.find((id) => activeCycles.some((c) => c.id === id)) ??
+    targets.cycle_ids.find((id) => activeCycles.some((c) => c.id === id)) ??
     candidates.find((p) => p.cycle_id)?.cycle_id ??
     activeCycles[0]?.id ??
     null
@@ -1116,11 +1380,11 @@ export async function completeEsquejado(
 
   const session = await requireUser()
   if ('error' in session) return { error: session.error }
-  const { supabase } = session
+  const { supabase, user } = session
 
   const { data: task, error: taskError } = await supabase
     .from('tasks')
-    .select('id, type, metadata, task_plants(plant_id), task_cycles(cycle_id)')
+    .select(TASK_WITH_TARGETS)
     .eq('id', taskId)
     .single()
 
@@ -1128,26 +1392,13 @@ export async function completeEsquejado(
   if (task.type !== 'esquejado') return { error: 'La tarea no es de esquejado.' }
 
   const date = readDay(payload?.date) ?? todayKey()
+  if (date > todayKey()) return { error: 'El día no puede ser después de hoy.' }
   const previous = (task.metadata as TaskMetadata | null)?.esquejado
 
-  // 1. Candidatas reales de la tarea: las enlazadas más las de sus ciclos.
-  const cycleIds = (task.task_cycles ?? []).map((tc) => Number(tc.cycle_id)).filter(Boolean)
-  const linkedPlantIds = (task.task_plants ?? []).map((tp) => Number(tp.plant_id)).filter(Boolean)
-
-  const [byPlant, byCycle] = previous
-    ? [{ data: [] as CandidatePlantRow[] }, { data: [] as CandidatePlantRow[] }]
-    : await Promise.all([
-        linkedPlantIds.length > 0
-          ? supabase.from('plants').select('id, name, strain, breeder').in('id', linkedPlantIds)
-          : Promise.resolve({ data: [] as CandidatePlantRow[] }),
-        cycleIds.length > 0
-          ? supabase.from('plants').select('id, name, strain, breeder').in('cycle_id', cycleIds)
-          : Promise.resolve({ data: [] as CandidatePlantRow[] }),
-      ])
-
-  const mothersById = new Map<number, CandidatePlantRow>()
-  for (const plant of [...(byPlant.data ?? []), ...(byCycle.data ?? [])] as CandidatePlantRow[]) {
-    mothersById.set(Number(plant.id), plant)
+  // 1. Madres posibles: las plantas que la tarea alcanza hoy.
+  const mothersById = new Map<number, EffectPlant>()
+  if (!previous) {
+    for (const plant of await loadTaskPlants(supabase, task)) mothersById.set(Number(plant.id), plant)
   }
 
   const entries = previous ? [] : sanitizeCloneEntries(payload?.entries, mothersById.keys())
@@ -1227,12 +1478,34 @@ export async function completeEsquejado(
     }
   }
 
-  const outcome = (result ?? {}) as { created?: number; already?: unknown }
-  revalidateEsquejado()
+  const outcome = (result ?? {}) as { created?: number; already?: unknown; entries?: { mother_id: number; count: number; plant_ids: number[] }[] }
 
   if (outcome.already) {
+    revalidateEsquejado()
     return { success: true, created: 0, alreadyRegistered: outcome.already as EsquejadoMetadata }
   }
+
+  // Cada madre deja su registro: de ella salieron los esquejes.
+  const effectDate = getTaskEffectDate(date)
+  for (const entry of outcome.entries ?? []) {
+    const mother = mothersById.get(Number(entry.mother_id))
+    if (!mother || !entry.count) continue
+    await writePlantLogs(
+      supabase,
+      user.id,
+      [{ id: mother.id, cycle_id: mother.cycle_id ?? null }],
+      {
+        type: 'esquejado',
+        title: entry.count === 1 ? 'Esquejado: 1 esqueje' : `Esquejado: ${entry.count} esquejes`,
+        notes: targetCycleName ? `Van a ${targetCycleName}.` : null,
+        data: { clone_ids: entry.plant_ids ?? [] },
+      },
+      effectDate,
+      taskId
+    )
+  }
+
+  revalidateEsquejado()
   return { success: true, created: Number(outcome.created ?? 0), cycleName: targetCycleName }
 }
 
@@ -1240,6 +1513,7 @@ function revalidateEsquejado() {
   revalidatePath('/')
   revalidatePath('/calendar')
   revalidatePath('/plants')
+  revalidatePath('/plants/[id]', 'page')
   revalidatePath('/cycles')
   revalidatePath('/cycles/[id]', 'page')
 }

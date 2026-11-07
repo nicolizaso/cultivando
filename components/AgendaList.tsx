@@ -6,78 +6,14 @@ import { Task } from "@/app/lib/types"
 import TaskPill from "./TaskPill"
 import EditTaskModal from "./EditTaskModal"
 import EsquejarModal from "./EsquejarModal"
-import FeedCompleteModal from "./FeedCompleteModal"
-import { toggleTaskStatus, deleteTasks, undoTaskCompletion } from "@/app/actions/tasks"
-import type { AmbienteMoveResult, FeedResult, TaskCompletionEffects } from "@/app/actions/tasks"
+import CompleteTaskSheet from "./CompleteTaskSheet"
+import { completeTask, deleteTasks, reopenTask } from "@/app/actions/tasks"
+import type { CompleteTaskInput } from "@/app/actions/tasks"
 import { hasStoredMix } from "@/app/lib/nutrition"
+import { completionNeeds } from "@/app/lib/task-effects"
 import { useToast } from "@/app/context/ToastContext"
 import ConfirmDialog from "@/components/ui/ConfirmDialog"
 import SelectionBar from "@/components/ui/SelectionBar"
-
-/** El aviso al completar una tarea, contando lo que cambió en las plantas. */
-function completionMessage(effects?: TaskCompletionEffects | null): string {
-  if (!effects || effects.count === 0) return '¡Tarea completada!'
-
-  const plants = effects.count === 1 ? '1 planta' : `${effects.count} plantas`
-  switch (effects.kind) {
-    case 'stage':
-      return `¡Tarea completada! ${plants} ${effects.count === 1 ? 'pasó' : 'pasaron'} a ${effects.stage}.`
-    case 'archive':
-      return `¡Tarea completada! ${plants} ${effects.count === 1 ? 'se archivó' : 'se archivaron'}.`
-    default:
-      return '¡Tarea completada!'
-  }
-}
-
-/** El aviso al completar un fertilizante: dónde quedó anotado y si algo se está acabando. */
-function feedMessage(feed: FeedResult): string {
-  let message = feed.plants > 0
-    ? `¡Tarea completada! Quedó en la bitácora de ${feed.plants === 1 ? '1 planta' : `${feed.plants} plantas`}.`
-    : '¡Tarea completada!'
-  if (feed.lowStock.length > 0) {
-    message += ` Queda poco: ${feed.lowStock.map((item) => `${item.name} (${(item.stock_ml ?? 0).toLocaleString('es-AR')})`).join(', ')}.`
-  }
-  return message
-}
-
-/** El aviso al completar un cambio de ambiente: qué se mudó y qué quedó. */
-function ambienteMessage(ambiente: AmbienteMoveResult): string {
-  const parts: string[] = []
-  if (ambiente.cycles > 0) {
-    parts.push(ambiente.cycles === 1 ? '1 ciclo' : `${ambiente.cycles} ciclos`)
-  }
-  if (ambiente.plants > 0) {
-    parts.push(ambiente.plants === 1 ? '1 planta' : `${ambiente.plants} plantas`)
-  }
-
-  let message = '¡Tarea completada!'
-  if (parts.length > 0) {
-    const moved = ambiente.cycles + ambiente.plants
-    message += ` ${parts.join(' y ')} ${moved === 1 ? 'pasó' : 'pasaron'} a ${ambiente.spaceName}.`
-  }
-  if (ambiente.unplaced > 0) {
-    const plants = ambiente.unplaced === 1 ? '1 planta no se movió' : `${ambiente.unplaced} plantas no se movieron`
-    message += ` ${plants}: ${ambiente.spaceName} no tiene un único ciclo activo. Movela${ambiente.unplaced === 1 ? '' : 's'} de ciclo a mano.`
-  }
-  return message
-}
-
-/**
- * Tareas que, al completarse, cambian mucho y de golpe: archivar plantas o
- * mudarlas de espacio. Antes bastaba un toque de más; ahora se confirma.
- */
-const CONFIRM_ON_COMPLETE: Record<string, { title: string; description: string; confirmLabel: string }> = {
-  muerta: {
-    title: '¿Archivar las plantas?',
-    description: 'Al completar esta tarea, las plantas que alcanza se archivan y dejan de aparecer en el cultivo activo.',
-    confirmLabel: 'Completar y archivar',
-  },
-  ambiente: {
-    title: '¿Mudar de espacio?',
-    description: 'Al completar esta tarea, los ciclos y plantas que alcanza pasan al espacio de destino.',
-    confirmLabel: 'Completar y mudar',
-  },
-}
 
 interface AgendaListProps {
   tasks: Task[]
@@ -95,63 +31,41 @@ export default function AgendaList({ tasks, groupByStatus = false, emptyLabel = 
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [editingTask, setEditingTask] = useState<Task | null>(null)
   const [esquejandoTask, setEsquejandoTask] = useState<Task | null>(null)
-  const [confirmingTask, setConfirmingTask] = useState<Task | null>(null)
-  const [feedingTask, setFeedingTask] = useState<Task | null>(null)
+  const [completingTask, setCompletingTask] = useState<Task | null>(null)
+  const [reopeningTask, setReopeningTask] = useState<Task | null>(null)
 
   // Tareas con un cambio en curso: un segundo toque mientras tanto no hace nada.
   const busy = useRef(new Set<string | number>())
 
-  const undo = async (id: string | number) => {
-    const res = await undoTaskCompletion(String(id))
-    if (res?.error) {
-      showToast(res.error, 'error')
-      return
-    }
-    showToast(
-      'partial' in res && res.partial
-        ? 'La tarea volvió a pendiente, pero algún cambio no se pudo deshacer. Revisá las plantas.'
-        : 'Listo, se deshizo la tarea.',
-      'partial' in res && res.partial ? 'error' : 'success'
-    )
-  }
-
-  const setStatus = async (
-    task: Task,
-    newStatus: 'pending' | 'completed',
-    feedDetails?: { liters: string; deductStock: boolean }
-  ) => {
+  /** Desmarca (y deshace). También es lo que hace "Deshacer" en el aviso. */
+  const reopen = async (task: Task) => {
     if (busy.current.has(task.id)) return
     busy.current.add(task.id)
-
     try {
-      const res = await toggleTaskStatus(String(task.id), newStatus, feedDetails)
+      const res = await reopenTask(String(task.id))
+      if ('error' in res) showToast(res.error, 'error')
+      else showToast(res.message, res.tone)
+    } finally {
+      busy.current.delete(task.id)
+    }
+  }
 
-      if (res?.error) {
+  /** Completa y cuenta lo que pasó; devuelve si salió bien. */
+  const complete = async (task: Task, input?: CompleteTaskInput): Promise<boolean> => {
+    if (busy.current.has(task.id)) return false
+    busy.current.add(task.id)
+    try {
+      const res = await completeTask(String(task.id), input)
+      if ('error' in res) {
         showToast(res.error, 'error')
-        return
+        return false
       }
-
-      if (newStatus === 'completed') {
-        const message = res?.ambiente
-          ? ambienteMessage(res.ambiente)
-          : res && 'feed' in res && res.feed ? feedMessage(res.feed) : completionMessage(res?.effects)
-        showToast(
-          message,
-          'success',
-          res?.canUndo ? { action: { label: 'Deshacer', onClick: () => undo(task.id) } } : undefined
-        )
-        return
-      }
-
-      // Al desmarcarla, los esquejes ya creados siguen existiendo: son plantas
-      // con su propia historia, no un efecto secundario que se pueda deshacer.
-      const registered = task.metadata?.esquejado?.total ?? 0
       showToast(
-        registered > 0
-          ? `Tarea pendiente. Los ${registered} esquejes creados se mantienen.`
-          : 'Tarea marcada como pendiente',
-        'success'
+        res.message,
+        res.tone,
+        res.canUndo ? { action: { label: 'Deshacer', onClick: () => reopen(task) } } : undefined
       )
+      return true
     } finally {
       busy.current.delete(task.id)
     }
@@ -161,28 +75,28 @@ export default function AgendaList({ tasks, groupByStatus = false, emptyLabel = 
     const task = tasks.find(t => t.id === id)
     if (!task) return
 
-    const newStatus = task.status === 'completed' ? 'pending' : 'completed'
+    if (task.status === 'completed') {
+      // Desmarcar deshace lo que hizo: si cambió algo, se confirma.
+      if (task.metadata?.last_effect) setReopeningTask(task)
+      else await reopen(task)
+      return
+    }
 
     // El esquejado no se completa de un toque: primero hay que decir de qué
     // plantas salieron esquejes y cuántos, porque de eso nacen plantas nuevas.
-    if (task.type === 'esquejado' && newStatus === 'completed') {
+    if (task.type === 'esquejado') {
       setEsquejandoTask(task)
       return
     }
 
-    // Un fertilizante con mezcla pregunta los litros (opcionales) antes de
-    // anotarlo en la bitácora y descontar el stock.
-    if (task.type === 'fertilizante' && newStatus === 'completed' && hasStoredMix(task.metadata)) {
-      setFeedingTask(task)
+    // Si hay algo que preguntar (el día de una atrasada, los litros, los
+    // pesos, el destino) se abre la hoja; si no, un toque alcanza.
+    if (completionNeeds(task, hasStoredMix(task.metadata)).any) {
+      setCompletingTask(task)
       return
     }
 
-    if (newStatus === 'completed' && CONFIRM_ON_COMPLETE[task.type]) {
-      setConfirmingTask(task)
-      return
-    }
-
-    await setStatus(task, newStatus)
+    await complete(task)
   }
 
   // --- Selección múltiple ---
@@ -298,15 +212,15 @@ export default function AgendaList({ tasks, groupByStatus = false, emptyLabel = 
       />
 
       <ConfirmDialog
-        isOpen={!!confirmingTask}
-        onClose={() => setConfirmingTask(null)}
+        isOpen={!!reopeningTask}
+        onClose={() => setReopeningTask(null)}
         onConfirm={async () => {
-          if (confirmingTask) await setStatus(confirmingTask, 'completed')
+          if (reopeningTask) await reopen(reopeningTask)
         }}
-        tone={confirmingTask?.type === 'muerta' ? 'danger' : 'brand'}
-        title={confirmingTask ? CONFIRM_ON_COMPLETE[confirmingTask.type]?.title ?? '' : ''}
-        description={confirmingTask ? CONFIRM_ON_COMPLETE[confirmingTask.type]?.description ?? '' : ''}
-        confirmLabel={confirmingTask ? CONFIRM_ON_COMPLETE[confirmingTask.type]?.confirmLabel ?? 'Completar' : 'Completar'}
+        tone="brand"
+        title="¿Volver a pendiente?"
+        description="Se deshace lo que hizo en las plantas y se borra su registro de la bitácora. Lo que cambiaste a mano después no se toca."
+        confirmLabel="Desmarcar y deshacer"
       />
 
       {editingTask && (
@@ -318,15 +232,12 @@ export default function AgendaList({ tasks, groupByStatus = false, emptyLabel = 
         />
       )}
 
-      {feedingTask && (
-        <FeedCompleteModal
-          key={feedingTask.id}
-          task={feedingTask}
-          onClose={() => setFeedingTask(null)}
-          onComplete={async (details) => {
-            await setStatus(feedingTask, 'completed', details)
-            setFeedingTask(null)
-          }}
+      {completingTask && (
+        <CompleteTaskSheet
+          key={completingTask.id}
+          task={completingTask}
+          onClose={() => setCompletingTask(null)}
+          onSubmit={(input) => complete(completingTask, input)}
         />
       )}
 
