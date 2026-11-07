@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert';
-import { canonicalLogType, isPhotoLog, LOG_TYPE, normalizeLogType } from './logs.ts';
+import { canonicalLogType, isPhotoLog, LOG_TYPE, normalizeLogType, taskIdOfLog } from './logs.ts';
 
 test('isPhotoLog - reconoce lo que escribe la bitácora hoy', () => {
   assert.strictEqual(isPhotoLog({ type: LOG_TYPE.photo }), true);
@@ -53,4 +53,13 @@ test('canonicalLogType - unifica los tipos heredados', () => {
   assert.strictEqual(canonicalLogType(' Riego '), 'riego');
   assert.strictEqual(canonicalLogType('Foto'), 'foto');
   assert.strictEqual(canonicalLogType(null), '');
+});
+
+test('taskIdOfLog: el id de la tarea que escribió el registro', () => {
+  assert.strictEqual(taskIdOfLog({ task_id: 231 }), 231);
+  assert.strictEqual(taskIdOfLog({ task_id: '231' }), 231);
+  assert.strictEqual(taskIdOfLog({ feed: {} }), null);
+  assert.strictEqual(taskIdOfLog({ task_id: 'x' }), null);
+  assert.strictEqual(taskIdOfLog(null), null);
+  assert.strictEqual(taskIdOfLog([1, 2]), null);
 });

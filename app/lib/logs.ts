@@ -23,7 +23,6 @@ export const LOG_TYPE = {
   water: 'riego',
   stage: 'cambio_etapa',
   ambiente: 'ambiente',
-  harvest: 'cosecha',
   other: 'otro',
 } as const;
 
@@ -53,12 +52,16 @@ export function canonicalLogType(type?: string | null): string {
   return LEGACY_LOG_TYPES[normalized] ?? normalized;
 }
 
-/** Todos los tipos que acepta la bitácora (los de tarea, más foto, nota y cosecha). */
-export const LOG_TYPES = [
-  LOG_TYPE.photo, LOG_TYPE.note, LOG_TYPE.harvest,
-  'riego', 'fertilizante', 'repelente', 'trasplante', 'esquejado', 'poda', 'entrenamiento',
-  'ambiente', 'cambio_etapa', 'lavado', 'cosechar', 'muerta', 'otro',
-] as const;
+/**
+ * El id de la tarea que escribió el registro (`data.task_id`), o null si se
+ * anotó a mano. Sirve para no mostrar dos veces lo mismo: la tarea completada
+ * y lo que dejó en la bitácora.
+ */
+export function taskIdOfLog(data: unknown): number | null {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) return null;
+  const id = Number((data as { task_id?: unknown }).task_id);
+  return Number.isInteger(id) && id > 0 ? id : null;
+}
 
 /**
  * ¿El registro es una foto?

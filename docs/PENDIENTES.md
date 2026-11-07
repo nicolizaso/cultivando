@@ -117,9 +117,17 @@ si podés).
 - [ ] Agendar una serie semanal de fertilizante: cada tarea tiene la dosis de su semana.
 - [ ] Agendar una serie mensual que empiece un 31: en los meses cortos cae el último día.
 - [ ] Editar una tarea de una serie con "Esta y todas las futuras", cambiando la fecha: todas se corren igual.
-- [ ] Completar un riego y tocar "Deshacer": vuelve a pendiente y el riego anterior queda como estaba.
-- [ ] Completar "Declarar muerta": pide confirmación; "Deshacer" vuelve a activar las plantas.
-- [ ] Completar "Cambiar ambiente": pide confirmación; "Deshacer" devuelve el ciclo a su espacio.
+- [ ] Completar un riego de hoy: se completa de un toque y en la ficha de la planta aparece "Riego" en la bitácora (una sola vez, no repetido con la tarea).
+- [ ] Completar un riego atrasado: pregunta "¿Qué día la hiciste?". Elegir ayer: la planta dice "regada ayer".
+- [ ] Desmarcar ese riego: pide confirmación, vuelve a pendiente, el registro desaparece y el riego anterior queda como estaba.
+- [ ] Completar una poda: queda "Poda" en la bitácora de cada planta.
+- [ ] Completar "Cosechar": pide pesos húmedos (opcionales). Las plantas pasan a Secado y en su ficha aparece la cosecha.
+- [ ] Completar "Declarar muerta": pide confirmación y motivo; desmarcarla vuelve a activar las plantas.
+- [ ] "Cambiar ambiente" de la única planta activa de un ciclo: se muda el ciclo entero.
+- [ ] "Cambiar ambiente" de una planta a un espacio sin ciclos: pregunta y deja crear un ciclo nuevo.
+- [ ] Una tarea vieja de "Cambiar ambiente" sin destino: al completarla pide el espacio.
+- [ ] Desmarcar una tarea después de cambiar la planta a mano: lo cambiado a mano no se toca.
+- [ ] Editar una tarea completada: sólo deja cambiar las notas.
 - [ ] Tocar dos veces rápido una tarea de riego: se completa una sola vez.
 - [ ] Esquejado: completarlo con 2 esquejes en un ciclo nuevo; desmarcarlo y volver a completarlo: no se duplican.
 - [ ] Agenda: cambiar de mes (carga ese mes), tocar un día del mes de al lado, ver los registros con su tipo.

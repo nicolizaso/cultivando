@@ -9,9 +9,10 @@ import { buildFeedLog, buildStoredMix, describeFeed, parseMixInput } from "@/app
 import type { FeedLog, UsageLine } from "@/app/lib/nutrition";
 import { loadMixSources, ownsAll } from "@/app/lib/nutrition-data";
 import { LOG_TYPE } from "@/app/lib/logs";
+import { setPlantsArchived, setPlantsCycle, setPlantsStage, setPlantsWatered, writePlantLogs } from "@/app/lib/plant-writes";
+import { stageLogTitle } from "@/app/lib/task-effects";
 import { STAGE_DATE_COLUMNS, STAGE_NAMES, getStageDateColumn, isStageName } from "@/app/lib/stage-logic";
 import type { StageName } from "@/app/lib/stage-logic";
-import type { Json } from "@/app/lib/database.types";
 import { dateKey, parseCultivationDate, todayKey } from "@/app/lib/dates";
 import { parseId, parseIds } from "@/app/lib/sanitize";
 import { IMAGES_BUCKET, storagePathFromPublicUrl } from "@/app/lib/uploads";
@@ -315,39 +316,13 @@ async function loadSelection(plantIds: unknown) {
   return { supabase, userId: user.id, plants: data as SelectedPlant[] };
 }
 
-/**
- * Anota el movimiento en la bitácora de cada planta.
- *
- * Antes se escribía un único registro por ciclo, con `plant_id` en null, y la
- * ficha de la planta lo pescaba por el ciclo. Con una selección repartida
- * entre ciclos —o sin ciclo— eso deja plantas sin rastro, así que ahora va una
- * entrada por planta, colgada también de su ciclo cuando lo tiene.
- *
- * Si la bitácora falla no se revierte nada: el cambio que pidió el usuario ya
- * está hecho y decirle que falló sería mentirle. Queda en el log del servidor.
+/*
+ * La bitácora y las escrituras viven en `plant-writes`: las tareas usan las
+ * mismas al completarse, así hacerlo a mano o por tarea deja el mismo rastro.
+ * Antes se escribía un único registro por ciclo, con `plant_id` en null; con
+ * una selección repartida entre ciclos —o sin ciclo— eso dejaba plantas sin
+ * rastro, así que va una entrada por planta, colgada también de su ciclo.
  */
-async function logForEachPlant(
-  supabase: ServerSupabase,
-  plants: SelectedPlant[],
-  userId: string,
-  entry: { type: string; title: string; notes: string; data?: Json | null },
-  createdAt: string
-) {
-  const { error } = await supabase.from('logs').insert(
-    plants.map((plant) => ({
-      plant_id: plant.id,
-      cycle_id: plant.cycle_id,
-      user_id: userId,
-      type: entry.type,
-      title: entry.title,
-      notes: entry.notes,
-      data: entry.data ?? null,
-      created_at: createdAt,
-    }))
-  );
-
-  if (error) console.error('Error escribiendo la bitácora en lote:', error);
-}
 
 /**
  * Mueve de etapa a todas las plantas seleccionadas y fecha la etapa nueva.
@@ -359,8 +334,7 @@ export async function bulkChangeStage(
   stage: string,
   date: string
 ): Promise<BulkResult> {
-  const dateColumn = getStageDateColumn(stage);
-  if (!dateColumn) return { success: false, error: 'Esa etapa no existe.' };
+  if (!isStageName(stage)) return { success: false, error: 'Esa etapa no existe.' };
 
   const timestamp = toTimestamp(date);
   if (!timestamp) return { success: false, error: 'La fecha no es válida.' };
@@ -370,27 +344,19 @@ export async function bulkChangeStage(
 
   const { supabase, userId, plants } = selection;
 
-  const { error } = await supabase
-    .from('plants')
-    .update({
-      stage,
-      stage_updated_at: timestamp,
-      // La columna sale del mapa de etapas, nunca del cliente.
-      [dateColumn]: timestamp,
-    })
-    .in('id', plants.map((plant) => plant.id));
+  const { error } = await setPlantsStage(supabase, plants.map((plant) => plant.id), stage, timestamp);
 
   if (error) {
     return { success: false, error: friendlyDbError(error, 'No se pudo cambiar la etapa.', {}, 'Error en el cambio de etapa en lote:') };
   }
 
-  await logForEachPlant(
+  await writePlantLogs(
     supabase,
-    plants,
     userId,
+    plants,
     {
       type: LOG_TYPE.stage,
-      title: `Cambio de etapa a ${stage}`,
+      title: stageLogTitle(stage),
       notes: plants.length > 1 ? `Cambio en lote sobre ${plantCountLabel(plants.length)}.` : '',
     },
     timestamp
@@ -439,10 +405,7 @@ export async function bulkWaterPlants(
     ({ feed, totals } = buildFeedLog(stored, watering.liters_total ?? null, plants.length));
   }
 
-  const { error } = await supabase
-    .from('plants')
-    .update({ last_water: day })
-    .in('id', plants.map((plant) => plant.id));
+  const { error } = await setPlantsWatered(supabase, plants.map((plant) => plant.id), day);
 
   if (error) {
     return { success: false, error: friendlyDbError(error, 'No se pudo registrar el riego.', {}, 'Error en el riego en lote:') };
@@ -455,10 +418,10 @@ export async function bulkWaterPlants(
     ...(feed ? { feed } : {}),
   };
 
-  await logForEachPlant(
+  await writePlantLogs(
     supabase,
-    plants,
     userId,
+    plants,
     {
       type: LOG_TYPE.water,
       title: 'Riego',
@@ -470,7 +433,7 @@ export async function bulkWaterPlants(
       ]
         .filter(Boolean)
         .join('\n'),
-      data: Object.keys(data).length > 0 ? (data as Json) : null,
+      data: Object.keys(data).length > 0 ? data : null,
     },
     timestamp
   );
@@ -517,10 +480,7 @@ export async function bulkSetArchived(
   // los tipos de TypeScript no existen en tiempo de ejecución.
   const isArchived = archived === true;
 
-  const { error } = await supabase
-    .from('plants')
-    .update({ is_archived: isArchived })
-    .in('id', plants.map((plant) => plant.id));
+  const { error } = await setPlantsArchived(supabase, plants.map((plant) => plant.id), isArchived);
 
   if (error) {
     return {
@@ -536,10 +496,10 @@ export async function bulkSetArchived(
 
   const reason = cleanText(notes, 500);
 
-  await logForEachPlant(
+  await writePlantLogs(
     supabase,
-    plants,
     userId,
+    plants,
     {
       type: LOG_TYPE.other,
       title: isArchived ? 'Archivada' : 'Restaurada',
@@ -582,10 +542,7 @@ export async function bulkMoveToCycle(
     cycleName = cycle.name;
   }
 
-  const { error } = await supabase
-    .from('plants')
-    .update({ cycle_id: targetId })
-    .in('id', plants.map((plant) => plant.id));
+  const { error } = await setPlantsCycle(supabase, plants.map((plant) => plant.id), targetId);
 
   if (error) {
     return { success: false, error: friendlyDbError(error, 'No se pudieron mover las plantas.', {}, 'Error moviendo plantas de ciclo:') };
@@ -593,11 +550,11 @@ export async function bulkMoveToCycle(
 
   const now = new Date().toISOString();
 
-  await logForEachPlant(
+  await writePlantLogs(
     supabase,
+    userId,
     // La entrada cuelga del ciclo nuevo, que es donde va a leerse.
     plants.map((plant) => ({ ...plant, cycle_id: targetId })),
-    userId,
     {
       type: LOG_TYPE.other,
       title: targetId === null ? 'Fuera de ciclo' : `Movida a ${cycleName}`,

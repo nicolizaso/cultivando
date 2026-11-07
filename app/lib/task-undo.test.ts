@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { canStillUndo, groupByValue, hasUndoableChanges, readLastEffect, UNDO_WINDOW_MS } from './task-undo.ts';
+import { canRevertUnmarked, groupByValue, hasUndoableChanges, readLastEffect } from './task-undo.ts';
 
 test('readLastEffect lee lo bien formado y descarta lo demás', () => {
   const effect = readLastEffect({
@@ -36,13 +36,49 @@ test('hasUndoableChanges', () => {
   assert.equal(hasUndoableChanges({ at: 'x', stage: { column: 'c', plants: [] } }), false);
 });
 
-test('canStillUndo respeta la ventana', () => {
-  const now = new Date('2026-10-17T12:00:00Z');
-  const recent = { at: new Date(now.getTime() - 60_000).toISOString() };
-  const old = { at: new Date(now.getTime() - UNDO_WINDOW_MS - 1).toISOString() };
-  assert.equal(canStillUndo(recent, now), true);
-  assert.equal(canStillUndo(old, now), false);
-  assert.equal(canStillUndo({ at: 'no es fecha' }, now), false);
+test('readLastEffect - lo que escribió la tarea, para revertir sólo si sigue igual', () => {
+  const effect = readLastEffect({
+    last_effect: {
+      at: '2026-11-07T12:00:00Z',
+      water: [{ id: 1, last_water: '2026-11-01' }],
+      waterSet: '2026-11-07',
+      stage: {
+        column: 'date_secado',
+        plants: [{ id: 5, stage: 'Floración', stage_updated_at: null, date: null }],
+        set: { stage: 'Secado', at: '2026-11-07T15:00:00.000Z' },
+      },
+      cycles: [{ id: 13, space_id: 8, to: 9 }, { id: 14, space_id: 8, to: 'x' }],
+      plants: [{ id: 56, cycle_id: 13, to: 17 }, { id: 57, cycle_id: null, to: null }],
+      createdCycle: 21,
+      harvests: [5, 'x', -2, 6],
+    },
+  });
+  assert.deepEqual(effect, {
+    at: '2026-11-07T12:00:00Z',
+    water: [{ id: 1, last_water: '2026-11-01' }],
+    waterSet: '2026-11-07',
+    stage: {
+      column: 'date_secado',
+      plants: [{ id: 5, stage: 'Floración', stage_updated_at: null, date: null }],
+      set: { stage: 'Secado', at: '2026-11-07T15:00:00.000Z' },
+    },
+    // Un `to` que no se entiende se descarta: ese ciclo se revierte sin filtro.
+    cycles: [{ id: 13, space_id: 8, to: 9 }, { id: 14, space_id: 8 }],
+    plants: [{ id: 56, cycle_id: 13, to: 17 }, { id: 57, cycle_id: null, to: null }],
+    createdCycle: 21,
+    harvests: [5, 6],
+  });
+});
+
+test('readLastEffect - un last_effect de antes (sin lo escrito) se lee igual', () => {
+  const effect = readLastEffect({ last_effect: { at: 'x', cycles: [{ id: 17, space_id: 9 }] } });
+  assert.deepEqual(effect, { at: 'x', cycles: [{ id: 17, space_id: 9 }] });
+});
+
+test('hasUndoableChanges - fichas de cosecha y ciclo creado también cuentan', () => {
+  assert.equal(hasUndoableChanges({ at: 'x', harvests: [3] }), true);
+  assert.equal(hasUndoableChanges({ at: 'x', createdCycle: 9 }), true);
+  assert.equal(hasUndoableChanges({ at: 'x', harvests: [] }), false);
 });
 
 test('groupByValue junta los ids con el mismo valor', () => {
@@ -70,4 +106,11 @@ test('readLastEffect - registros de bitácora y stock de una mezcla', () => {
   assert.deepEqual(effect, { at: '2026-11-07T12:00:00Z', logs: [11, 12], stock: [{ fertilizer_id: 1, delta: -50 }] });
   assert.equal(hasUndoableChanges(effect), true);
   assert.equal(hasUndoableChanges({ at: 'x', logs: [], stock: [] }), false);
+});
+
+test('canRevertUnmarked: lo guardado sin marcas (antes de este cambio) sólo se revierte en los 30 minutos', () => {
+  const now = new Date('2026-11-07T12:00:00Z');
+  assert.equal(canRevertUnmarked({ at: '2026-11-07T11:45:00Z' }, now), true);
+  assert.equal(canRevertUnmarked({ at: '2026-11-06T00:08:23Z' }, now), false);
+  assert.equal(canRevertUnmarked({ at: 'no es fecha' }, now), false);
 });

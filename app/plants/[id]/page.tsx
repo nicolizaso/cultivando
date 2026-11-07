@@ -10,7 +10,7 @@ import LogModal from "@/components/LogModal";
 import PlantMetricsDisplay from "@/components/PlantMetricsDisplay";
 import TimelineSection, { TimelineItem } from "@/components/TimelineSection";
 import { getPlantMetrics, getStageColor, getWaterStatus } from "@/app/lib/utils";
-import { LOG_TYPE, canonicalLogType } from "@/app/lib/logs";
+import { LOG_TYPE, canonicalLogType, taskIdOfLog } from "@/app/lib/logs";
 import { describeWatering, readWatering } from "@/app/lib/watering";
 import { weekInStage } from "@/app/lib/nutrition";
 import WaterPlantButton from "@/components/WaterPlantButton";
@@ -114,8 +114,10 @@ export default async function PlantDetailPage({ params }: { params: Promise<{ id
   }
   const uniqueTasks = Array.from(tasksById.values());
 
+  // Una tarea completada que dejó registros se ve por sus registros, no dos veces.
+  const loggedTaskIds = new Set(logs.map((log) => taskIdOfLog(log.data)).filter((id): id is number => id !== null));
   const pendingTasksList = uniqueTasks.filter((t) => t.status === 'pending');
-  const completedTasksList = uniqueTasks.filter((t) => t.status !== 'pending');
+  const completedTasksList = uniqueTasks.filter((t) => t.status !== 'pending' && !loggedTaskIds.has(Number(t.id)));
 
   const pendingTimelineItems: TimelineItem[] = pendingTasksList.map((task) => ({
     id: `task-${task.id}`,

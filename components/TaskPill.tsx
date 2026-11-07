@@ -1,7 +1,7 @@
 'use client'
 
 import { useRef } from 'react'
-import { Check, Trash2, RotateCcw, CheckCircle2, Circle, Pencil, Leaf } from 'lucide-react'
+import { Check, RotateCcw, CheckCircle2, Circle, Pencil, Leaf } from 'lucide-react'
 import { Task } from '@/app/lib/types'
 import { getTaskType } from '@/app/lib/constants'
 import { formatInAppTz } from '@/app/lib/dates'
@@ -9,10 +9,8 @@ import { formatInAppTz } from '@/app/lib/dates'
 interface TaskPillProps {
   task: Task
   onComplete?: (id: string | number) => void
-  onDelete?: (id: string | number) => void
   onEdit?: (task: Task) => void
   onClick?: (task: Task) => void
-  readOnly?: boolean
   selectionMode?: boolean
   isSelected?: boolean
   onSelect?: (id: string | number) => void
@@ -27,7 +25,7 @@ interface TaskPillProps {
  * dos temas. El color y el icono salen de la taxonomía compartida, no de una
  * tabla propia como antes.
  */
-export default function TaskPill({ task, onComplete, onDelete, onEdit, onClick, readOnly, selectionMode, isSelected, onSelect, onLongPress }: TaskPillProps) {
+export default function TaskPill({ task, onComplete, onEdit, onClick, selectionMode, isSelected, onSelect, onLongPress }: TaskPillProps) {
   const taskType = getTaskType(task.type || 'otro')
   const Icon = taskType.icon
   const isCompleted = task.status === 'completed'
@@ -36,7 +34,7 @@ export default function TaskPill({ task, onComplete, onDelete, onEdit, onClick, 
   const isLongPressTriggered = useRef(false)
 
   const handleStart = () => {
-    if (readOnly || selectionMode) return
+    if (selectionMode) return
     isLongPressTriggered.current = false
     timerRef.current = setTimeout(() => {
       isLongPressTriggered.current = true
@@ -61,7 +59,7 @@ export default function TaskPill({ task, onComplete, onDelete, onEdit, onClick, 
       onSelect(task.id)
     } else if (onClick) {
       onClick(task)
-    } else if (onComplete && !readOnly && !selectionMode) {
+    } else if (onComplete && !selectionMode) {
       onComplete(task.id)
     }
   }
@@ -75,8 +73,6 @@ export default function TaskPill({ task, onComplete, onDelete, onEdit, onClick, 
     }
     return task.cycleNames || ''
   })()
-
-  const interactive = !readOnly
 
   const body = (
     <>
@@ -127,33 +123,29 @@ export default function TaskPill({ task, onComplete, onDelete, onEdit, onClick, 
     >
       {/* El área principal es un botón real: antes era un div con onClick,
           inalcanzable con teclado. La pulsación larga sigue disponible. */}
-      {interactive ? (
-        <button
-          type="button"
-          onMouseDown={handleStart}
-          onMouseUp={handleEnd}
-          onMouseLeave={handleEnd}
-          onTouchStart={handleStart}
-          onTouchEnd={handleEnd}
-          onClick={handleActivate}
-          onContextMenu={(e) => e.preventDefault()}
-          aria-pressed={selectionMode ? isSelected : isCompleted}
-          aria-label={
-            selectionMode
-              ? `Seleccionar ${task.title}`
-              : isCompleted
-                ? `Marcar ${task.title} como pendiente`
-                : `Marcar ${task.title} como completada`
-          }
-          className="flex min-w-0 flex-1 select-none items-center gap-3 p-3 text-left"
-        >
-          {body}
-        </button>
-      ) : (
-        <div className="flex min-w-0 flex-1 items-center gap-3 p-3">{body}</div>
-      )}
+      <button
+        type="button"
+        onMouseDown={handleStart}
+        onMouseUp={handleEnd}
+        onMouseLeave={handleEnd}
+        onTouchStart={handleStart}
+        onTouchEnd={handleEnd}
+        onClick={handleActivate}
+        onContextMenu={(e) => e.preventDefault()}
+        aria-pressed={selectionMode ? isSelected : isCompleted}
+        aria-label={
+          selectionMode
+            ? `Seleccionar ${task.title}`
+            : isCompleted
+              ? `Marcar ${task.title} como pendiente`
+              : `Marcar ${task.title} como completada`
+        }
+        className="flex min-w-0 flex-1 select-none items-center gap-3 p-3 text-left"
+      >
+        {body}
+      </button>
 
-      {!readOnly && !selectionMode && (
+      {!selectionMode && (
         <div className="flex shrink-0 items-center gap-0.5">
           {onComplete && (
             <button
@@ -177,17 +169,6 @@ export default function TaskPill({ task, onComplete, onDelete, onEdit, onClick, 
               title="Editar"
             >
               <Pencil size={16} aria-hidden="true" />
-            </button>
-          )}
-          {onDelete && (
-            <button
-              type="button"
-              onClick={() => onDelete(task.id)}
-              className="btn-icon btn-icon-sm text-[color:var(--danger)]"
-              aria-label={`Eliminar ${task.title}`}
-              title="Eliminar"
-            >
-              <Trash2 size={16} aria-hidden="true" />
             </button>
           )}
         </div>

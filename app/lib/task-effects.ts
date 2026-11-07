@@ -1,5 +1,6 @@
 import { isStageName, STAGE_NAMES } from "./stage-logic.ts";
 import type { StageName } from "./stage-logic.ts";
+import { APP_UTC_OFFSET, dateKey, todayKey } from "./dates.ts";
 
 /**
  * Qué le pasa a las plantas cuando se completa una tarea.
@@ -8,7 +9,8 @@ import type { StageName } from "./stage-logic.ts";
  * planta se cortó y está secándose, declararla muerta significa que ya no está
  * en el cultivo. Antes esto había que hacerlo a mano después de tildar la
  * tarea, y lo normal era olvidarse. Acá se decide, sin tocar la base, qué
- * cambio corresponde a cada tipo; la server action sólo lo aplica.
+ * cambio corresponde a cada tipo y qué queda en la bitácora; la server action
+ * sólo lo aplica.
  */
 
 export interface StageEffect {
@@ -22,15 +24,25 @@ export interface StageEffect {
   onlyForward: boolean;
 }
 
-export interface WaterEffect {
-  kind: 'water';
+/**
+ * Lo que hace completar una tarea, según su tipo. Toda tarea deja un registro
+ * en la bitácora de cada planta que alcanza (`logType`), aunque no cambie
+ * nada más: una poda también es parte de la historia de la planta.
+ */
+export interface CompletionPlan {
+  /** El tipo con que se escribe el registro en la bitácora. */
+  logType: string;
+  /** Marca el riego (`last_water`). */
+  water: boolean;
+  stage: StageEffect | null;
+  archive: boolean;
+  /** Crea la ficha de cosecha de las plantas que no la tienen. */
+  harvest: boolean;
+  /** Muda ciclos y plantas al espacio destino ("Cambiar ambiente"). */
+  move: boolean;
+  /** Anota la mezcla guardada (si la tarea tiene una). */
+  feed: boolean;
 }
-
-export interface ArchiveEffect {
-  kind: 'archive';
-}
-
-export type TaskEffect = StageEffect | WaterEffect | ArchiveEffect;
 
 /** La etapa en la que entra una planta al cosecharla. */
 export const HARVEST_STAGE: StageName = 'Secado';
@@ -41,32 +53,72 @@ interface CompletableTask {
   target_stage?: string | null;
 }
 
+/** Los tipos que sólo dejan su registro, con su mismo id. */
+const LOG_ONLY_TYPES = new Set(['poda', 'trasplante', 'entrenamiento', 'repelente', 'otro']);
+
 /**
- * El efecto que tiene completar la tarea, o null si no toca nada.
- *
- * El esquejado y el cambio de ambiente no pasan por acá: el primero necesita
- * datos que sólo da su modal y el segundo mueve ciclos, no plantas.
+ * Qué hace completar la tarea. Null para el esquejado, que se completa desde
+ * su propia ventana porque necesita saber cuántos esquejes salieron.
  */
-export function getTaskCompletionEffect(task: CompletableTask): TaskEffect | null {
+export function getCompletionPlan(task: CompletableTask): CompletionPlan | null {
+  const plan: CompletionPlan = {
+    logType: 'otro', water: false, stage: null, archive: false, harvest: false, move: false, feed: false,
+  };
   switch (task.type) {
+    case 'esquejado':
+      return null;
     case 'riego':
-      return { kind: 'water' };
+    case 'lavado':
+      return { ...plan, logType: task.type, water: true };
     case 'fertilizante':
       // Sólo cuenta como riego si el fertilizante se aplicó en el agua.
-      return task.application_type === 'Riego' ? { kind: 'water' } : null;
+      return { ...plan, logType: 'fertilizante', feed: true, water: task.application_type === 'Riego' };
     case 'cambio_etapa':
       // `target_stage` viene de la base pero lo eligió el cliente: si no es una
       // de las siete etapas no se escribe nada.
-      return isStageName(task.target_stage)
-        ? { kind: 'stage', stage: task.target_stage, onlyForward: false }
-        : null;
+      return {
+        ...plan,
+        logType: 'cambio_etapa',
+        stage: isStageName(task.target_stage) ? { kind: 'stage', stage: task.target_stage, onlyForward: false } : null,
+      };
     case 'cosechar':
-      return { kind: 'stage', stage: HARVEST_STAGE, onlyForward: true };
+      return { ...plan, logType: 'cosechar', harvest: true, stage: { kind: 'stage', stage: HARVEST_STAGE, onlyForward: true } };
     case 'muerta':
-      return { kind: 'archive' };
+      return { ...plan, logType: 'muerta', archive: true };
+    case 'ambiente':
+      return { ...plan, logType: 'ambiente', move: true };
     default:
-      return null;
+      return { ...plan, logType: task.type && LOG_ONLY_TYPES.has(task.type) ? task.type : 'otro' };
   }
+}
+
+/** El título del registro de un cambio de etapa, el mismo a mano o por tarea. */
+export function stageLogTitle(stage: string): string {
+  return `Cambio de etapa a ${stage}`;
+}
+
+/** El título del registro de una mudanza de ciclo. */
+export function cycleMoveTitle(from: string, to: string): string {
+  return `Mudanza de espacio: ${from} → ${to}`;
+}
+
+/** El registro completo de una mudanza de ciclo (va a nivel ciclo, sin planta). */
+export function cycleMoveEntry(from: string, to: string): { type: 'ambiente'; title: string; notes: string } {
+  return { type: 'ambiente', title: cycleMoveTitle(from, to), notes: `El ciclo pasó de "${from}" a "${to}".` };
+}
+
+const LOG_TITLES: Record<string, string> = {
+  riego: 'Riego',
+  lavado: 'Lavado de raíces',
+  fertilizante: 'Fertilizante',
+  cosechar: 'Cosecha',
+  muerta: 'Declarada muerta',
+};
+
+/** El título del registro que deja la tarea: lo que pasó, no lo que había que hacer. */
+export function logTitleFor(type: string, taskTitle: string, stage?: string | null): string {
+  if (type === 'cambio_etapa' && stage) return stageLogTitle(stage);
+  return LOG_TITLES[type] ?? taskTitle;
 }
 
 /**
@@ -83,18 +135,56 @@ export function shouldApplyStage(currentStage: string | null | undefined, effect
   return current < STAGE_NAMES.indexOf(effect.stage);
 }
 
+const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
+
 /**
- * La fecha con la que se registra el efecto: el día en que la tarea estaba
- * agendada, no el día en que alguien se acordó de tildarla. Cosechar el 19 y
- * marcarlo el 24 tiene que dejar el secado empezando el 19.
+ * La fecha con la que se registra el efecto: el día en que la tarea se hizo,
+ * que en una atrasada lo dice quien la completa. Hoy (o sin día) es ahora; un
+ * día pasado queda al mediodía de ese día en Argentina. Nunca en el futuro.
  *
- * Si la tarea se completa antes de tiempo se usa el momento de completarla:
- * una etapa no puede empezar en el futuro.
+ * Antes se usaba el día agendado: un riego atrasado 5 días y hecho hoy dejaba
+ * la planta "sin regar hace 5 días".
  */
-export function getTaskEffectDate(dueDate: string | null | undefined, now: Date = new Date()): string {
-  const due = dueDate ? new Date(dueDate) : null;
-  if (!due || isNaN(due.getTime()) || due.getTime() > now.getTime()) return now.toISOString();
-  return due.toISOString();
+export function getTaskEffectDate(doneOn: string | null | undefined, now: Date = new Date()): string {
+  if (typeof doneOn !== 'string' || !DATE_ONLY.test(doneOn) || doneOn >= todayKey(now)) return now.toISOString();
+  const date = new Date(`${doneOn}T12:00:00${APP_UTC_OFFSET}`);
+  return isNaN(date.getTime()) ? now.toISOString() : date.toISOString();
+}
+
+/** ¿El día agendado ya pasó? Se cuentan días en Argentina. */
+export function isOverdue(dueDate: string | null | undefined, now: Date = new Date()): boolean {
+  const day = dateKey(dueDate);
+  return day !== null && day < todayKey(now);
+}
+
+/** Lo que hay que preguntar al completar una tarea antes de aplicarla. */
+export interface CompletionNeeds {
+  /** Atrasada: qué día se hizo. */
+  date: boolean;
+  /** Fertilizante con mezcla: litros y stock. */
+  feed: boolean;
+  /** Cosechar: pesos húmedos, opcionales. */
+  harvest: boolean;
+  /** Cambiar ambiente: destino o ciclo, si hacen falta. */
+  ambiente: boolean;
+  /** Cambios grandes que se confirman. */
+  confirm: 'muerta' | 'ambiente' | null;
+  any: boolean;
+}
+
+export function completionNeeds(
+  task: { type: string; due_date: string; target_space_id?: number | null },
+  hasMix: boolean,
+  now: Date = new Date()
+): CompletionNeeds {
+  const needs = {
+    date: isOverdue(task.due_date, now),
+    feed: task.type === 'fertilizante' && hasMix,
+    harvest: task.type === 'cosechar',
+    ambiente: task.type === 'ambiente',
+    confirm: task.type === 'muerta' || task.type === 'ambiente' ? task.type : null,
+  } as const;
+  return { ...needs, any: needs.date || needs.feed || needs.harvest || needs.ambiente || needs.confirm !== null };
 }
 
 /**
@@ -200,18 +290,18 @@ export function resolveTaskPlants(
  * Qué mueve una tarea de "Cambiar ambiente" al completarse.
  *
  * Las plantas no tienen espacio propio: viven en un ciclo y el ciclo en un
- * espacio. Mudar un ciclo elegido entero es mudar el ciclo. Mudar una planta
- * elegida sola es pasarla a un ciclo del espacio destino, y eso sólo se hace
- * cuando no hay que adivinar cuál: si el espacio tiene exactamente un ciclo
- * activo. Si no tiene ninguno o tiene varios, la planta se queda donde está y
- * se cuenta como pendiente, para moverla a mano.
+ * espacio. Mudar un ciclo elegido entero es mudar el ciclo, y elegir sueltas
+ * todas las plantas activas de un ciclo también: es el mismo cultivo cambiando
+ * de lugar. Las demás plantas sueltas pasan a un ciclo del espacio destino: el
+ * que se eligió al completar o, si no, el único activo. Si no hay ninguno o
+ * hay varios, quedan pendientes y la hoja de completar pregunta.
  */
 export interface AmbienteMovePlan {
   /** Ciclos a mudar al espacio destino. */
   cycleIds: number[];
   /** Plantas sueltas a pasar a `targetCycleId`. */
   plantIds: number[];
-  /** El único ciclo activo del espacio destino, si lo hay. */
+  /** El ciclo del destino que recibe a las plantas sueltas, si lo hay. */
   targetCycleId: number | null;
   /** Plantas sueltas que no se pudieron ubicar. */
   unplacedPlantIds: number[];
@@ -225,13 +315,26 @@ export function planAmbienteMove(
   /** Espacio actual de cada ciclo involucrado (los elegidos y los de las plantas). */
   cycleSpaces: Map<number, number | null>,
   /** Ciclos activos del espacio destino. */
-  activeCyclesInTarget: number[]
+  activeCyclesInTarget: number[],
+  /** Las plantas activas de cada ciclo involucrado, hoy. */
+  activePlantsByCycle: Map<number, number[]>,
+  /** El ciclo del destino elegido al completar. */
+  chosenCycleId: number | null = null
 ): AmbienteMovePlan {
-  const cycleIds = targets.cycle_ids.filter((id) => cycleSpaces.get(id) !== targetSpaceId);
-  const movingCycles = new Set(targets.cycle_ids);
-  const targetCycleId = activeCyclesInTarget.length === 1 ? activeCyclesInTarget[0] : null;
-
   const chosen = new Set(targets.plant_ids);
+
+  // Ciclos cuyas plantas activas se eligieron todas, una por una.
+  const fullCycles = Array.from(activePlantsByCycle.entries())
+    .filter(([, ids]) => ids.length > 0 && ids.every((id) => chosen.has(Number(id))))
+    .map(([cycleId]) => Number(cycleId));
+
+  const movingCycles = new Set([...targets.cycle_ids, ...fullCycles]);
+  const cycleIds = Array.from(movingCycles).filter((id) => cycleSpaces.get(id) !== targetSpaceId);
+
+  const targetCycleId = chosenCycleId != null && activeCyclesInTarget.includes(chosenCycleId)
+    ? chosenCycleId
+    : activeCyclesInTarget.length === 1 ? activeCyclesInTarget[0] : null;
+
   const plantIds: number[] = [];
   const unplacedPlantIds: number[] = [];
 
