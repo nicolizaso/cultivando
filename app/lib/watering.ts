@@ -3,12 +3,11 @@
  * ------------------------------------------------------------------
  * pH, EC y litros de cada riego, que se guardan en `logs.data.watering`. Con
  * eso la bitácora deja de decir sólo "Riego" y se puede ver qué se le dio a
- * cada planta. Acá se validan los valores y se arma el texto que se muestra;
- * también la calculadora de dosis (ml de cada producto para esos litros).
+ * cada planta. Acá se validan los valores y se arma el texto que se muestra.
+ * La calculadora de dosis vive en `nutrition.ts` (`mixUsage`).
  */
 
-import type { RecipeItem } from './nutrition.ts';
-import { formatDose } from './nutrition.ts';
+import { parseDecimal } from './sanitize.ts';
 
 export interface WateringData {
   /** Litros en total del riego. */
@@ -34,13 +33,7 @@ const LIMITS: Record<'liters_total' | 'ph' | 'ec' | 'runoff_ph' | 'runoff_ec' | 
 };
 
 /** "6,2" o "6.2" → 6.2; vacío → undefined; basura → NaN. */
-function readNumber(value: unknown): number | undefined {
-  if (value === null || value === undefined) return undefined;
-  if (typeof value === 'number') return value;
-  const text = String(value).trim().replace(',', '.');
-  if (text === '') return undefined;
-  return Number(text);
-}
+const readNumber = parseDecimal;
 
 /**
  * Valida lo que llega del formulario. Devuelve los datos limpios o el primer
@@ -106,31 +99,4 @@ export function describeWatering(data: WateringData): string {
   if (data.runoff_ec !== undefined) runoff.push(`EC ${fmt(data.runoff_ec)}`);
   if (runoff.length > 0) parts.push(`drenaje ${runoff.join(', ')}`);
   return parts.join(' · ');
-}
-
-export interface DoseLine {
-  fertilizerId: number;
-  name: string;
-  /** ml/L, o null si el producto no tiene dosis cargada. */
-  perLiter: number | null;
-  /** ml para los litros pedidos. */
-  total: number | null;
-}
-
-/** Cuántos ml de cada producto van en `liters` litros de agua. */
-export function doseForLiters(items: RecipeItem[], liters: number): DoseLine[] {
-  const valid = Number.isFinite(liters) && liters > 0;
-  return items.map((item) => ({
-    fertilizerId: item.fertilizerId,
-    name: item.name,
-    perLiter: item.dose,
-    total: item.dose === null || !valid ? null : Math.round(item.dose * liters * 100) / 100,
-  }));
-}
-
-/** "Grow A: 20 ml + Bloom B: 15 ml (10 L, semana 3)" para la nota del riego. */
-export function describeDoses(lines: DoseLine[], liters: number, week: number): string {
-  if (lines.length === 0) return '';
-  const parts = lines.map((line) => `${line.name}: ${line.total === null ? '?' : `${formatDose(line.total)} ml`}`);
-  return `${parts.join(' + ')} (${fmt(liters)} L, semana ${week})`;
 }

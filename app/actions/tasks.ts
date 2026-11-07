@@ -3,14 +3,19 @@
 import { requireUser } from "@/app/lib/auth"
 import type { ServerSupabase } from "@/app/lib/auth"
 import { TASK_TYPES, getTaskType } from "@/app/lib/constants"
-import { dateKey, daysBetweenKeys, todayKey } from "@/app/lib/dates"
-import { averageDays, buildRecipe, recipeItems, weekInStage, withRecipe } from "@/app/lib/nutrition"
-import type { ComboInfo, FertilizerDoseInfo, NutritionSelection } from "@/app/lib/nutrition"
+import { addDaysToKey, dateKey, daysBetweenKeys, todayKey } from "@/app/lib/dates"
+import {
+  buildFeedLog, buildStoredMix, describeFeed, hasStoredMix, mixLabel, mixRecipe, parseMixInput, readStoredMix,
+  resolveMix, weekInStage, withRecipe,
+} from "@/app/lib/nutrition"
+import type { MixItem, StoredMix } from "@/app/lib/nutrition"
+import { loadMixSources, ownsAll } from "@/app/lib/nutrition-data"
+import type { MixSources } from "@/app/lib/nutrition-data"
 import { getPlantMetrics } from "@/app/lib/plant-metrics"
 import type { PlantDates } from "@/app/lib/plant-metrics"
 import { buildOccurrenceDates, isFrequency } from "@/app/lib/recurrence"
 import { friendlyDbError } from "@/app/lib/errors"
-import { parseId, parseIds } from "@/app/lib/sanitize"
+import { parseDecimal, parseId, parseIds } from "@/app/lib/sanitize"
 import { revalidatePath } from "next/cache"
 import { randomUUID } from 'crypto'
 import { mapTaskCycles } from "../lib/utils"
@@ -71,52 +76,27 @@ function readTargets(value: unknown): { kind: TargetKind; id: number }[] {
   return targets
 }
 
-function readNutrition(value: unknown): NutritionSelection | null {
-  const type = (value as { type?: unknown } | null)?.type
-  const id = parseId((value as { id?: unknown } | null)?.id)
-  return (type === 'product' || type === 'combo') && id ? { type, id } : null
-}
-
 /**
- * Prepara la receta de cada fecha de una serie de fertilizante: la semana de
- * la etapa avanza entre una repetición y otra, así que la dosis también.
- * Los días en etapa de hoy salen de las plantas del primer objetivo.
+ * Lee la mezcla del formulario y la valida contra los productos del usuario.
+ * `undefined` = no vino (no se toca), `null` = sin mezcla.
  */
-async function planNutrition(
+async function readMix(
   supabase: ServerSupabase,
   userId: string,
-  nutrition: NutritionSelection,
-  plantIds: number[]
-): Promise<((day: string) => { recipe: string; week: number }) | null> {
-  const [fertilizersResult, combosResult, plantsResult] = await Promise.all([
-    supabase.from('fertilizers').select('id, name, dosage_type, fixed_dosage, weekly_dosages').eq('user_id', userId),
-    supabase.from('fertilizer_combos').select('id, combo_items ( fertilizer_id, fertilizers ( name ) )').eq('user_id', userId),
-    plantIds.length > 0
-      ? supabase.from('plants').select(`stage, planted_at, stage_updated_at, ${STAGE_DATE_SELECT}`).in('id', plantIds).eq('is_archived', false)
-      : Promise.resolve({ data: [] as PlantDates[], error: null }),
-  ])
+  value: unknown
+): Promise<{ mix: { items: MixItem[]; stage_days: number } | null; sources: MixSources | null } | { error: string }> {
+  const input = parseMixInput(value)
+  if (input === 'invalid') return { error: 'Revisá los fertilizantes: hay algo que no se entiende.' }
+  if (!input) return { mix: null, sources: null }
+  const sources = await loadMixSources(supabase, userId)
+  if ('error' in sources) return { error: sources.error }
+  if (!ownsAll(input.items, sources.fertilizers)) return { error: 'Alguno de los productos ya no existe.' }
+  return { mix: input, sources }
+}
 
-  if (fertilizersResult.error || combosResult.error) {
-    console.error('No se pudo leer la nutrición para la receta:', fertilizersResult.error ?? combosResult.error)
-    return null
-  }
-
-  const combos: ComboInfo[] = (combosResult.data ?? []).map((combo) => ({
-    id: Number(combo.id),
-    products: ((combo.combo_items ?? []) as { fertilizer_id: number; fertilizers: { name: string } | { name: string }[] | null }[]).map((item) => {
-      const fertilizer = Array.isArray(item.fertilizers) ? item.fertilizers[0] : item.fertilizers
-      return { fertilizer_id: Number(item.fertilizer_id), name: fertilizer?.name ?? 'Producto' }
-    }),
-  }))
-
-  const today = todayKey()
-  const baseDays = averageDays(((plantsResult.data ?? []) as PlantDates[]).map((plant) => getPlantMetrics(plant).daysInCurrentStage)) ?? 0
-  const fertilizers = (fertilizersResult.data ?? []) as FertilizerDoseInfo[]
-
-  return (day) => {
-    const week = weekInStage(baseDays + Math.max(0, daysBetweenKeys(today, day)))
-    return { recipe: buildRecipe(recipeItems(nutrition, fertilizers, combos, week), week), week }
-  }
+/** Los detalles de una tarea de fertilizante: la receta arriba y las notas abajo. */
+function describeWithMix(notes: string, mix: StoredMix | null): string | null {
+  return (mix ? withRecipe(notes, mixRecipe(mix.resolved, mix.week)) : notes) || null
 }
 
 /**
@@ -212,30 +192,21 @@ export async function createTask(input: unknown) {
     : { dates: [startDay], truncated: false }
   if (dates.length === 0) return { error: 'La fecha no es válida.' }
 
-  // 3. Receta por fecha, si es un fertilizante con producto elegido.
-  const nutrition = taskType.id === 'fertilizante' ? readNutrition(form.nutrition) : null
-  let recipeFor: Awaited<ReturnType<typeof planNutrition>> = null
-  if (nutrition) {
-    const first = targets[0]
-    const weekPlantIds = first.kind === 'plant'
-      ? [first.id]
-      : ((cyclePlants ?? []) as { id: number; cycle_id: number | null }[])
-          .filter((plant) =>
-            first.kind === 'cycle'
-              ? Number(plant.cycle_id) === first.id
-              : (spaceCycles.data ?? []).some((cycle) => Number(cycle.id) === Number(plant.cycle_id) && Number(cycle.space_id) === first.id)
-          )
-          .map((plant) => Number(plant.id))
-    recipeFor = await planNutrition(supabase, user.id, nutrition, weekPlantIds)
-  }
+  // 3. La mezcla, si es un fertilizante con productos. La receta se arma para
+  // cada fecha: en una serie la semana de la etapa avanza y la dosis también.
+  const mixResult = taskType.id === 'fertilizante' ? await readMix(supabase, user.id, form.nutrition) : { mix: null, sources: null }
+  if ('error' in mixResult) return { error: mixResult.error }
+  const { mix, sources } = mixResult
 
   const recurrenceId = isRecurring && dates.length > 1 ? randomUUID() : null
 
   const rows = dates.map((day) => {
-    const planned = recipeFor?.(day)
+    const stored = mix && sources
+      ? buildStoredMix(mix.items, sources.fertilizers, sources.combos, mix.stage_days + Math.max(0, daysBetweenKeys(startDay, day)))
+      : null
     return {
       title,
-      description: planned ? withRecipe(description, planned.recipe) : description || null,
+      description: describeWithMix(description, stored),
       // Mediodía: una fecha sin hora a las 00:00 se corre al día anterior
       // al oeste de Greenwich.
       due_date: `${day}T12:00:00`,
@@ -246,7 +217,7 @@ export async function createTask(input: unknown) {
       recurrence_id: recurrenceId,
       metadata: {
         targets: taskTargets,
-        ...(nutrition ? { nutrition: { ...nutrition, week: planned?.week ?? null } } : {}),
+        ...(stored ? { nutrition: stored } : {}),
       },
     }
   })
@@ -265,29 +236,34 @@ export async function createTask(input: unknown) {
 }
 
 /**
- * Edita una tarea, o "esta y las siguientes" de una serie. En una serie todas
- * las fechas se corren los mismos días que se movió la elegida; eso lo hace
- * `update_task_series` en una sola consulta (antes era una por tarea y los
- * errores se perdían).
+ * Edita una tarea, o "esta y las siguientes" de una serie.
+ *
+ * En una tarea de fertilizante llega la mezcla como datos y los detalles sin
+ * la receta: la receta se arma acá. En una serie, cada tarea corre su fecha
+ * los mismos días que la elegida y recalcula la dosis con su propia semana;
+ * todo se escribe junto con `update_task_series_rows`. Antes se copiaba la
+ * descripción de la elegida a todas, receta incluida, y todas quedaban con la
+ * dosis de la misma semana.
  */
 export async function updateTask(
   rawTaskId: string | number,
   rawUpdates: unknown,
   scope: 'single' | 'all_future' = 'single',
-  recurrenceId?: string | null
+  _recurrenceId?: string | null
 ) {
+  void _recurrenceId
   const taskId = parseId(rawTaskId)
   if (!taskId) return { error: 'Esa tarea no es válida.' }
 
   const session = await requireUser()
   if ('error' in session) return { error: session.error }
-  const { supabase } = session
+  const { supabase, user } = session
 
   const updates = (rawUpdates ?? {}) as Record<string, unknown>
   const title = typeof updates.title === 'string' ? updates.title.trim().slice(0, 120) : ''
   if (!title) return { error: 'El título es obligatorio.' }
 
-  const description = typeof updates.description === 'string' ? updates.description.trim().slice(0, 2000) || null : null
+  const notes = typeof updates.description === 'string' ? updates.description.trim().slice(0, 2000) : ''
   const day = readDay(updates.date)
   if (!day) return { error: 'La fecha no es válida.' }
 
@@ -299,14 +275,53 @@ export async function updateTask(
   const targetStage = updates.target_stage == null ? null : isStageName(updates.target_stage) ? updates.target_stage : null
   if (updates.target_stage != null && !targetStage) return { error: 'Elegí la etapa de destino.' }
 
-  if (scope === 'all_future' && recurrenceId) {
-    const { error } = await supabase.rpc('update_task_series', {
+  const { data: task, error: taskError } = await supabase
+    .from('tasks')
+    .select('id, type, due_date, recurrence_id, metadata')
+    .eq('id', taskId)
+    .maybeSingle()
+  if (taskError || !task) return { error: friendlyDbError(taskError, 'No se encontró la tarea.', {}, 'Error leyendo la tarea:') }
+
+  // La mezcla sólo se toca si vino en el formulario y la tarea es de fertilizante.
+  const touchesMix = task.type === 'fertilizante' && Object.prototype.hasOwnProperty.call(updates, 'nutrition')
+  const mixResult = touchesMix ? await readMix(supabase, user.id, updates.nutrition) : { mix: null, sources: null }
+  if ('error' in mixResult) return { error: mixResult.error }
+  const { mix, sources } = mixResult
+  const storedFor = (stageDays: number) =>
+    mix && sources ? buildStoredMix(mix.items, sources.fertilizers, sources.combos, stageDays) : null
+
+  if (scope === 'all_future' && task.recurrence_id) {
+    const oldDay = dateKey(task.due_date)
+    if (!oldDay) return { error: 'La fecha de la tarea no es válida.' }
+    const shift = daysBetweenKeys(oldDay, day)
+
+    const { data: series, error: seriesError } = await supabase
+      .from('tasks')
+      .select('id, due_date')
+      .eq('recurrence_id', task.recurrence_id)
+      .gte('due_date', task.due_date)
+      .order('due_date', { ascending: true })
+    if (seriesError) return { error: friendlyDbError(seriesError, 'No se pudo leer la serie.', {}, 'Error leyendo la serie:') }
+
+    const rows = (series ?? []).flatMap((row) => {
+      const rowDay = dateKey(row.due_date)
+      if (!rowDay) return []
+      const newDay = addDaysToKey(rowDay, shift)
+      const stored = touchesMix && mix ? storedFor(mix.stage_days + Math.max(0, daysBetweenKeys(day, newDay))) : null
+      return [{
+        id: Number(row.id),
+        due_date: `${newDay}T12:00:00`,
+        description: touchesMix ? describeWithMix(notes, stored) : notes || null,
+        ...(touchesMix ? { nutrition: stored } : {}),
+      }]
+    })
+
+    const { error } = await supabase.rpc('update_task_series_rows', {
       p_task_id: taskId,
       p_title: title,
-      p_description: description,
       p_application_type: applicationType,
       p_target_stage: targetStage,
-      p_new_day: day,
+      p_rows: rows as unknown as Json,
     })
 
     if (error) {
@@ -318,15 +333,21 @@ export async function updateTask(
       }
     }
   } else {
+    const stored = touchesMix && mix ? storedFor(mix.stage_days) : null
+    const metadata = { ...((task.metadata as Record<string, unknown> | null) ?? {}) }
+    delete metadata.nutrition
+    if (stored) metadata.nutrition = stored
+
     const { error } = await supabase
       .from('tasks')
       .update({
         title,
-        description,
+        description: touchesMix ? describeWithMix(notes, stored) : notes || null,
         application_type: applicationType,
         target_stage: targetStage,
         // Mediodía: una fecha sin hora a las 00:00 se corre al día anterior.
         due_date: `${day}T12:00:00`,
+        ...(touchesMix ? { metadata: metadata as Json } : {}),
       })
       .eq('id', taskId)
 
@@ -376,14 +397,19 @@ const TASK_WITH_TARGETS = `
  * que necesita saber de qué plantas salieron los esquejes y cuántos. Al
  * desmarcar una tarea los efectos se quedan: para revertirlos está "Deshacer".
  */
-export async function toggleTaskStatus(rawTaskId: string | number, newStatus: 'pending' | 'completed') {
+export async function toggleTaskStatus(
+  rawTaskId: string | number,
+  newStatus: 'pending' | 'completed',
+  /** Sólo para un fertilizante: los litros que se prepararon y si se descuenta del stock. */
+  feedDetails?: { liters?: unknown; deductStock?: unknown }
+) {
   const taskId = parseId(rawTaskId)
   if (!taskId) return { error: 'Esa tarea no es válida.' }
   if (newStatus !== 'pending' && newStatus !== 'completed') return { error: 'Estado inválido.' }
 
   const session = await requireUser()
   if ('error' in session) return { error: session.error }
-  const { supabase } = session
+  const { supabase, user } = session
 
   const { data: task, error: fetchError } = await supabase
     .from('tasks')
@@ -393,7 +419,7 @@ export async function toggleTaskStatus(rawTaskId: string | number, newStatus: 'p
 
   if (fetchError || !task) return { error: friendlyDbError(fetchError, 'No se encontró la tarea.', {}, 'Error leyendo la tarea:') }
 
-  const unchanged = { success: true as const, effects: null, ambiente: null, canUndo: false }
+  const unchanged = { success: true as const, effects: null, ambiente: null, feed: null, canUndo: false }
   if (task.status === newStatus) return unchanged
 
   const metadata = withoutLastEffect(task.metadata)
@@ -414,21 +440,30 @@ export async function toggleTaskStatus(rawTaskId: string | number, newStatus: 'p
 
   let effects: TaskCompletionEffects | null = null
   let ambiente: AmbienteMoveResult | null = null
+  let feed: FeedResult | null = null
   const before: LastEffect = { at: new Date().toISOString() }
 
   if (newStatus === 'completed') {
+    // El efecto lleva la fecha en que la tarea estaba agendada.
+    const effectDate = getTaskEffectDate(task.due_date)
     const effect = getTaskCompletionEffect(task)
+    let plants: EffectPlant[] | null = null
     if (effect) {
-      const plants = await loadTaskPlants(supabase, task)
+      plants = await loadTaskPlants(supabase, task)
       if (plants.length > 0) {
-        // El efecto lleva la fecha en que la tarea estaba agendada.
-        const effectDate = getTaskEffectDate(task.due_date)
         effects = await applyTaskCompletionEffect(supabase, effect, plants, effectDate, before)
       }
     }
 
     if (task.type === 'ambiente' && task.target_space_id) {
       ambiente = await applyAmbienteMove(supabase, task, Number(task.target_space_id), before)
+    }
+
+    // Un fertilizante con mezcla queda en la bitácora de cada planta (y, si
+    // se pide, sale del stock). Antes sólo marcaba el riego.
+    if (task.type === 'fertilizante' && hasStoredMix(task.metadata)) {
+      plants ??= await loadTaskPlants(supabase, task)
+      feed = await applyFeed(supabase, user.id, { id: taskId, metadata: task.metadata }, plants, feedDetails, effectDate, before)
     }
 
     if (hasUndoableChanges(before)) {
@@ -442,8 +477,115 @@ export async function toggleTaskStatus(rawTaskId: string | number, newStatus: 'p
 
   revalidatePath('/')
   revalidatePath('/calendar')
-  if (effects || ambiente) revalidatePlantsAndCycles()
-  return { success: true as const, effects, ambiente, canUndo: hasUndoableChanges(before) }
+  if (effects || ambiente || feed) revalidatePlantsAndCycles()
+  if (feed?.deducted) revalidatePath('/fertilizers')
+  return { success: true as const, effects, ambiente, feed, canUndo: hasUndoableChanges(before) }
+}
+
+/**
+ * Para editar un fertilizante: cuántos días en su etapa llevan hoy las plantas
+ * de la tarea (el que menos, como al agendar) y en qué etapas están, para la
+ * semana de la dosis y los avisos de etapa.
+ */
+export async function getTaskFeedContext(rawTaskId: string | number): Promise<{ stageDaysToday: number | null; stages: string[] }> {
+  const empty = { stageDaysToday: null, stages: [] as string[] }
+  const taskId = parseId(rawTaskId)
+  if (!taskId) return empty
+
+  const session = await requireUser()
+  if ('error' in session) return empty
+
+  const { data: task } = await session.supabase.from('tasks').select(TASK_WITH_TARGETS).eq('id', taskId).maybeSingle()
+  if (!task) return empty
+
+  const plants = (await loadTaskPlants(session.supabase, task)).filter((plant) => !plant.is_archived)
+  if (plants.length === 0) return empty
+  const metrics = plants.map((plant) => getPlantMetrics(plant as PlantDates))
+  return {
+    stageDaysToday: Math.min(...metrics.map((metric) => metric.daysInCurrentStage)),
+    stages: Array.from(new Set(metrics.map((metric) => metric.currentStage).filter(Boolean))),
+  }
+}
+
+/** Lo que dejó en la bitácora (y en el stock) un fertilizante al completarse. */
+export interface FeedResult {
+  /** Plantas a las que se les anotó la mezcla. */
+  plants: number
+  /** Productos a los que se les descontó stock. */
+  deducted: number
+  lowStock: { name: string; stock_ml: number | null }[]
+}
+
+/**
+ * Anota la mezcla de la tarea en la bitácora de cada planta (con la parte de
+ * cada producto que le tocó) y, si se pidió, descuenta del stock lo que se
+ * usó. Todo queda en `before` para que "Deshacer" lo pueda revertir.
+ */
+async function applyFeed(
+  supabase: ServerSupabase,
+  userId: string,
+  task: { id: number; metadata: unknown },
+  plants: EffectPlant[],
+  details: { liters?: unknown; deductStock?: unknown } | undefined,
+  effectDate: string,
+  before: LastEffect
+): Promise<FeedResult | null> {
+  if (plants.length === 0) return null
+
+  const sources = await loadMixSources(supabase, userId)
+  if ('error' in sources) return null
+  const stored = readStoredMix(task.metadata, sources.combos, sources.fertilizers)
+  if (!stored) return null
+
+  const week = weekInStage(stored.stage_days)
+  // Lo que se agendó, tal cual; en las tareas viejas, con las dosis de hoy.
+  const resolved = stored.resolved ?? resolveMix(stored.items, sources.fertilizers, week)
+  const label = stored.label || mixLabel(stored.items, sources.combos)
+
+  const rawLiters = parseDecimal(details?.liters)
+  const liters = rawLiters !== undefined && Number.isFinite(rawLiters) && rawLiters > 0 && rawLiters <= 10000 ? rawLiters : null
+  const { feed, totals } = buildFeedLog({ label, week, resolved }, liters, plants.length)
+
+  const { data: logs, error: logError } = await supabase
+    .from('logs')
+    .insert(plants.map((plant) => ({
+      plant_id: plant.id,
+      cycle_id: plant.cycle_id ?? null,
+      user_id: userId,
+      type: 'fertilizante',
+      title: 'Fertilizante',
+      notes: describeFeed(feed),
+      data: { task_id: task.id, feed } as unknown as Json,
+      created_at: effectDate,
+    })))
+    .select('id')
+  if (logError) {
+    console.error('No se pudo anotar el fertilizante en la bitácora:', logError)
+    return null
+  }
+  before.logs = (logs ?? []).map((row) => Number(row.id))
+
+  let lowStock: FeedResult['lowStock'] = []
+  const changes = totals
+    .filter((line) => line.total !== null && line.total > 0)
+    .map((line) => ({ fertilizer_id: line.fertilizer_id, delta_ml: -(line.total as number) }))
+  if (details?.deductStock === true && changes.length > 0) {
+    const { data: moved, error: stockError } = await supabase.rpc('move_fertilizer_stock', {
+      p_changes: changes,
+      p_reason: 'uso',
+      p_note: 'Tarea de fertilizante',
+    })
+    if (stockError) {
+      console.error('No se pudo descontar el stock de la tarea:', stockError)
+    } else {
+      // Sólo los que llevan la cuenta se movieron: esos se devuelven al deshacer.
+      const tracked = new Set((moved ?? []).filter((row) => row.stock_ml !== null).map((row) => Number(row.fertilizer_id)))
+      before.stock = changes.filter((change) => tracked.has(change.fertilizer_id)).map((change) => ({ fertilizer_id: change.fertilizer_id, delta: change.delta_ml }))
+      lowStock = (moved ?? []).filter((row) => row.low).map((row) => ({ name: row.name, stock_ml: row.stock_ml }))
+    }
+  }
+
+  return { plants: before.logs.length, deducted: before.stock?.length ?? 0, lowStock }
 }
 
 /**
@@ -482,11 +624,12 @@ export async function undoTaskCompletion(rawTaskId: string | number) {
   if (error) return { error: friendlyDbError(error, 'No se pudo deshacer.', {}, 'Error deshaciendo la tarea:') }
   if (!changed || changed.length === 0) return { success: true, partial: false }
 
-  const failures = before ? await restoreBefore(supabase, before) : 0
+  const failures = before ? await restoreBefore(supabase, before, taskId) : 0
 
   revalidatePath('/')
   revalidatePath('/calendar')
   revalidatePlantsAndCycles()
+  if (before?.stock?.length) revalidatePath('/fertilizers')
   return { success: true, partial: failures > 0 }
 }
 
@@ -497,7 +640,7 @@ function withoutLastEffect(metadata: unknown): Record<string, unknown> {
 }
 
 /** Vuelve a poner lo que guardó `last_effect`. Devuelve cuántos pasos fallaron. */
-async function restoreBefore(supabase: ServerSupabase, before: LastEffect): Promise<number> {
+async function restoreBefore(supabase: ServerSupabase, before: LastEffect, taskId: number): Promise<number> {
   let failures = 0
   const fail = (what: string, error: unknown) => {
     failures++
@@ -548,6 +691,20 @@ async function restoreBefore(supabase: ServerSupabase, before: LastEffect): Prom
   for (const group of groupByValue((before.plants ?? []).map((row) => ({ id: row.id, value: row.cycle_id })))) {
     const result = await bulkMoveToCycle(group.ids, group.value)
     if (!result.success) fail('el cambio de ciclo', result.error)
+  }
+
+  // Lo que anotó un fertilizante en la bitácora, y lo que sacó del stock.
+  if (before.logs?.length) {
+    const { error } = await supabase.rpc('delete_task_logs', { p_task_id: taskId, p_log_ids: before.logs })
+    if (error) fail('la bitácora', error)
+  }
+  if (before.stock?.length) {
+    const { error } = await supabase.rpc('move_fertilizer_stock', {
+      p_changes: before.stock.map((row) => ({ fertilizer_id: row.fertilizer_id, delta_ml: -row.delta })),
+      p_reason: 'ajuste',
+      p_note: 'Se deshizo una tarea de fertilizante',
+    })
+    if (error) fail('el stock', error)
   }
 
   return failures

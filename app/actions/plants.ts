@@ -5,6 +5,9 @@ import { requireUser } from "@/app/lib/auth";
 import type { ServerSupabase } from "@/app/lib/auth";
 import { friendlyDbError } from "@/app/lib/errors";
 import { describeWatering, hasWateringData, parseWateringData } from "@/app/lib/watering";
+import { buildFeedLog, buildStoredMix, describeFeed, parseMixInput } from "@/app/lib/nutrition";
+import type { FeedLog, UsageLine } from "@/app/lib/nutrition";
+import { loadMixSources, ownsAll } from "@/app/lib/nutrition-data";
 import { LOG_TYPE } from "@/app/lib/logs";
 import { STAGE_DATE_COLUMNS, STAGE_NAMES, getStageDateColumn, isStageName } from "@/app/lib/stage-logic";
 import type { StageName } from "@/app/lib/stage-logic";
@@ -399,12 +402,15 @@ export async function bulkChangeStage(
 
 /**
  * Registra un riego: pone al día `last_water` (el día de calendario) y deja la
- * nota en la bitácora.
+ * nota en la bitácora. Si lleva una mezcla, queda como datos en cada registro
+ * (con la parte de cada producto que le tocó a esa planta) y, si se pide, se
+ * descuenta del stock lo que se usó. Las dosis las calcula el servidor con los
+ * productos de la base, no se toman del cliente.
  */
 export async function bulkWaterPlants(
   plantIds: number[],
   date: string,
-  details: { nutrients?: string; watering?: unknown; usage?: unknown } = {}
+  details: { nutrients?: string; watering?: unknown; feed?: unknown; deductStock?: unknown } = {}
 ): Promise<BulkResult & { lowStock?: { name: string; stock_ml: number | null }[] }> {
   const timestamp = toTimestamp(date);
   const day = dateKey(date);
@@ -420,6 +426,19 @@ export async function bulkWaterPlants(
   if (parsed.error !== null) return { success: false, error: parsed.error };
   const watering = parsed.data;
 
+  // La mezcla, si la hay, contra los productos del usuario.
+  const mixInput = parseMixInput(details?.feed);
+  if (mixInput === 'invalid') return { success: false, error: 'Revisá los nutrientes: hay algo que no se entiende.' };
+  let feed: FeedLog | null = null;
+  let totals: UsageLine[] = [];
+  if (mixInput) {
+    const sources = await loadMixSources(supabase, userId);
+    if ('error' in sources) return { success: false, error: sources.error };
+    if (!ownsAll(mixInput.items, sources.fertilizers)) return { success: false, error: 'Alguno de los productos ya no existe.' };
+    const stored = buildStoredMix(mixInput.items, sources.fertilizers, sources.combos, mixInput.stage_days);
+    ({ feed, totals } = buildFeedLog(stored, watering.liters_total ?? null, plants.length));
+  }
+
   const { error } = await supabase
     .from('plants')
     .update({ last_water: day })
@@ -430,6 +449,11 @@ export async function bulkWaterPlants(
   }
 
   const nutrients = cleanText(details?.nutrients, 500);
+  const data: Record<string, unknown> = {
+    ...(hasWateringData(watering) ? { watering: { ...watering } } : {}),
+    ...(nutrients ? { nutrients } : {}),
+    ...(feed ? { feed } : {}),
+  };
 
   await logForEachPlant(
     supabase,
@@ -441,23 +465,24 @@ export async function bulkWaterPlants(
       notes: [
         plants.length > 1 ? `Riego en lote sobre ${plantCountLabel(plants.length)}.` : null,
         hasWateringData(watering) ? describeWatering(watering) : null,
+        feed ? `Mezcla: ${describeFeed(feed)}` : null,
         nutrients ? `Nutrientes: ${nutrients}` : null,
       ]
         .filter(Boolean)
         .join('\n'),
-      data: hasWateringData(watering) || nutrients
-        ? { ...(hasWateringData(watering) ? { watering: { ...watering } } : {}), ...(nutrients ? { nutrients } : {}) }
-        : null,
+      data: Object.keys(data).length > 0 ? (data as Json) : null,
     },
     timestamp
   );
 
-  // Lo que salió de cada producto (la calculadora del modal), del stock.
-  const usage = parseUsage(details?.usage);
+  // Lo que salió de cada producto, del stock.
+  const changes = totals
+    .filter((line) => line.total !== null && line.total > 0)
+    .map((line) => ({ fertilizer_id: line.fertilizer_id, delta_ml: -(line.total as number) }));
   let lowStock: { name: string; stock_ml: number | null }[] = [];
-  if (usage.length > 0) {
+  if (details?.deductStock === true && changes.length > 0) {
     const { data: moved, error: stockError } = await supabase.rpc('move_fertilizer_stock', {
-      p_changes: usage.map((item) => ({ fertilizer_id: item.fertilizer_id, delta_ml: -item.ml })),
+      p_changes: changes,
       p_reason: 'uso',
       p_note: 'Riego',
     });
@@ -468,16 +493,6 @@ export async function bulkWaterPlants(
 
   revalidatePlantViews();
   return { success: true, count: plants.length, lowStock };
-}
-
-/** [{ fertilizer_id, ml }] del cliente, depurado: ids válidos y ml positivos. */
-function parseUsage(value: unknown): { fertilizer_id: number; ml: number }[] {
-  if (!Array.isArray(value)) return [];
-  return value.slice(0, 20).flatMap((item) => {
-    const id = parseId((item as { fertilizer_id?: unknown })?.fertilizer_id);
-    const ml = Number((item as { ml?: unknown })?.ml);
-    return id && Number.isFinite(ml) && ml > 0 && ml <= 100000 ? [{ fertilizer_id: id, ml: Math.round(ml * 100) / 100 }] : [];
-  });
 }
 
 /**

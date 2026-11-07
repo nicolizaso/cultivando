@@ -5,6 +5,8 @@ import type { MeasurementLike } from '@/app/lib/climate'
 import { daysSinceDate, formatDay } from '@/app/lib/dates'
 import { cycleYield } from '@/app/lib/harvest'
 import type { HarvestRow, SpaceSize } from '@/app/lib/harvest'
+import { formatDose } from '@/app/lib/nutrition'
+import type { FeedTotal } from '@/app/lib/nutrition'
 import { getPlantMetrics } from '@/app/lib/plant-metrics'
 import type { PlantDates } from '@/app/lib/plant-metrics'
 import { buildTimelapseFrames } from '@/app/lib/timelapse'
@@ -31,6 +33,8 @@ export interface ReportData {
   measurements: MeasurementLike[]
   images: GalleryImage[]
   harvests: HarvestRow[]
+  /** Cuánto se usó de cada producto (no viene en el enlace compartido). */
+  feeding?: FeedTotal[]
 }
 
 const grams = (value: number | null, unit = 'g', decimals = 1) =>
@@ -42,7 +46,7 @@ const grams = (value: number | null, unit = 'g', decimals = 1) =>
  * compartir (con los datos que devuelve `get_shared_cycle`).
  */
 export default function CycleReport({ data, actions, footer }: { data: ReportData; actions?: ReactNode; footer?: ReactNode }) {
-  const { cycle, plants, measurements, images, harvests } = data
+  const { cycle, plants, measurements, images, harvests, feeding = [] } = data
   const active = plants.filter((plant) => !plant.is_archived)
   const stage = dominantStage(active)
   const periods = stagePeriods(plants)
@@ -121,6 +125,35 @@ export default function CycleReport({ data, actions, footer }: { data: ReportDat
           </table>
         </div>
       </section>
+
+      {feeding.length > 0 && (
+        <section aria-labelledby="r-nutrientes" className="space-y-3 print:break-inside-avoid">
+          <h2 id="r-nutrientes" className="section-title">Nutrientes</h2>
+          <div className="surface overflow-x-auto rounded-[var(--radius-lg)]">
+            <table className="w-full min-w-[22rem] text-sm">
+              <thead className="text-left text-xs text-fg-muted">
+                <tr className="border-b border-line">
+                  <th scope="col" className="px-4 py-2.5 font-semibold">Producto</th>
+                  <th scope="col" className="px-3 py-2.5 text-right font-semibold">Usado</th>
+                  <th scope="col" className="px-4 py-2.5 text-right font-semibold">Aplicaciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                {feeding.map((row) => (
+                  <tr key={`${row.fertilizer_id}-${row.unit}`} className="border-b border-line last:border-0">
+                    <th scope="row" className="px-4 py-2.5 text-left font-medium text-fg">{row.name}</th>
+                    <td className="mono px-3 py-2.5 text-right text-fg">{row.amount > 0 ? `${formatDose(row.amount)} ${row.unit}` : '–'}</td>
+                    <td className="mono px-4 py-2.5 text-right text-fg">{row.days} {row.days === 1 ? 'día' : 'días'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="text-xs text-fg-muted">
+            Lo usado cuenta los riegos y tareas en los que se anotaron los litros (o los productos que van por planta).
+          </p>
+        </section>
+      )}
 
       <section aria-labelledby="r-clima" className="space-y-3 print:break-inside-avoid">
         <h2 id="r-clima" className="section-title">Clima</h2>

@@ -58,3 +58,16 @@ test('groupByValue junta los ids con el mismo valor', () => {
     ]
   );
 });
+
+test('readLastEffect - registros de bitácora y stock de una mezcla', () => {
+  const effect = readLastEffect({
+    last_effect: {
+      at: '2026-11-07T12:00:00Z',
+      logs: [11, 12, 'x', 0],
+      stock: [{ fertilizer_id: 1, delta: -50 }, { fertilizer_id: 2, delta: 0 }, { fertilizer_id: 'y', delta: -3 }],
+    },
+  });
+  assert.deepEqual(effect, { at: '2026-11-07T12:00:00Z', logs: [11, 12], stock: [{ fertilizer_id: 1, delta: -50 }] });
+  assert.equal(hasUndoableChanges(effect), true);
+  assert.equal(hasUndoableChanges({ at: 'x', logs: [], stock: [] }), false);
+});

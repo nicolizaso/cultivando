@@ -2,13 +2,14 @@
 
 import { useRef, useState } from 'react'
 import { Fertilizer, FertilizerCombo } from '@/app/lib/types'
+import { doseUnitShort, formatDose, productDoseText } from '@/app/lib/nutrition'
 import Modal from '@/components/ui/Modal'
-import { Field, FormActions, FormAlert, Input, MultiChoice, useFieldErrors } from '@/components/ui/form'
+import { Field, FieldGroup, FormActions, FormAlert, Input, MultiChoice, Textarea, useFieldErrors } from '@/components/ui/form'
 
 interface AddFertilizerComboModalProps {
   isOpen: boolean
   onClose: () => void
-  onSave: (data: Partial<FertilizerCombo>) => Promise<{ error?: string | null }>
+  onSave: (data: Record<string, unknown>) => Promise<{ error?: string | null }>
   availableProducts: Fertilizer[]
   initialData?: FertilizerCombo | null
 }
@@ -17,20 +18,25 @@ export default function AddFertilizerComboModal({ isOpen, onClose, onSave, avail
   // Quien lo abre le cambia la `key` en cada apertura: el estado arranca con
   // el combo elegido (o en blanco) sin un efecto que copie props.
   const [name, setName] = useState(initialData?.name ?? '')
-  const [selectedProducts, setSelectedProducts] = useState<{ fertilizer_id: number; name: string }[]>(initialData?.products ?? [])
+  const [description, setDescription] = useState(initialData?.description ?? '')
+  const [selected, setSelected] = useState<number[]>(initialData?.products.map((p) => p.fertilizer_id) ?? [])
+  // La dosis propia de cada producto en este combo, como texto ("" = la del producto).
+  const [doses, setDoses] = useState<Record<number, string>>(() =>
+    Object.fromEntries((initialData?.products ?? []).map((p) => [p.fertilizer_id, p.dose === null ? '' : formatDose(p.dose)]))
+  )
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const formRef = useRef<HTMLFormElement>(null)
   const { errors, validate, clear } = useFieldErrors<'name' | 'products'>()
 
-  const handleToggleProduct = (product: Fertilizer) => {
-    const isSelected = selectedProducts.some(p => p.fertilizer_id === product.id)
-    if (isSelected) {
-      setSelectedProducts(selectedProducts.filter(p => p.fertilizer_id !== product.id))
-    } else {
-      setSelectedProducts([...selectedProducts, { fertilizer_id: product.id, name: product.name }])
-    }
+  const toggle = (id: number) => {
+    setSelected((prev) => (prev.includes(id) ? prev.filter((value) => value !== id) : [...prev, id]))
+    clear('products')
   }
+
+  const selectedProducts = selected
+    .map((id) => availableProducts.find((product) => product.id === id))
+    .filter((product): product is Fertilizer => Boolean(product))
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -43,12 +49,12 @@ export default function AddFertilizerComboModal({ isOpen, onClose, onSave, avail
     setIsSubmitting(true)
     setError(null)
 
-    const formData: Partial<FertilizerCombo> = {
-      name,
-      products: selectedProducts,
-    }
-
-    const res = await onSave(formData)
+    const res = await onSave({
+      name: name.trim(),
+      description: description.trim() || null,
+      // El servidor entiende "1,5" y valida el rango.
+      items: selectedProducts.map((product) => ({ fertilizer_id: product.id, dose: doses[product.id]?.trim() || null })),
+    })
 
     setIsSubmitting(false)
     if (res.error) {
@@ -98,19 +104,55 @@ export default function AddFertilizerComboModal({ isOpen, onClose, onSave, avail
             legend="Qué lleva"
             variant="tile"
             layout="grid grid-cols-1 gap-2 sm:grid-cols-2"
-            options={availableProducts.map(product => ({
+            options={availableProducts.map((product) => ({
               value: product.id,
               label: product.name,
-              description: product.brand || undefined,
+              description: [product.brand, productDoseText(product)].filter(Boolean).join(' · '),
             }))}
-            values={selectedProducts.map(p => p.fertilizer_id)}
-            onToggle={(id) => {
-              const product = availableProducts.find(p => p.id === id)
-              if (product) { handleToggleProduct(product); clear('products') }
-            }}
+            values={selected}
+            onToggle={toggle}
             error={errors.products}
           />
         )}
+
+        {selectedProducts.length > 0 && (
+          <FieldGroup
+            legend="Dosis en este combo"
+            optional
+            hint="Vacío: va con la dosis del producto. Escribí otra si en este combo la usás distinta."
+          >
+            <ul className="space-y-2">
+              {selectedProducts.map((product) => (
+                <li key={product.id} className="flex items-center gap-3">
+                  <label htmlFor={`combo-dose-${product.id}`} className="min-w-0 flex-1 truncate text-sm font-semibold text-fg">
+                    {product.name}
+                  </label>
+                  <div className="w-36 shrink-0">
+                    <Input
+                      id={`combo-dose-${product.id}`}
+                      type="text"
+                      inputMode="decimal"
+                      suffix={doseUnitShort(product.unit, product.dose_basis)}
+                      value={doses[product.id] ?? ''}
+                      onChange={(e) => setDoses((prev) => ({ ...prev, [product.id]: e.target.value }))}
+                      placeholder={product.dosage_type === 'semanal' ? 'tabla' : product.fixed_dosage === null ? '–' : formatDose(product.fixed_dosage)}
+                      aria-label={`Dosis de ${product.name} en este combo`}
+                    />
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </FieldGroup>
+        )}
+
+        <Field label="Notas" optional>
+          <Textarea
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="Ej: agitar antes, primero el A y después el B"
+            rows={2}
+          />
+        </Field>
       </form>
     </Modal>
   )

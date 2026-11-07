@@ -22,14 +22,17 @@ export type Database = {
       combo_items: {
         Row: {
           combo_id: number
+          dose: number | null
           fertilizer_id: number
         }
         Insert: {
           combo_id: number
+          dose?: number | null
           fertilizer_id: number
         }
         Update: {
           combo_id?: number
+          dose?: number | null
           fertilizer_id?: number
         }
         Relationships: [
@@ -231,12 +234,14 @@ export type Database = {
           container_ml: number | null
           created_at: string | null
           dosage_type: string | null
+          dose_basis: string
           fixed_dosage: number | null
           id: number
           low_stock_ml: number | null
           name: string
           stage_category: string | null
           stock_ml: number | null
+          unit: string
           user_id: string | null
           weekly_dosages: Json | null
         }
@@ -245,12 +250,14 @@ export type Database = {
           container_ml?: number | null
           created_at?: string | null
           dosage_type?: string | null
+          dose_basis?: string
           fixed_dosage?: number | null
           id?: number
           low_stock_ml?: number | null
           name: string
           stage_category?: string | null
           stock_ml?: number | null
+          unit?: string
           user_id?: string | null
           weekly_dosages?: Json | null
         }
@@ -259,12 +266,14 @@ export type Database = {
           container_ml?: number | null
           created_at?: string | null
           dosage_type?: string | null
+          dose_basis?: string
           fixed_dosage?: number | null
           id?: number
           low_stock_ml?: number | null
           name?: string
           stage_category?: string | null
           stock_ml?: number | null
+          unit?: string
           user_id?: string | null
           weekly_dosages?: Json | null
         }
@@ -788,6 +797,19 @@ export type Database = {
         }
         Returns: number
       }
+      save_fertilizer_combo_items: {
+        Args: {
+          p_combo_id: number | null
+          p_name: string
+          p_description: string | null
+          p_items: Json
+        }
+        Returns: number
+      }
+      delete_task_logs: {
+        Args: { p_task_id: number; p_log_ids: number[] }
+        Returns: number
+      }
       get_shared_cycle: { Args: { p_token: string }; Returns: Json }
       move_fertilizer_stock: {
         Args: { p_changes: Json; p_reason: string; p_note?: string | null }
@@ -806,6 +828,16 @@ export type Database = {
           p_application_type: string | null
           p_target_stage: string | null
           p_new_day: string
+        }
+        Returns: number
+      }
+      update_task_series_rows: {
+        Args: {
+          p_task_id: number
+          p_title: string
+          p_application_type: string | null
+          p_target_stage: string | null
+          p_rows: Json
         }
         Returns: number
       }

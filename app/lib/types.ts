@@ -1,5 +1,5 @@
 import type { Tables } from './database.types';
-import type { DosageType, FertilizerStage, WeeklyDose } from './nutrition';
+import type { DoseBasis, DoseUnit, DosageType, FertilizerStage, MixItem, WeeklyDose } from './nutrition';
 
 export type CycleStage = 
   | 'Germinación' 
@@ -96,11 +96,15 @@ export interface Fertilizer {
   brand: string | null;
   stage_category: FertilizerStage | null;
   dosage_type: DosageType | null;
-  /** ml por litro, cuando la dosis es fija. */
+  /** En qué se mide (ml o g), también el stock. */
+  unit: DoseUnit;
+  /** Si la dosis es por litro de agua o por planta. */
+  dose_basis: DoseBasis;
+  /** La dosis (en `unit`, por litro o por planta) cuando es fija. */
   fixed_dosage: number | null;
   /** Tabla por semana de la etapa, cuando la dosis es semanal. */
   weekly_dosages: WeeklyDose[] | null;
-  /** Lo que queda, en ml. Null = no se lleva la cuenta. */
+  /** Lo que queda, en la unidad del producto. Null = no se lleva la cuenta. */
   stock_ml: number | null;
   /** Tamaño del envase, para sumar "una botella" al comprar. */
   container_ml: number | null;
@@ -115,7 +119,15 @@ export interface FertilizerCombo {
   user_id: string | null;
   name: string;
   description: string | null;
-  /** Sale de `combo_items`; no es una columna de la tabla. */
-  products: { fertilizer_id: number; name: string }[];
+  /** Sale de `combo_items`; `dose` es la dosis propia en el combo (null = la del producto). */
+  products: { fertilizer_id: number; name: string; dose: number | null }[];
   created_at: string | null;
+}
+
+/** Lo que necesita el selector de nutrientes: productos, combos y la última mezcla. */
+export interface NutritionOptions {
+  fertilizers: Fertilizer[];
+  combos: FertilizerCombo[];
+  /** La última mezcla aplicada o agendada, para repetirla con un toque. */
+  lastMix: { items: MixItem[]; label: string; date: string } | null;
 }

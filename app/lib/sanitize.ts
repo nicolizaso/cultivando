@@ -29,14 +29,46 @@ export function optionalText(max = 500): Parser<string | null> {
   };
 }
 
+/**
+ * Un número como se escribe en Argentina: "1,5" es uno y medio y "1.000" es
+ * mil. Antes se cambiaba la coma por punto y nada más, así que un envase de
+ * "1.000" ml se guardaba como 1 ml.
+ *
+ * - Con punto y coma, el último separador es el decimal ("1.000,5", "1,000.5").
+ * - Sólo coma: decimal ("2,5").
+ * - Sólo puntos en grupos de tres ("1.000", "12.500"): de miles. Si no, decimal ("1.5").
+ *
+ * Vacío → undefined; lo que no es un número → NaN.
+ */
+export function parseDecimal(value: unknown): number | undefined {
+  if (value === null || value === undefined) return undefined;
+  if (typeof value === 'number') return value;
+  const text = String(value).trim().replace(/[\s ]/g, '');
+  if (text === '') return undefined;
+
+  const lastDot = text.lastIndexOf('.');
+  const lastComma = text.lastIndexOf(',');
+  let normalized = text;
+  if (lastDot !== -1 && lastComma !== -1) {
+    const decimal = lastDot > lastComma ? '.' : ',';
+    const thousands = decimal === '.' ? ',' : '.';
+    normalized = text.split(thousands).join('').replace(decimal, '.');
+  } else if (lastComma !== -1) {
+    normalized = text.indexOf(',') === lastComma ? text.replace(',', '.') : 'NaN';
+  } else if (lastDot !== -1 && /^-?\d{1,3}(\.\d{3})+$/.test(text)) {
+    normalized = text.split('.').join('');
+  }
+  return Number(normalized);
+}
+
 /** Número opcional dentro de un rango; vacío queda en null. */
 export function optionalNumber(
   options: { min?: number; max?: number; integer?: boolean } = {}
 ): Parser<number | null> {
   const { min = -Infinity, max = Infinity, integer = false } = options;
   return (value) => {
-    if (value === null || value === undefined || value === '') return null;
-    const number = typeof value === 'number' ? value : Number(String(value).replace(',', '.'));
+    const number = parseDecimal(value);
+    if (number === undefined) return null;
     if (!Number.isFinite(number)) return INVALID;
     const result = integer ? Math.round(number) : number;
     if (result < min || result > max) return INVALID;

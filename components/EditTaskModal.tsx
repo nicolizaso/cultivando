@@ -1,11 +1,14 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Loader2, Repeat, Trash2, AlertTriangle } from 'lucide-react'
-import { updateTask, deleteTask, deleteTaskSeries } from '@/app/actions/tasks'
+import { updateTask, deleteTask, deleteTaskSeries, getTaskFeedContext } from '@/app/actions/tasks'
 import { Task } from '@/app/lib/types'
 import { useToast } from '@/app/context/ToastContext'
-import { dateKey, todayKey } from '@/app/lib/dates'
+import { dateKey, daysBetweenKeys, todayKey } from '@/app/lib/dates'
+import { hasStoredMix, readStoredMix, stageDaysForWeek, stripRecipe, weekInStage } from '@/app/lib/nutrition'
+import type { MixItem } from '@/app/lib/nutrition'
+import NutrientPicker, { useNutritionOptions } from '@/components/NutrientPicker'
 import { useRouter } from 'next/navigation'
 import Modal from '@/components/ui/Modal'
 import ConfirmDialog from '@/components/ui/ConfirmDialog'
@@ -32,8 +35,12 @@ export default function EditTaskModal({ isOpen, onClose, task }: EditTaskModalPr
   const { showToast } = useToast()
   const router = useRouter()
 
+  const isFeed = task.type === 'fertilizante'
+  const hadMix = isFeed && hasStoredMix(task.metadata)
+
   const [title, setTitle] = useState(task.title)
-  const [description, setDescription] = useState(task.description || '')
+  // Con mezcla guardada, la receta se arma sola: acá se editan sólo las notas.
+  const [description, setDescription] = useState(() => (hadMix ? stripRecipe(task.description) : task.description || ''))
   const [applicationType, setApplicationType] = useState(task.application_type || 'Riego')
   const [targetStage, setTargetStage] = useState(task.target_stage || 'Vegetativo')
   // El día de la tarea en Argentina, no en el huso del navegador.
@@ -46,6 +53,36 @@ export default function EditTaskModal({ isOpen, onClose, task }: EditTaskModalPr
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const formRef = useRef<HTMLFormElement>(null)
   const { errors, validate, clear } = useFieldErrors<'title'>()
+
+  // Mezcla: la guardada (las tareas viejas con un combo necesitan los combos
+  // para saber qué productos tenía, por eso puede arrancar sin saberse).
+  const nutrition = useNutritionOptions()
+  const { load } = nutrition
+  const stored = readStoredMix(task.metadata, nutrition.options?.combos, nutrition.options?.fertilizers)
+  // null = sin tocar: vale la guardada.
+  const [mixDraft, setMixDraft] = useState<MixItem[] | null>(null)
+  const mix = mixDraft ?? (!hadMix ? [] : stored ? stored.items : nutrition.options ? [] : null)
+  const [context, setContext] = useState<{ stageDaysToday: number | null; stages: string[] } | null>(null)
+  const [weekOverride, setWeekOverride] = useState<number | null>(null)
+
+  useEffect(() => {
+    if (!isFeed) return
+    let cancelled = false
+    load()
+    getTaskFeedContext(task.id).then((result) => { if (!cancelled) setContext(result) })
+    return () => { cancelled = true }
+  }, [isFeed, load, task.id])
+
+  // La semana el día elegido: la guardada corrida los días que se movió la
+  // tarea o, si no tenía mezcla, la de las plantas hoy.
+  const originalDay = dateKey(task.due_date) ?? todayKey()
+  const savedStageDays = stored?.stage_days ?? null
+  const autoStageDays = Math.max(0, savedStageDays !== null
+    ? savedStageDays + daysBetweenKeys(originalDay, date)
+    : (context?.stageDaysToday ?? 0) + daysBetweenKeys(todayKey(), date))
+  const week = weekOverride ?? weekInStage(autoStageDays)
+  const stageDays = weekOverride !== null ? stageDaysForWeek(weekOverride) : autoStageDays
+  const mixReady = !isFeed || mix !== null
 
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -60,7 +97,10 @@ export default function EditTaskModal({ isOpen, onClose, task }: EditTaskModalPr
        description,
        application_type: task.type === 'fertilizante' ? applicationType : undefined,
        target_stage: task.type === 'cambio_etapa' ? targetStage : undefined,
-       date: `${date}T12:00:00` // Mediodía para evitar desfases de zona horaria
+       date: `${date}T12:00:00`, // Mediodía para evitar desfases de zona horaria
+       // La mezcla como datos: el servidor arma la receta (y en una serie, la
+       // de cada fecha con su semana).
+       ...(isFeed && mix !== null ? { nutrition: mix.length > 0 ? { items: mix, stage_days: stageDays } : null } : {}),
     }
 
     const result = await updateTask(task.id, updates, scope, task.recurrence_id)
@@ -186,7 +226,7 @@ export default function EditTaskModal({ isOpen, onClose, task }: EditTaskModalPr
             form="edit-task-form"
             onCancel={onClose}
             pending={isSubmitting}
-            disabled={isDeleting}
+            disabled={isDeleting || !mixReady}
             submitLabel="Guardar cambios"
             extra={
               <button
@@ -222,14 +262,35 @@ export default function EditTaskModal({ isOpen, onClose, task }: EditTaskModalPr
 
           <DateField label="Día" value={date} onChange={setDate} quick="future" />
 
-          {task.type === 'fertilizante' && (
-            <ChoiceGroup
-              legend="Cómo se aplica"
-              options={APPLICATION_OPTIONS}
-              value={applicationType}
-              onChange={setApplicationType}
-              size="sm"
-            />
+          {isFeed && (
+            <>
+              <NutrientPicker
+                options={nutrition.options}
+                state={nutrition.state}
+                onReload={nutrition.reload}
+                value={mix ?? []}
+                onChange={setMixDraft}
+                week={week}
+                onWeekChange={setWeekOverride}
+                weekNote={weekOverride !== null ? (
+                  <>
+                    Semana elegida a mano.{' '}
+                    <button type="button" className="font-semibold text-[color:var(--brand-text)]" onClick={() => setWeekOverride(null)}>
+                      Volver a la {weekInStage(autoStageDays)}
+                    </button>
+                  </>
+                ) : task.recurrence_id && scope === 'all_future' ? 'Cada tarea de la serie usa la dosis de su semana.' : undefined}
+                stages={context?.stages ?? []}
+                showRecipe
+              />
+              <ChoiceGroup
+                legend="Cómo se aplica"
+                options={APPLICATION_OPTIONS}
+                value={applicationType}
+                onChange={setApplicationType}
+                size="sm"
+              />
+            </>
           )}
 
           {task.type === 'cambio_etapa' && (
@@ -242,11 +303,11 @@ export default function EditTaskModal({ isOpen, onClose, task }: EditTaskModalPr
             />
           )}
 
-          <Field label="Detalles" optional>
+          <Field label={isFeed ? 'Notas' : 'Detalles'} optional>
             <Textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="Notas adicionales"
+              placeholder={isFeed ? 'Cómo prepararla, en qué orden, lo que haga falta recordar' : 'Notas adicionales'}
             />
           </Field>
 

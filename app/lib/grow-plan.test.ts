@@ -12,8 +12,8 @@ const base: GrowPlanOptions = {
   waterEvery: 3,
   feedEvery: 2,
   flushDays: 10,
-  vegNutrition: { type: 'product', id: 1 },
-  flowerNutrition: { type: 'combo', id: 9 },
+  vegNutrition: [{ fertilizer_id: 1, name: 'Grow', custom_dose: null }],
+  flowerNutrition: [{ fertilizer_id: 2, name: 'Bloom', custom_dose: null }, { fertilizer_id: 3, name: 'PK', custom_dose: 0.5 }],
   include: { stageChange: true, harvest: true, flush: true },
 };
 
@@ -32,10 +32,10 @@ test('buildGrowPlan - riegos cada 3 días, uno de cada 2 con fertilizante de su 
   assert.equal(waterings[1].day, '2026-10-21');
   assert.equal(waterings[0].type, 'fertilizante');
   assert.equal(waterings[1].type, 'riego');
-  assert.deepEqual(waterings[0].nutrition, { type: 'product', id: 1 });
+  assert.deepEqual(waterings[0].nutrition, [{ fertilizer_id: 1, name: 'Grow', custom_dose: null }]);
   assert.equal(waterings[0].week, 2, 'el 18/10 es la semana 2 del vegetativo que empezó el 10');
   const firstFlowerFeed = plan.items.find((i) => i.type === 'fertilizante' && i.stage === 'Floración')!;
-  assert.deepEqual(firstFlowerFeed.nutrition, { type: 'combo', id: 9 });
+  assert.deepEqual(firstFlowerFeed.nutrition?.map((item) => item.fertilizer_id), [2, 3]);
   assert.equal(firstFlowerFeed.week, 1);
 });
 

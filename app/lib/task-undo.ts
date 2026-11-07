@@ -38,6 +38,10 @@ export interface LastEffect {
   cycles?: { id: number; space_id: number | null }[];
   /** Plantas pasadas de ciclo, con el ciclo que tenían. */
   plants?: { id: number; cycle_id: number | null }[];
+  /** Registros de bitácora que escribió la tarea (una mezcla aplicada). */
+  logs?: number[];
+  /** Lo que se descontó del stock: [{ fertilizer_id, delta }], con delta negativo. */
+  stock?: { fertilizer_id: number; delta: number }[];
 }
 
 function isId(value: unknown): value is number {
@@ -103,6 +107,16 @@ export function readLastEffect(metadata: unknown): LastEffect | null {
     });
   }
 
+  if (Array.isArray(raw.logs)) effect.logs = raw.logs.filter(isId);
+
+  if (Array.isArray(raw.stock)) {
+    effect.stock = raw.stock.flatMap((item) => {
+      const id = (item as { fertilizer_id?: unknown })?.fertilizer_id;
+      const delta = Number((item as { delta?: unknown })?.delta);
+      return isId(id) && Number.isFinite(delta) && delta !== 0 ? [{ fertilizer_id: id, delta }] : [];
+    });
+  }
+
   return effect;
 }
 
@@ -114,7 +128,9 @@ export function hasUndoableChanges(effect: LastEffect | null): boolean {
       effect.archived?.length ||
       effect.stage?.plants.length ||
       effect.cycles?.length ||
-      effect.plants?.length
+      effect.plants?.length ||
+      effect.logs?.length ||
+      effect.stock?.length
   );
 }
 

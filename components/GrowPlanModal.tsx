@@ -1,19 +1,20 @@
 'use client'
 
-import { useMemo, useRef, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { CalendarRange, Trash2 } from 'lucide-react'
 import { createGrowPlan, deleteGrowPlan } from '@/app/actions/grow-plan'
-import { getFertilizerCombos, getFertilizers } from '@/app/actions/fertilizers'
 import { buildGrowPlan, countByType } from '@/app/lib/grow-plan'
 import type { PlanItem } from '@/app/lib/grow-plan'
-import type { NutritionSelection } from '@/app/lib/nutrition'
+import { mixLabel } from '@/app/lib/nutrition'
+import type { MixItem } from '@/app/lib/nutrition'
+import NutrientPicker, { useNutritionOptions } from '@/components/NutrientPicker'
 import type { StageName } from '@/app/lib/stage-logic'
 import { addDaysToKey, formatInAppTz, todayKey } from '@/app/lib/dates'
 import { getTaskType } from '@/app/lib/constants'
 import { useToast } from '@/app/context/ToastContext'
 import Modal from '@/components/ui/Modal'
-import { Field, FormActions, FormAlert, FormSection, MultiChoice, Select, Stepper } from '@/components/ui/form'
+import { Disclosure, Field, FormActions, FormAlert, FormSection, MultiChoice, Stepper } from '@/components/ui/form'
 import ConfirmDialog from '@/components/ui/ConfirmDialog'
 
 interface GrowPlanModalProps {
@@ -26,13 +27,6 @@ interface GrowPlanModalProps {
   defaultFlowerDays: number
   /** Tareas pendientes de planes anteriores de este ciclo. */
   pendingPlanTasks: number
-}
-
-type Option = { value: string; label: string }
-
-const parseSelection = (value: string): NutritionSelection | null => {
-  const [type, id] = value.split(':')
-  return (type === 'product' || type === 'combo') && Number(id) ? { type, id: Number(id) } : null
 }
 
 /**
@@ -53,23 +47,17 @@ export default function GrowPlanModal(props: GrowPlanModalProps) {
   const [waterEvery, setWaterEvery] = useState('3')
   const [feedEvery, setFeedEvery] = useState('2')
   const [flushDays, setFlushDays] = useState('10')
-  const [vegNutrition, setVegNutrition] = useState('')
-  const [flowerNutrition, setFlowerNutrition] = useState('')
+  const [vegNutrition, setVegNutrition] = useState<MixItem[]>([])
+  const [flowerNutrition, setFlowerNutrition] = useState<MixItem[]>([])
   const [include, setInclude] = useState({ stageChange: true, harvest: true, flush: true })
   const [excluded, setExcluded] = useState<Set<string>>(new Set())
 
-  const [products, setProducts] = useState<{ fertilizers: Option[]; combos: Option[] }>({ fertilizers: [], combos: [] })
-  const loaded = useRef(false)
+  const nutrition = useNutritionOptions()
+  const [openMix, setOpenMix] = useState<'veg' | 'flower' | null>(null)
 
-  const open = async () => {
+  const open = () => {
     setIsOpen(true)
-    if (loaded.current) return
-    loaded.current = true
-    const [fertRes, comboRes] = await Promise.all([getFertilizers(), getFertilizerCombos()])
-    setProducts({
-      fertilizers: (fertRes.data ?? []).map((f) => ({ value: `product:${f.id}`, label: f.name })),
-      combos: (comboRes.data ?? []).map((c) => ({ value: `combo:${c.id}`, label: c.name })),
-    })
+    nutrition.load()
   }
 
   const options = useMemo(() => ({
@@ -78,8 +66,8 @@ export default function GrowPlanModal(props: GrowPlanModalProps) {
     waterEvery: Number(waterEvery) || 3,
     feedEvery: Number(feedEvery),
     flushDays: Number(flushDays) || 0,
-    vegNutrition: parseSelection(vegNutrition),
-    flowerNutrition: parseSelection(flowerNutrition),
+    vegNutrition: vegNutrition.length > 0 ? vegNutrition : null,
+    flowerNutrition: flowerNutrition.length > 0 ? flowerNutrition : null,
     include,
   }), [vegDays, flowerDays, waterEvery, feedEvery, flushDays, vegNutrition, flowerNutrition, include, defaultVegDays, defaultFlowerDays])
 
@@ -148,22 +136,26 @@ export default function GrowPlanModal(props: GrowPlanModalProps) {
     </Field>
   )
 
-  const productSelect = (label: string, value: string, set: (v: string) => void) => (
-    <Field label={label}>
-      <Select value={value} onChange={(e) => set(e.target.value)}>
-        <option value="">Sin fertilizante</option>
-        {products.combos.length > 0 && (
-          <optgroup label="Combos">
-            {products.combos.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-          </optgroup>
-        )}
-        {products.fertilizers.length > 0 && (
-          <optgroup label="Productos">
-            {products.fertilizers.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-          </optgroup>
-        )}
-      </Select>
-    </Field>
+  const mixSection = (key: 'veg' | 'flower', label: string, stageName: string, value: MixItem[], set: (items: MixItem[]) => void) => (
+    <Disclosure
+      label={label}
+      summary={value.length > 0 ? mixLabel(value, nutrition.options?.combos ?? []) : 'Sin fertilizante'}
+      open={openMix === key}
+      onOpenChange={(isOpenNow) => setOpenMix(isOpenNow ? key : null)}
+    >
+      <NutrientPicker
+        options={nutrition.options}
+        state={nutrition.state}
+        onReload={nutrition.reload}
+        value={value}
+        onChange={set}
+        week={1}
+        hideWeek
+        stages={[stageName]}
+        legend="Qué lleva"
+        hint="Cada riego con fertilizante usa la dosis de su semana. Lo que ajustes a mano queda igual en todas."
+      />
+    </Disclosure>
   )
 
   const includeKeys = (Object.keys(include) as (keyof typeof include)[]).filter((key) => include[key])
@@ -241,9 +233,9 @@ export default function GrowPlanModal(props: GrowPlanModalProps) {
                 {stepper('Regar cada', waterEvery, setWaterEvery, { suffix: 'días', min: 1, max: 30 })}
                 {stepper('Fertilizar 1 de cada', feedEvery, setFeedEvery, { suffix: 'riegos', max: 10, hint: '0 = nunca' })}
               </div>
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                {stage !== 'Floración' && productSelect('Fertilizante en vegetativo', vegNutrition, setVegNutrition)}
-                {productSelect('Fertilizante en floración', flowerNutrition, setFlowerNutrition)}
+              <div className="space-y-3">
+                {stage !== 'Floración' && mixSection('veg', 'Fertilizante en vegetativo', 'Vegetativo', vegNutrition, setVegNutrition)}
+                {mixSection('flower', 'Fertilizante en floración', 'Floración', flowerNutrition, setFlowerNutrition)}
               </div>
             </FormSection>
 

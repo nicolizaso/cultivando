@@ -5,36 +5,24 @@ import { CalendarPlus, GitBranch, Layers, Repeat, Search, Sprout, Warehouse, X }
 import { useRouter } from 'next/navigation'
 import { createTask } from '@/app/actions/tasks'
 import { useToast } from '@/app/context/ToastContext'
-import { addDaysToKey, formatInAppTz, todayKey } from '@/app/lib/dates'
+import { addDaysToKey, daysBetweenKeys, formatInAppTz, todayKey } from '@/app/lib/dates'
 import { TASK_TYPES } from '@/app/lib/constants'
 import { STAGE_NAMES } from '@/app/lib/stage-logic'
 import { buildOccurrenceDates, type Frequency } from '@/app/lib/recurrence'
 import Modal from '@/components/ui/Modal'
 import {
   APPLICATION_OPTIONS, ChoiceGroup, DateField, Field, FieldGroup, FormActions, FormAlert, FormSection,
-  Input, MultiChoice, Select, Switch, Textarea, stageOptions, taskTypeOptions, useFieldErrors,
+  Input, MultiChoice, Switch, Textarea, stageOptions, taskTypeOptions, useFieldErrors,
 } from '@/components/ui/form'
+import NutrientPicker, { useNutritionOptions } from '@/components/NutrientPicker'
+import { stageDaysForWeek, weekInStage } from '@/app/lib/nutrition'
+import type { MixItem } from '@/app/lib/nutrition'
+import { feedContext } from '@/app/lib/task-targets'
+import type { CycleOption, PlantOption } from '@/app/lib/task-targets'
 
-// Interfaces
-import { Fertilizer, FertilizerCombo } from '@/app/lib/types'
-import { getFertilizers, getFertilizerCombos } from '@/app/actions/fertilizers'
-import { averageDays, buildRecipe, recipeItems, weekInStage, withRecipe } from '@/app/lib/nutrition'
-
-interface Plant { id: string; name: string; days_in_stage?: number | null; space_id?: number; cycle_id?: number | null; }
-interface CycleOption { id: number; name: string; space_id?: number | null; days_in_stage?: number | null }
+type Plant = PlantOption
 type TargetType = 'plant' | 'space' | 'cycle'
 type Target = { id: string | number; name: string; type: TargetType }
-
-/** Días en la etapa de un objetivo: los de la planta, o el promedio del ciclo o del espacio. */
-function targetDaysInStage(
-  target: { id: string | number; type: TargetType },
-  plants: Plant[],
-  cycles: CycleOption[]
-): number | null {
-  if (target.type === 'plant') return plants.find(p => String(p.id) === String(target.id))?.days_in_stage ?? null
-  if (target.type === 'cycle') return cycles.find(c => c.id === Number(target.id))?.days_in_stage ?? null
-  return averageDays(cycles.filter(c => c.space_id === Number(target.id)).map(c => c.days_in_stage))
-}
 interface Space { id: number; name: string; }
 
 interface AddTaskModalProps {
@@ -92,11 +80,10 @@ export default function AddTaskModal({ isOpen, onClose, plants, spaces, cycles =
   )
   const [targetQuery, setTargetQuery] = useState('')
 
-  // Nutrición (Fertilizantes)
-  const [fertilizers, setFertilizers] = useState<Fertilizer[]>([])
-  const [combos, setCombos] = useState<FertilizerCombo[]>([])
-  const [selectedNutrition, setSelectedNutrition] = useState<{ type: 'product' | 'combo', id: number } | null>(null)
-  const [isNutritionLoading, setIsNutritionLoading] = useState(false)
+  // Nutrición: la mezcla (productos con su dosis) y la semana, si se cambia a mano.
+  const nutrition = useNutritionOptions()
+  const [mix, setMix] = useState<MixItem[]>([])
+  const [weekOverride, setWeekOverride] = useState<number | null>(null)
 
   // Recurrencia
   const [isRecurring, setIsRecurring] = useState(false)
@@ -105,55 +92,42 @@ export default function AddTaskModal({ isOpen, onClose, plants, spaces, cycles =
 
   const [isSubmitting, setIsSubmitting] = useState(false)
 
-  // Los productos y combos se piden la primera vez que se elige
-  // "Fertilizante", en el momento del cambio (antes, un efecto que miraba el
-  // tipo los volvía a pedir cada vez).
-  const nutritionLoaded = useRef(false)
-
-  const loadNutrition = async () => {
-    if (nutritionLoaded.current) return
-    nutritionLoaded.current = true
-    setIsNutritionLoading(true)
-    try {
-      const [fertRes, combosRes] = await Promise.all([getFertilizers(), getFertilizerCombos()])
-      if (fertRes.data) setFertilizers(fertRes.data)
-      if (combosRes.data) setCombos(combosRes.data)
-    } catch (error) {
-      nutritionLoaded.current = false
-      console.error("Failed to load nutrition data", error)
-    } finally {
-      setIsNutritionLoading(false)
-    }
-  }
-
   const changeTaskType = (id: string | null) => {
     setTaskTypeId(id)
     clear('type')
-    if (id === 'fertilizante') loadNutrition()
-    else setSelectedNutrition(null)
+    // Los productos se piden la primera vez que se elige "Fertilizante".
+    if (id === 'fertilizante') nutrition.load()
+    else setMix([])
     // El esquejado se apunta al ciclo entero: se lleva a esa pestaña.
     if (id === 'esquejado' && cycles.length > 0) setTargetTab('cycle')
   }
 
   /**
-   * Escribe la receta en los detalles con la semana de la etapa del primer
-   * objetivo: una planta tiene sus días en la etapa y un ciclo o un espacio,
-   * el promedio de sus plantas. Antes la semana era siempre la 1, porque la
-   * lista de plantas no traía los días en etapa y los ciclos no se miraban.
-   *
-   * Se llama al elegir producto u objetivo, no desde un efecto: así la receta
-   * se recalcula sólo cuando cambia algo que la afecta. En una serie, el
-   * servidor recalcula la semana de cada fecha.
+   * La semana de la etapa para la dosis: la de lo elegido el día de la tarea.
+   * Si los objetivos están en semanas distintas se usa la más temprana (y se
+   * avisa); también se puede cambiar a mano. En una serie, el servidor avanza
+   * la semana en cada repetición.
    */
-  const applyRecipe = (
-    nutrition: { type: 'product' | 'combo'; id: number } | null,
-    targets: { id: string | number; type: TargetType }[]
-  ) => {
-    if (!nutrition || targets.length === 0) return
-    const week = weekInStage(targetDaysInStage(targets[0], plants, cycles))
-    const recipe = buildRecipe(recipeItems(nutrition, fertilizers, combos, week), week)
-    setDescription(prev => withRecipe(prev, recipe))
-  }
+  const context = feedContext(selectedTargets, plants, cycles)
+  const autoStageDays = context.stageDays === null
+    ? 0
+    : Math.max(0, context.stageDays + daysBetweenKeys(todayKey(), date))
+  const week = weekOverride ?? weekInStage(autoStageDays)
+  const stageDays = weekOverride !== null ? stageDaysForWeek(weekOverride) : autoStageDays
+  const weekNote = weekOverride !== null ? (
+    <>
+      Semana elegida a mano.{' '}
+      <button type="button" className="font-semibold text-[color:var(--brand-text)]" onClick={() => setWeekOverride(null)}>
+        Volver a la de las plantas ({weekInStage(autoStageDays)})
+      </button>
+    </>
+  ) : selectedTargets.length === 0 ? (
+    'Elegí sobre qué es la tarea y la semana se calcula sola.'
+  ) : context.minWeek !== null && context.maxWeek !== null && context.minWeek !== context.maxWeek ? (
+    `Lo elegido va de la semana ${context.minWeek} a la ${context.maxWeek} de su etapa: se usa la ${context.minWeek} para no pasarse.`
+  ) : isRecurring ? (
+    'En la serie, cada repetición usa la dosis de su semana.'
+  ) : undefined
 
   const toggleTarget = (item: Target) => {
     const exists = selectedTargets.some(t => t.id === item.id && t.type === item.type)
@@ -162,7 +136,6 @@ export default function AddTaskModal({ isOpen, onClose, plants, spaces, cycles =
       : [...selectedTargets, item]
     setSelectedTargets(next)
     clear('targets')
-    applyRecipe(selectedNutrition, next)
   }
 
   const groups: Record<TargetType, { id: string | number; name: string }[]> = {
@@ -207,9 +180,9 @@ export default function AddTaskModal({ isOpen, onClose, plants, spaces, cycles =
 
     const result = await createTask({
       targets: selectedTargets,
-      // El servidor recalcula la receta para cada fecha de la serie: la
-      // semana de la etapa avanza entre una repetición y la siguiente.
-      nutrition: selectedTaskType.id === 'fertilizante' ? selectedNutrition : null,
+      // La mezcla viaja como datos; el servidor arma la receta de cada fecha
+      // (en una serie, la semana avanza entre una repetición y la siguiente).
+      nutrition: selectedTaskType.id === 'fertilizante' && mix.length > 0 ? { items: mix, stage_days: stageDays } : null,
       taskType: { id: selectedTaskType.id, label: selectedTaskType.label },
       applicationType,
       targetStage,
@@ -240,14 +213,13 @@ export default function AddTaskModal({ isOpen, onClose, plants, spaces, cycles =
 
       setSelectedTargets([])
       changeTaskType(null)
+      setWeekOverride(null)
       setDescription('')
       setOtherText('')
       setIsRecurring(false)
       onClose()
     }
   }
-
-  const nutritionValue = selectedNutrition ? `${selectedNutrition.type}-${selectedNutrition.id}` : ''
 
   return (
     <Modal
@@ -306,35 +278,19 @@ export default function AddTaskModal({ isOpen, onClose, plants, spaces, cycles =
 
         {selectedTaskType?.id === 'fertilizante' && (
           <div className="form-reveal space-y-5">
-            <Field
-              label="Combo o producto"
-              optional
-              hint="Calcula la receta para la semana de la etapa y la suma a los detalles."
-            >
-              <Select
-                value={nutritionValue}
-                onChange={(e) => {
-                  const val = e.target.value
-                  if (!val) {
-                    setSelectedNutrition(null)
-                  } else {
-                    const [type, id] = val.split('-')
-                    const next = { type: type as 'product' | 'combo', id: parseInt(id) }
-                    setSelectedNutrition(next)
-                    applyRecipe(next, selectedTargets)
-                  }
-                }}
-                aria-busy={isNutritionLoading}
-              >
-                <option value="">{isNutritionLoading ? 'Cargando productos…' : 'Sin receta'}</option>
-                {combos.length > 0 && <optgroup label="Combos">
-                  {combos.map(c => <option key={`combo-${c.id}`} value={`combo-${c.id}`}>{c.name}</option>)}
-                </optgroup>}
-                {fertilizers.length > 0 && <optgroup label="Productos">
-                  {fertilizers.map(f => <option key={`product-${f.id}`} value={`product-${f.id}`}>{f.name}</option>)}
-                </optgroup>}
-              </Select>
-            </Field>
+            <NutrientPicker
+              options={nutrition.options}
+              state={nutrition.state}
+              onReload={nutrition.reload}
+              value={mix}
+              onChange={setMix}
+              week={week}
+              onWeekChange={setWeekOverride}
+              weekNote={weekNote}
+              stages={context.stages}
+              hint="Combos, productos o los dos. La dosis sale de la semana de la etapa y la podés ajustar."
+              showRecipe
+            />
 
             <ChoiceGroup
               legend="Cómo se aplica"
@@ -519,9 +475,9 @@ export default function AddTaskModal({ isOpen, onClose, plants, spaces, cycles =
         </FormSection>
 
         {/* 4. DETALLES */}
-        <Field label="Detalles" optional>
+        <Field label={selectedTaskType?.id === 'fertilizante' ? 'Notas' : 'Detalles'} optional>
           <Textarea
-            placeholder="Dosis, observaciones, lo que haga falta recordar"
+            placeholder={selectedTaskType?.id === 'fertilizante' ? 'Cómo prepararla, en qué orden, lo que haga falta recordar' : 'Dosis, observaciones, lo que haga falta recordar'}
             value={description}
             onChange={(e) => setDescription(e.target.value)}
           />

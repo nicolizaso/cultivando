@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { describeDoses, describeWatering, doseForLiters, ecToPpm, parseWateringData, readWatering } from './watering.ts';
+import { describeWatering, ecToPpm, parseWateringData, readWatering } from './watering.ts';
 
 test('parseWateringData - acepta coma, reparte litros y redondea', () => {
   const result = parseWateringData({ liters_total: '10', ph: '6,2', ec: '1.45', runoff_ph: '' }, 4);
@@ -28,9 +28,6 @@ test('describeWatering - texto corto para la bitácora', () => {
   assert.equal(ecToPpm(1.2, 700), 840);
 });
 
-test('doseForLiters y describeDoses - ml de cada producto', () => {
-  const lines = doseForLiters([{ fertilizerId: 1, name: 'Grow', dose: 2 }, { fertilizerId: 2, name: 'Raíz', dose: null }], 10);
-  assert.deepEqual(lines, [{ fertilizerId: 1, name: 'Grow', perLiter: 2, total: 20 }, { fertilizerId: 2, name: 'Raíz', perLiter: null, total: null }]);
-  assert.equal(describeDoses(lines, 10, 3), 'Grow: 20 ml + Raíz: ? (10 L, semana 3)');
-  assert.equal(doseForLiters([{ fertilizerId: 1, name: 'Grow', dose: 2 }], 0)[0].total, null);
+test('parseWateringData - entiende "1.000" como mil litros', () => {
+  assert.deepEqual(parseWateringData({ liters_total: '1.000' }, 1).data, { liters_total: 1000, liters_per_plant: 1000 });
 });

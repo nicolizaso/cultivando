@@ -9,18 +9,19 @@ import { dominantStage, stagePeriods } from '@/app/lib/climate'
 import { dateKey, todayKey } from '@/app/lib/dates'
 import { buildGrowPlan } from '@/app/lib/grow-plan'
 import type { GrowPlanOptions } from '@/app/lib/grow-plan'
-import { buildRecipe, recipeItems } from '@/app/lib/nutrition'
-import type { ComboInfo, FertilizerDoseInfo, NutritionSelection } from '@/app/lib/nutrition'
+import { buildStoredMix, mixRecipe, parseMixInput } from '@/app/lib/nutrition'
+import type { MixItem } from '@/app/lib/nutrition'
+import { loadMixSources, ownsAll } from '@/app/lib/nutrition-data'
 import { parseId } from '@/app/lib/sanitize'
 import type { Json } from '@/app/lib/database.types'
 
 const PLANT_COLUMNS =
   'id, stage, is_archived, stage_updated_at, date_germinacion, date_plantula, date_enraizamiento, date_vegetativo, date_floracion, date_secado, date_curado' as const
 
-function readSelection(value: unknown): NutritionSelection | null {
-  const type = (value as { type?: unknown } | null)?.type
-  const id = parseId((value as { id?: unknown } | null)?.id)
-  return (type === 'product' || type === 'combo') && id ? { type, id } : null
+/** La mezcla de una etapa: [{ fertilizer_id, custom_dose }], o null si no lleva. */
+function readMixItems(value: unknown): MixItem[] | null | 'invalid' {
+  const parsed = parseMixInput({ items: value ?? null })
+  return parsed === 'invalid' ? 'invalid' : parsed?.items ?? null
 }
 
 const num = (value: unknown, fallback: number) => {
@@ -43,12 +44,12 @@ export async function createGrowPlan(rawCycleId: number, rawOptions: unknown, ex
   if ('error' in session) return { error: session.error }
   const { supabase, user } = session
 
-  const [{ data: cycle }, { data: plants }, { data: fertilizers }, { data: combos }] = await Promise.all([
+  const [{ data: cycle }, { data: plants }, sources] = await Promise.all([
     supabase.from('cycles').select('id, is_active').eq('id', cycleId).maybeSingle(),
     supabase.from('plants').select(PLANT_COLUMNS).eq('cycle_id', cycleId).eq('is_archived', false),
-    supabase.from('fertilizers').select('id, name, dosage_type, fixed_dosage, weekly_dosages').eq('user_id', user.id),
-    supabase.from('fertilizer_combos').select('id, combo_items ( fertilizer_id, fertilizers ( name ) )').eq('user_id', user.id),
+    loadMixSources(supabase, user.id),
   ])
+  if ('error' in sources) return { error: sources.error }
 
   if (!cycle) return { error: 'No se encontró el ciclo.' }
   if (!cycle.is_active) return { error: 'El ciclo está finalizado.' }
@@ -65,23 +66,14 @@ export async function createGrowPlan(rawCycleId: number, rawOptions: unknown, ex
       .sort()[0]
   if (!stage || !stageStart) return { error: 'Cargá en qué etapa están las plantas (con su fecha) para armar el plan.' }
 
-  const comboInfos: ComboInfo[] = (combos ?? []).map((combo) => ({
-    id: Number(combo.id),
-    products: ((combo.combo_items ?? []) as { fertilizer_id: number; fertilizers: { name: string } | { name: string }[] | null }[]).map((item) => {
-      const fertilizer = Array.isArray(item.fertilizers) ? item.fertilizers[0] : item.fertilizers
-      return { fertilizer_id: Number(item.fertilizer_id), name: fertilizer?.name ?? 'Producto' }
-    }),
-  }))
-  const doseInfos = (fertilizers ?? []) as FertilizerDoseInfo[]
-
-  const owned = (selection: NutritionSelection | null) =>
-    selection && (selection.type === 'product'
-      ? doseInfos.some((f) => Number(f.id) === selection.id)
-      : comboInfos.some((c) => c.id === selection.id))
-      ? selection
-      : null
-
   const raw = (rawOptions ?? {}) as Record<string, unknown>
+  const vegMix = readMixItems(raw.vegNutrition)
+  const flowerMix = readMixItems(raw.flowerNutrition)
+  if (vegMix === 'invalid' || flowerMix === 'invalid') return { error: 'Revisá los fertilizantes del plan.' }
+  if ((vegMix && !ownsAll(vegMix, sources.fertilizers)) || (flowerMix && !ownsAll(flowerMix, sources.fertilizers))) {
+    return { error: 'Alguno de los productos ya no existe.' }
+  }
+
   const include = (raw.include ?? {}) as Record<string, unknown>
   const options: GrowPlanOptions = {
     today: todayKey(),
@@ -92,8 +84,8 @@ export async function createGrowPlan(rawCycleId: number, rawOptions: unknown, ex
     waterEvery: num(raw.waterEvery, 3),
     feedEvery: num(raw.feedEvery, 2),
     flushDays: num(raw.flushDays, 10),
-    vegNutrition: owned(readSelection(raw.vegNutrition)),
-    flowerNutrition: owned(readSelection(raw.flowerNutrition)),
+    vegNutrition: vegMix,
+    flowerNutrition: flowerMix,
     include: { stageChange: include.stageChange !== false, harvest: include.harvest !== false, flush: include.flush !== false },
   }
 
@@ -107,9 +99,9 @@ export async function createGrowPlan(rawCycleId: number, rawOptions: unknown, ex
   const planId = randomUUID()
   const targets = { cycle_ids: [cycleId], plant_ids: [] as number[] }
   const rows = items.map((item) => {
-    const recipe = item.nutrition
-      ? buildRecipe(recipeItems(item.nutrition, doseInfos, comboInfos, item.week), item.week)
-      : ''
+    // Cada riego con fertilizante, con la dosis de su semana en la etapa.
+    const stored = item.nutrition ? buildStoredMix(item.nutrition, sources.fertilizers, sources.combos, item.stageDays) : null
+    const recipe = stored ? mixRecipe(stored.resolved, stored.week) : ''
     return {
       title: getTaskType(item.type).label,
       description: item.type === 'lavado' ? FLUSH_NOTE : recipe || null,
@@ -124,7 +116,7 @@ export async function createGrowPlan(rawCycleId: number, rawOptions: unknown, ex
         targets,
         plan_id: planId,
         plan_cycle_id: cycleId,
-        ...(item.nutrition ? { nutrition: { ...item.nutrition, week: item.week } } : {}),
+        ...(stored ? { nutrition: stored } : {}),
       },
     }
   })

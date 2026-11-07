@@ -3,7 +3,9 @@
 import { useRef, useState } from 'react'
 import { Package, Plus, Trash2 } from 'lucide-react'
 import { Fertilizer } from '@/app/lib/types'
-import type { FertilizerStage } from '@/app/lib/nutrition'
+import { doseUnitShort } from '@/app/lib/nutrition'
+import type { DoseBasis, DoseUnit, FertilizerStage } from '@/app/lib/nutrition'
+import { parseDecimal } from '@/app/lib/sanitize'
 import Modal from '@/components/ui/Modal'
 import { getStageColor } from '@/app/lib/utils'
 import {
@@ -41,6 +43,8 @@ export default function AddFertilizerModal({ isOpen, onClose, onSave, initialDat
   const [brand, setBrand] = useState(initialData?.brand ?? '')
   const [stage, setStage] = useState<FertilizerStage>(initialData?.stage_category ?? 'todo')
   const [doseType, setDoseType] = useState<'fija' | 'semanal'>(initialData?.dosage_type ?? 'fija')
+  const [unit, setUnit] = useState<DoseUnit>(initialData?.unit ?? 'ml')
+  const [basis, setBasis] = useState<DoseBasis>(initialData?.dose_basis ?? 'litro')
   const [doseFixed, setDoseFixed] = useState(
     initialData?.fixed_dosage != null ? String(initialData.fixed_dosage).replace('.', ',') : ''
   )
@@ -77,7 +81,8 @@ export default function AddFertilizerModal({ isOpen, onClose, onSave, initialDat
     const newWeekly = [...doseWeekly]
     // Se guarda también lo escrito: si no, "1," se volvía "1" al tipear y no
     // había forma de cargar un decimal.
-    newWeekly[index] = { ...newWeekly[index], dose: parseFloat(value.replace(',', '.')) || 0, text: value }
+    const dose = parseDecimal(value) ?? 0
+    newWeekly[index] = { ...newWeekly[index], dose: Number.isFinite(dose) ? dose : 0, text: value }
     setDoseWeekly(newWeekly)
   }
 
@@ -85,7 +90,7 @@ export default function AddFertilizerModal({ isOpen, onClose, onSave, initialDat
     e.preventDefault()
     const ok = validate({
       name: !name.trim() && 'Ponele un nombre al producto.',
-      dose: doseType === 'fija' && !doseFixed.trim() && 'Cargá cuántos ml van por litro.',
+      dose: doseType === 'fija' && !doseFixed.trim() && (basis === 'planta' ? `Cargá cuántos ${unit} van por planta.` : `Cargá cuántos ${unit} van por litro.`),
     }, formRef.current)
     if (!ok) return
 
@@ -98,7 +103,10 @@ export default function AddFertilizerModal({ isOpen, onClose, onSave, initialDat
       brand: brand.trim() || null,
       stage_category: stage,
       dosage_type: doseType,
-      fixed_dosage: doseType === 'fija' ? Number(doseFixed.replace(',', '.')) : null,
+      unit,
+      dose_basis: basis,
+      // Tal cual se escribió: el servidor entiende "1,5" y "1.000".
+      fixed_dosage: doseType === 'fija' ? doseFixed.trim() : null,
       weekly_dosages: doseType === 'semanal' ? doseWeekly.map(({ week, dose }) => ({ week, dose })) : null,
       // Vacío = no llevar la cuenta. El servidor valida los números.
       stock_ml: trackStock ? stock.trim() || null : null,
@@ -120,13 +128,22 @@ export default function AddFertilizerModal({ isOpen, onClose, onSave, initialDat
     { value: 'fija', label: 'Siempre igual' },
     { value: 'semanal', label: 'Cambia por semana' },
   ]
+  const unitOptions: Array<{ value: DoseUnit; label: string }> = [
+    { value: 'ml', label: 'ml · líquido' },
+    { value: 'g', label: 'g · sólido' },
+  ]
+  const basisOptions: Array<{ value: DoseBasis; label: string }> = [
+    { value: 'litro', label: 'Por litro de agua' },
+    { value: 'planta', label: 'Por planta' },
+  ]
+  const suffix = doseUnitShort(unit, basis)
 
   return (
     <Modal
       isOpen={isOpen}
       onClose={onClose}
       title={initialData ? 'Editar producto' : 'Nuevo producto'}
-      description="Su dosis por litro, para calcular cada riego."
+      description="Su dosis, para calcular cada riego y cuánto queda."
       dismissOnBackdrop={false}
       footer={
         <FormActions
@@ -171,6 +188,24 @@ export default function AddFertilizerModal({ isOpen, onClose, onSave, initialDat
         />
 
         <FormSection title="Dosis">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <ChoiceGroup
+              legend="Unidad"
+              variant="segment"
+              options={unitOptions}
+              value={unit}
+              onChange={setUnit}
+            />
+            <ChoiceGroup
+              legend="Se mide"
+              variant="segment"
+              options={basisOptions}
+              value={basis}
+              onChange={setBasis}
+              hint={basis === 'planta' ? 'Para enmiendas que van directo a la maceta.' : undefined}
+            />
+          </div>
+
           <ChoiceGroup
             legend="Cómo se dosifica"
             hideLegend
@@ -181,11 +216,11 @@ export default function AddFertilizerModal({ isOpen, onClose, onSave, initialDat
           />
 
           {doseType === 'fija' ? (
-            <Field label="Por litro de agua" error={errors.dose}>
+            <Field label={basis === 'planta' ? 'Por planta' : 'Por litro de agua'} error={errors.dose}>
               <Input
                 type="text"
                 inputMode="decimal"
-                suffix="ml/L"
+                suffix={suffix}
                 className="metric text-lg"
                 value={doseFixed}
                 onChange={(e) => { setDoseFixed(e.target.value); clear('dose') }}
@@ -193,7 +228,7 @@ export default function AddFertilizerModal({ isOpen, onClose, onSave, initialDat
               />
             </Field>
           ) : (
-            <FieldGroup legend="Por litro, en cada semana de la etapa">
+            <FieldGroup legend={basis === 'planta' ? 'Por planta, en cada semana de la etapa' : 'Por litro, en cada semana de la etapa'}>
               <ol className="space-y-2">
                 {doseWeekly.map((item, index) => (
                   <li key={index} className="flex items-center gap-2">
@@ -205,7 +240,7 @@ export default function AddFertilizerModal({ isOpen, onClose, onSave, initialDat
                         id={`fert-week-${index}`}
                         type="text"
                         inputMode="decimal"
-                        suffix="ml/L"
+                        suffix={suffix}
                         value={item.text ?? String(item.dose).replace('.', ',')}
                         onChange={(e) => handleWeeklyDoseChange(index, e.target.value)}
                       />
@@ -236,18 +271,18 @@ export default function AddFertilizerModal({ isOpen, onClose, onSave, initialDat
             onChange={setTrackStock}
             icon={<Package size={17} />}
             label="Llevar la cuenta de lo que queda"
-            description="Cada riego con la calculadora lo descuenta solo y avisa cuando queda poco."
+            description="Cada riego o tarea de fertilizante lo descuenta solo y avisa cuando queda poco."
           />
           {trackStock && (
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 animate-fade-in">
               <Field label="Queda">
-                <Input type="text" inputMode="decimal" suffix="ml" value={stock} onChange={(e) => setStock(e.target.value)} placeholder="500" />
+                <Input type="text" inputMode="decimal" suffix={unit} value={stock} onChange={(e) => setStock(e.target.value)} placeholder="500" />
               </Field>
               <Field label="Envase">
-                <Input type="text" inputMode="decimal" suffix="ml" value={container} onChange={(e) => setContainer(e.target.value)} placeholder="1000" />
+                <Input type="text" inputMode="decimal" suffix={unit} value={container} onChange={(e) => setContainer(e.target.value)} placeholder="1000" />
               </Field>
               <Field label="Avisar con" className="col-span-2 sm:col-span-1">
-                <Input type="text" inputMode="decimal" suffix="ml" value={lowStock} onChange={(e) => setLowStock(e.target.value)} placeholder="100" />
+                <Input type="text" inputMode="decimal" suffix={unit} value={lowStock} onChange={(e) => setLowStock(e.target.value)} placeholder="100" />
               </Field>
             </div>
           )}

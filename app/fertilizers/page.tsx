@@ -17,7 +17,8 @@ import {
   createFertilizerCombo, deleteFertilizerCombo, updateFertilizerCombo, restockFertilizer
 } from '@/app/actions/fertilizers'
 import { Fertilizer, FertilizerCombo } from '@/app/lib/types'
-import { FERTILIZER_STAGE_LABELS, formatDose } from '@/app/lib/nutrition'
+import { FERTILIZER_STAGE_LABELS, doseUnitLabel, formatDose, formatDoseWithUnit } from '@/app/lib/nutrition'
+import { useToast } from '@/app/context/ToastContext'
 
 type Tab = 'productos' | 'combos'
 
@@ -26,6 +27,7 @@ type PendingDeletion =
   | { kind: 'combo'; id: number; name: string }
 
 export default function FertilizersPage() {
+  const { showToast } = useToast()
   const [activeTab, setActiveTab] = useState<Tab>('productos')
   const [fertilizers, setFertilizers] = useState<Fertilizer[]>([])
   const [combos, setCombos] = useState<FertilizerCombo[]>([])
@@ -76,7 +78,7 @@ export default function FertilizersPage() {
     return { error: null }
   }
 
-  const handleSaveCombo = async (data: Partial<FertilizerCombo>) => {
+  const handleSaveCombo = async (data: Record<string, unknown>) => {
     const res = editingCombo
       ? await updateFertilizerCombo(editingCombo.id, data)
       : await createFertilizerCombo(data)
@@ -89,8 +91,11 @@ export default function FertilizersPage() {
 
   const handleConfirmDelete = async () => {
     if (!pendingDeletion) return
-    if (pendingDeletion.kind === 'product') await deleteFertilizer(pendingDeletion.id)
-    else await deleteFertilizerCombo(pendingDeletion.id)
+    // Antes el error se tragaba y parecía que se había borrado.
+    const res = pendingDeletion.kind === 'product'
+      ? await deleteFertilizer(pendingDeletion.id)
+      : await deleteFertilizerCombo(pendingDeletion.id)
+    if (res?.error) showToast(res.error, 'error')
     await loadData()
   }
 
@@ -191,8 +196,8 @@ export default function FertilizersPage() {
                       <dt className="sr-only">Dosis</dt>
                       <dd className="chip chip-brand">
                         {fert.dosage_type === 'semanal'
-                          ? `Tabla de ${fert.weekly_dosages?.length ?? 0} semana${fert.weekly_dosages?.length === 1 ? '' : 's'}`
-                          : fert.fixed_dosage === null ? 'Sin dosis' : `${formatDose(fert.fixed_dosage)} ml/L`}
+                          ? `Tabla de ${fert.weekly_dosages?.length ?? 0} semana${fert.weekly_dosages?.length === 1 ? '' : 's'} · ${doseUnitLabel(fert.unit, fert.dose_basis)}`
+                          : fert.fixed_dosage === null ? 'Sin dosis' : formatDoseWithUnit(fert.fixed_dosage, fert.unit, fert.dose_basis)}
                       </dd>
                     </div>
                   </dl>
@@ -268,10 +273,24 @@ export default function FertilizersPage() {
                   </div>
 
                   <ul className="mb-4 flex flex-wrap gap-2">
-                    {combo.products?.map((p, idx) => (
-                      <li key={idx} className="chip chip-neutral">{p.name}</li>
-                    ))}
+                    {combo.products?.map((p) => {
+                      const product = fertilizers.find((f) => f.id === p.fertilizer_id)
+                      return (
+                        <li key={p.fertilizer_id} className={p.dose === null ? 'chip chip-neutral' : 'chip chip-brand'}>
+                          {p.name}
+                          {p.dose !== null && product && (
+                            <span className="mono font-semibold">
+                              {' · '}{formatDoseWithUnit(p.dose, product.unit, product.dose_basis)}
+                            </span>
+                          )}
+                        </li>
+                      )
+                    })}
                   </ul>
+
+                  {combo.description && (
+                    <p className="mb-4 line-clamp-3 text-sm text-fg-muted">{combo.description}</p>
+                  )}
 
                   <div className="mt-auto flex justify-end gap-1 border-t border-line pt-3">
                     <button
@@ -349,8 +368,8 @@ function StockMeter({ fertilizer }: { fertilizer: Fertilizer }) {
   return (
     <div className="mb-4">
       <p className="text-sm text-fg-muted">
-        Quedan <span className="mono font-semibold text-fg">{formatDose(stock)} ml</span>
-        {fertilizer.container_ml !== null && <> de un envase de {formatDose(fertilizer.container_ml)} ml</>}
+        Quedan <span className="mono font-semibold text-fg">{formatDose(stock)} {fertilizer.unit}</span>
+        {fertilizer.container_ml !== null && <> de un envase de {formatDose(fertilizer.container_ml)} {fertilizer.unit}</>}
       </p>
       {ratio !== null && (
         <div
@@ -401,7 +420,7 @@ function RestockDialog({ fertilizer, onClose, onDone }: { fertilizer: Fertilizer
       isOpen
       onClose={onClose}
       title={`Compré ${fertilizer.name}`}
-      description={fertilizer.stock_ml === null ? 'Desde ahora se lleva la cuenta de este producto.' : `Hoy quedan ${formatDose(fertilizer.stock_ml)} ml.`}
+      description={fertilizer.stock_ml === null ? 'Desde ahora se lleva la cuenta de este producto.' : `Hoy quedan ${formatDose(fertilizer.stock_ml)} ${fertilizer.unit}.`}
       size="sm"
       footer={
         <FormActions form="restock-form" onCancel={onClose} icon={ShoppingCart} pending={saving} submitLabel="Sumar al stock" />
@@ -426,7 +445,7 @@ function RestockDialog({ fertilizer, onClose, onDone }: { fertilizer: Fertilizer
             ) : undefined
           }
         >
-          <Input data-autofocus type="text" inputMode="decimal" suffix="ml" className="metric text-lg" value={ml} onChange={(e) => setMl(e.target.value)} placeholder="1000" />
+          <Input data-autofocus type="text" inputMode="decimal" suffix={fertilizer.unit} className="metric text-lg" value={ml} onChange={(e) => setMl(e.target.value)} placeholder="1000" />
         </Field>
       </form>
     </Modal>

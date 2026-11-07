@@ -1,17 +1,18 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
-import { Calculator, Droplets, NotebookPen } from "lucide-react";
+import { useState } from "react";
+import { FlaskConical, Droplets, Package } from "lucide-react";
 
 import { bulkWaterPlants } from "@/app/actions/plants";
-import { getFertilizerCombos, getFertilizers } from "@/app/actions/fertilizers";
 import { plantCountLabel, todayForInput } from "@/app/lib/utils";
-import { recipeItems } from "@/app/lib/nutrition";
-import type { ComboInfo, FertilizerDoseInfo, NutritionSelection } from "@/app/lib/nutrition";
-import { describeDoses, doseForLiters, ecToPpm } from "@/app/lib/watering";
+import { mixLabel, mixUsage, resolveMix, stageDaysForWeek } from "@/app/lib/nutrition";
+import type { MixItem } from "@/app/lib/nutrition";
+import { parseDecimal } from "@/app/lib/sanitize";
+import { ecToPpm } from "@/app/lib/watering";
 import Modal from "@/components/ui/Modal";
+import NutrientPicker, { useNutritionOptions } from "@/components/NutrientPicker";
 import { useToast } from "@/app/context/ToastContext";
-import { DateField, Disclosure, Field, FormActions, FormSection, Input, Select, Stepper, Switch, Textarea } from "@/components/ui/form";
+import { DateField, Disclosure, Field, FormActions, FormSection, Input, Switch, Textarea } from "@/components/ui/form";
 
 interface BulkWaterModalProps {
   isOpen: boolean;
@@ -27,8 +28,9 @@ const EMPTY = { liters_total: "", ph: "", ec: "", runoff_ph: "", runoff_ec: "", 
 
 /**
  * Registrar un riego, con los datos que importan: litros, pH y EC (y el
- * drenaje, si se mide). La calculadora dice cuántos ml de cada producto van
- * para esos litros y lo deja anotado en la nota.
+ * drenaje, si se mide). Si lleva nutrientes, se eligen con el mismo selector
+ * de las tareas: dice cuánto va de cada producto para esos litros, queda en
+ * la bitácora de cada planta y, si se pide, sale del stock.
  */
 export default function BulkWaterModal({ isOpen, onClose, selectedIds, onSuccess, defaultWeek = 1 }: BulkWaterModalProps) {
   const { showToast } = useToast();
@@ -38,54 +40,39 @@ export default function BulkWaterModal({ isOpen, onClose, selectedIds, onSuccess
   const [showRunoff, setShowRunoff] = useState(false);
   const [nutrients, setNutrients] = useState("");
 
-  // Calculadora: los productos se piden la primera vez que se abre.
-  const [showCalculator, setShowCalculator] = useState(false);
-  const [fertilizers, setFertilizers] = useState<FertilizerDoseInfo[]>([]);
-  const [combos, setCombos] = useState<(ComboInfo & { name: string })[]>([]);
-  const [selection, setSelection] = useState<string>("");
-  // null = la semana que propone quien abre el modal (cambia con la selección).
-  const [weekInput, setWeekInput] = useState<string | null>(null);
+  // Nutrientes: los productos se piden la primera vez que se abre la sección.
+  const [showNutrients, setShowNutrients] = useState(false);
+  const nutrition = useNutritionOptions();
+  const [mix, setMix] = useState<MixItem[]>([]);
+  // null = la semana que propone quien abre el modal.
+  const [weekInput, setWeekInput] = useState<number | null>(null);
   const [deductStock, setDeductStock] = useState(true);
-  const week = weekInput ?? String(defaultWeek);
-  const loaded = useRef(false);
-  const [productsState, setProductsState] = useState<"idle" | "loading" | "ready">("idle");
+  const week = weekInput ?? Math.max(1, defaultWeek);
 
   const set = (field: keyof typeof EMPTY) => (event: React.ChangeEvent<HTMLInputElement>) =>
     setValues((prev) => ({ ...prev, [field]: event.target.value }));
 
-  const openCalculator = async () => {
-    setShowCalculator((open) => !open);
-    if (loaded.current) return;
-    loaded.current = true;
-    setProductsState("loading");
-    const [fertRes, comboRes] = await Promise.all([getFertilizers(), getFertilizerCombos()]);
-    if (fertRes.data) setFertilizers(fertRes.data);
-    if (comboRes.data) setCombos(comboRes.data.map((combo) => ({ id: combo.id, name: combo.name, products: combo.products })));
-    setProductsState("ready");
-  };
+  const parsedLiters = parseDecimal(values.liters_total);
+  const liters = parsedLiters !== undefined && Number.isFinite(parsedLiters) && parsedLiters > 0 ? parsedLiters : 0;
+  const fertilizers = nutrition.options?.fertilizers ?? [];
+  const usage = mixUsage(resolveMix(mix, fertilizers, week), liters, selectedIds.length);
+  const canDeduct = usage.some((line) =>
+    line.total !== null && fertilizers.find((product) => product.id === line.fertilizer_id)?.stock_ml != null
+  );
 
-  const liters = Number(values.liters_total.replace(",", ".")) || 0;
-  const weekNumber = Math.max(1, Math.floor(Number(week) || 1));
-
-  const doses = useMemo(() => {
-    if (!selection) return [];
-    const [type, rawId] = selection.split(":");
-    const choice: NutritionSelection = { type: type === "combo" ? "combo" : "product", id: Number(rawId) };
-    return doseForLiters(recipeItems(choice, fertilizers, combos, weekNumber), liters);
-  }, [selection, fertilizers, combos, weekNumber, liters]);
-
-  const ecValue = Number(values.ec.replace(",", "."));
+  const ecValue = parseDecimal(values.ec) ?? NaN;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
-    // Lo que dice la calculadora sale del stock, si se pidió.
-    const usage = showCalculator && deductStock && liters > 0
-      ? doses.filter((line) => line.total !== null).map((line) => ({ fertilizer_id: line.fertilizerId, ml: line.total }))
-      : [];
-
-    const res = await bulkWaterPlants(selectedIds, date, { nutrients, watering: values, usage });
+    const res = await bulkWaterPlants(selectedIds, date, {
+      nutrients,
+      watering: values,
+      // La mezcla como datos: el servidor calcula las dosis con tus productos.
+      feed: mix.length > 0 ? { items: mix, stage_days: stageDaysForWeek(week) } : null,
+      deductStock: canDeduct && deductStock,
+    });
 
     setLoading(false);
 
@@ -93,10 +80,11 @@ export default function BulkWaterModal({ isOpen, onClose, selectedIds, onSuccess
       const low = 'lowStock' in res ? res.lowStock ?? [] : [];
       showToast(
         `Riego registrado en ${plantCountLabel(res.count ?? selectedIds.length)}` +
-          (low.length > 0 ? `. Queda poco: ${low.map((item) => `${item.name} (${item.stock_ml ?? 0} ml)`).join(', ')}.` : '')
+          (low.length > 0 ? `. Queda poco: ${low.map((item) => `${item.name} (${(item.stock_ml ?? 0).toLocaleString('es-AR')})`).join(', ')}.` : '')
       );
       setValues(EMPTY);
       setNutrients("");
+      setMix([]);
       setWeekInput(null);
       onSuccess();
       onClose();
@@ -177,89 +165,39 @@ export default function BulkWaterModal({ isOpen, onClose, selectedIds, onSuccess
         </FormSection>
 
         <Disclosure
-          label="Calcular nutrientes"
-          summary={liters > 0 ? `Cuántos ml de cada producto para ${liters.toLocaleString("es-AR")} L` : "Cuántos ml de cada producto van"}
-          icon={<Calculator size={18} />}
-          open={showCalculator}
-          onOpenChange={() => { openCalculator(); }}
+          label="Nutrientes"
+          summary={mix.length > 0 ? mixLabel(mix, nutrition.options?.combos ?? []) : "Qué lleva el agua y cuánto de cada producto"}
+          icon={<FlaskConical size={18} />}
+          open={showNutrients}
+          onOpenChange={(open) => { setShowNutrients(open); if (open) nutrition.load(); }}
         >
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_10rem]">
-            <Field label="Producto o combo">
-              <Select value={selection} onChange={(e) => setSelection(e.target.value)}>
-                <option value="">{productsState === "loading" ? "Cargando productos…" : productsState === "ready" && fertilizers.length + combos.length === 0 ? "No hay productos cargados" : "Elegir…"}</option>
-                {combos.length > 0 && (
-                  <optgroup label="Combos">
-                    {combos.map((combo) => (
-                      <option key={`c${combo.id}`} value={`combo:${combo.id}`}>{combo.name}</option>
-                    ))}
-                  </optgroup>
-                )}
-                {fertilizers.length > 0 && (
-                  <optgroup label="Productos">
-                    {fertilizers.map((fertilizer) => (
-                      <option key={`p${fertilizer.id}`} value={`product:${fertilizer.id}`}>{fertilizer.name}</option>
-                    ))}
-                  </optgroup>
-                )}
-              </Select>
-            </Field>
-            <Field label="Semana de la etapa">
-              <Stepper
-                value={weekNumber}
-                onChange={(n) => setWeekInput(String(n))}
-                min={1}
-                max={30}
-                unitName="semana"
-              />
-            </Field>
-          </div>
-
-          {doses.length > 0 && (
-            <div className="space-y-3">
-              {liters <= 0 && <p className="field-hint">Cargá los litros arriba para ver el total de cada producto.</p>}
-              <ul className="divide-y divide-[color:var(--border)] rounded-[var(--radius-md)] border border-line bg-surface-2 text-sm">
-                {doses.map((line) => (
-                  <li key={line.name} className="flex items-baseline justify-between gap-3 px-3 py-2.5">
-                    <span className="min-w-0 truncate text-fg">{line.name}</span>
-                    <span className="shrink-0 text-right">
-                      <span className="mono font-semibold text-fg">
-                        {line.total !== null ? `${line.total.toLocaleString("es-AR")} ml` : "–"}
-                      </span>
-                      <span className="block text-xs text-fg-muted">
-                        {line.perLiter !== null ? `${line.perLiter.toLocaleString("es-AR")} ml/L` : "sin dosis cargada"}
-                      </span>
-                    </span>
-                  </li>
-                ))}
-              </ul>
-              {liters > 0 && doses.some((line) => line.total !== null) && (
-                <Switch
-                  checked={deductStock}
-                  onChange={setDeductStock}
-                  label="Descontar del stock"
-                  description="Resta estos ml de cada producto al registrar el riego."
-                />
-              )}
-              {liters > 0 && (
-                <button
-                  type="button"
-                  className="btn btn-sm btn-secondary w-full"
-                  onClick={() => {
-                    const text = describeDoses(doses, liters, weekNumber);
-                    setNutrients((prev) => (prev.trim() ? `${prev.trim()}\n${text}` : text));
-                  }}
-                >
-                  <NotebookPen size={15} aria-hidden="true" />
-                  Copiar la receta a la nota
-                </button>
-              )}
-            </div>
+          <NutrientPicker
+            options={nutrition.options}
+            state={nutrition.state}
+            onReload={nutrition.reload}
+            value={mix}
+            onChange={setMix}
+            week={week}
+            onWeekChange={setWeekInput}
+            liters={liters}
+            plantCount={selectedIds.length}
+            legend="Qué lleva"
+            hint={liters > 0 ? undefined : "Cargá los litros arriba para ver cuánto va de cada producto."}
+          />
+          {canDeduct && (
+            <Switch
+              checked={deductStock}
+              onChange={setDeductStock}
+              icon={<Package size={17} />}
+              label="Descontar del stock"
+              description="Resta lo usado de cada producto al registrar el riego."
+            />
           )}
         </Disclosure>
 
-        <Field label="Nutrientes y notas" optional>
+        <Field label="Notas" optional>
           <Textarea
-            placeholder="Ej: Base A+B (2 ml/L), CalMag"
+            placeholder="Ej: agua de lluvia, regué lento"
             value={nutrients}
             onChange={(e) => setNutrients(e.target.value)}
           />

@@ -10,7 +10,7 @@
 
 import { addDaysToKey, daysBetweenKeys } from './dates.ts';
 import { weekInStage } from './nutrition.ts';
-import type { NutritionSelection } from './nutrition.ts';
+import type { MixItem } from './nutrition.ts';
 import type { StageName } from './stage-logic.ts';
 
 /** Lo mismo que acepta `create_tasks` en una sola llamada. */
@@ -41,8 +41,9 @@ export interface GrowPlanOptions {
   feedEvery: number;
   /** Días antes de la cosecha con agua sola (y una tarea de lavado). */
   flushDays: number;
-  vegNutrition: NutritionSelection | null;
-  flowerNutrition: NutritionSelection | null;
+  /** La mezcla de cada etapa (vacía o null: sin fertilizante). */
+  vegNutrition: MixItem[] | null;
+  flowerNutrition: MixItem[] | null;
   include: { stageChange: boolean; harvest: boolean; flush: boolean };
 }
 
@@ -53,10 +54,11 @@ export interface PlanItem {
   type: PlanTaskType;
   /** La etapa en la que cae. */
   stage: StageName | 'Previa';
-  /** Semana dentro de esa etapa (para la dosis). */
+  /** Días dentro de esa etapa y la semana que les toca (para la dosis). */
+  stageDays: number;
   week: number;
   targetStage?: StageName;
-  nutrition?: NutritionSelection;
+  nutrition?: MixItem[];
 }
 
 export interface GrowPlan {
@@ -90,10 +92,14 @@ export function buildGrowPlan(options: GrowPlanOptions): GrowPlan | null {
 
   const stageOf = (day: string): PlanItem['stage'] =>
     day < vegStart ? 'Previa' : day < flowerStart ? 'Vegetativo' : 'Floración';
-  const weekOf = (day: string, stage: PlanItem['stage']) =>
-    stage === 'Floración' ? weekInStage(daysBetweenKeys(flowerStart, day))
-      : stage === 'Vegetativo' ? weekInStage(daysBetweenKeys(vegStart, day))
-        : weekInStage(daysBetweenKeys(stageStart, day));
+  const daysOf = (day: string, stage: PlanItem['stage']) => Math.max(0,
+    stage === 'Floración' ? daysBetweenKeys(flowerStart, day)
+      : stage === 'Vegetativo' ? daysBetweenKeys(vegStart, day)
+        : daysBetweenKeys(stageStart, day));
+  const timing = (day: string, stage: PlanItem['stage']) => {
+    const stageDays = daysOf(day, stage);
+    return { stageDays, week: weekInStage(stageDays) };
+  };
 
   const items: PlanItem[] = [];
   const future = (day: string) => day > today;
@@ -102,7 +108,8 @@ export function buildGrowPlan(options: GrowPlanOptions): GrowPlan | null {
   let feedable = 0;
   for (let day = addDaysToKey(today, 1); day < harvestDay; day = addDaysToKey(day, waterEvery)) {
     const stage = stageOf(day);
-    const nutrition = stage === 'Vegetativo' ? options.vegNutrition : stage === 'Floración' ? options.flowerNutrition : null;
+    const mix = stage === 'Vegetativo' ? options.vegNutrition : stage === 'Floración' ? options.flowerNutrition : null;
+    const nutrition = mix && mix.length > 0 ? mix : null;
     const flushing = include.flush && flushDays > 0 && day >= flushStart;
     let feed = false;
     if (nutrition && !flushing && feedEvery > 0) {
@@ -114,26 +121,26 @@ export function buildGrowPlan(options: GrowPlanOptions): GrowPlan | null {
       day,
       type: feed ? 'fertilizante' : 'riego',
       stage,
-      week: weekOf(day, stage),
+      ...timing(day, stage),
       ...(feed && nutrition ? { nutrition } : {}),
     });
   }
 
   if (include.stageChange) {
     if (currentStage !== 'Vegetativo' && currentStage !== 'Floración' && future(vegStart)) {
-      items.push({ key: `cambio-${vegStart}-Vegetativo`, day: vegStart, type: 'cambio_etapa', stage: 'Vegetativo', week: 1, targetStage: 'Vegetativo' });
+      items.push({ key: `cambio-${vegStart}-Vegetativo`, day: vegStart, type: 'cambio_etapa', stage: 'Vegetativo', stageDays: 0, week: 1, targetStage: 'Vegetativo' });
     }
     if (currentStage !== 'Floración' && future(flowerStart)) {
-      items.push({ key: `cambio-${flowerStart}-Floración`, day: flowerStart, type: 'cambio_etapa', stage: 'Floración', week: 1, targetStage: 'Floración' });
+      items.push({ key: `cambio-${flowerStart}-Floración`, day: flowerStart, type: 'cambio_etapa', stage: 'Floración', stageDays: 0, week: 1, targetStage: 'Floración' });
     }
   }
 
   if (include.flush && flushDays > 0 && future(flushStart)) {
-    items.push({ key: `lavado-${flushStart}`, day: flushStart, type: 'lavado', stage: 'Floración', week: weekOf(flushStart, 'Floración') });
+    items.push({ key: `lavado-${flushStart}`, day: flushStart, type: 'lavado', stage: 'Floración', ...timing(flushStart, 'Floración') });
   }
 
   if (include.harvest && future(harvestDay)) {
-    items.push({ key: `cosechar-${harvestDay}`, day: harvestDay, type: 'cosechar', stage: 'Floración', week: weekOf(harvestDay, 'Floración') });
+    items.push({ key: `cosechar-${harvestDay}`, day: harvestDay, type: 'cosechar', stage: 'Floración', ...timing(harvestDay, 'Floración') });
   }
 
   const order: Record<PlanTaskType, number> = { cambio_etapa: 0, lavado: 1, fertilizante: 2, riego: 3, cosechar: 4 };

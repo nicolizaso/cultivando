@@ -6,8 +6,10 @@ import { Task } from "@/app/lib/types"
 import TaskPill from "./TaskPill"
 import EditTaskModal from "./EditTaskModal"
 import EsquejarModal from "./EsquejarModal"
+import FeedCompleteModal from "./FeedCompleteModal"
 import { toggleTaskStatus, deleteTasks, undoTaskCompletion } from "@/app/actions/tasks"
-import type { AmbienteMoveResult, TaskCompletionEffects } from "@/app/actions/tasks"
+import type { AmbienteMoveResult, FeedResult, TaskCompletionEffects } from "@/app/actions/tasks"
+import { hasStoredMix } from "@/app/lib/nutrition"
 import { useToast } from "@/app/context/ToastContext"
 import ConfirmDialog from "@/components/ui/ConfirmDialog"
 import SelectionBar from "@/components/ui/SelectionBar"
@@ -25,6 +27,17 @@ function completionMessage(effects?: TaskCompletionEffects | null): string {
     default:
       return '¡Tarea completada!'
   }
+}
+
+/** El aviso al completar un fertilizante: dónde quedó anotado y si algo se está acabando. */
+function feedMessage(feed: FeedResult): string {
+  let message = feed.plants > 0
+    ? `¡Tarea completada! Quedó en la bitácora de ${feed.plants === 1 ? '1 planta' : `${feed.plants} plantas`}.`
+    : '¡Tarea completada!'
+  if (feed.lowStock.length > 0) {
+    message += ` Queda poco: ${feed.lowStock.map((item) => `${item.name} (${(item.stock_ml ?? 0).toLocaleString('es-AR')})`).join(', ')}.`
+  }
+  return message
 }
 
 /** El aviso al completar un cambio de ambiente: qué se mudó y qué quedó. */
@@ -83,6 +96,7 @@ export default function AgendaList({ tasks, groupByStatus = false, emptyLabel = 
   const [editingTask, setEditingTask] = useState<Task | null>(null)
   const [esquejandoTask, setEsquejandoTask] = useState<Task | null>(null)
   const [confirmingTask, setConfirmingTask] = useState<Task | null>(null)
+  const [feedingTask, setFeedingTask] = useState<Task | null>(null)
 
   // Tareas con un cambio en curso: un segundo toque mientras tanto no hace nada.
   const busy = useRef(new Set<string | number>())
@@ -101,12 +115,16 @@ export default function AgendaList({ tasks, groupByStatus = false, emptyLabel = 
     )
   }
 
-  const setStatus = async (task: Task, newStatus: 'pending' | 'completed') => {
+  const setStatus = async (
+    task: Task,
+    newStatus: 'pending' | 'completed',
+    feedDetails?: { liters: string; deductStock: boolean }
+  ) => {
     if (busy.current.has(task.id)) return
     busy.current.add(task.id)
 
     try {
-      const res = await toggleTaskStatus(String(task.id), newStatus)
+      const res = await toggleTaskStatus(String(task.id), newStatus, feedDetails)
 
       if (res?.error) {
         showToast(res.error, 'error')
@@ -114,7 +132,9 @@ export default function AgendaList({ tasks, groupByStatus = false, emptyLabel = 
       }
 
       if (newStatus === 'completed') {
-        const message = res?.ambiente ? ambienteMessage(res.ambiente) : completionMessage(res?.effects)
+        const message = res?.ambiente
+          ? ambienteMessage(res.ambiente)
+          : res && 'feed' in res && res.feed ? feedMessage(res.feed) : completionMessage(res?.effects)
         showToast(
           message,
           'success',
@@ -147,6 +167,13 @@ export default function AgendaList({ tasks, groupByStatus = false, emptyLabel = 
     // plantas salieron esquejes y cuántos, porque de eso nacen plantas nuevas.
     if (task.type === 'esquejado' && newStatus === 'completed') {
       setEsquejandoTask(task)
+      return
+    }
+
+    // Un fertilizante con mezcla pregunta los litros (opcionales) antes de
+    // anotarlo en la bitácora y descontar el stock.
+    if (task.type === 'fertilizante' && newStatus === 'completed' && hasStoredMix(task.metadata)) {
+      setFeedingTask(task)
       return
     }
 
@@ -288,6 +315,18 @@ export default function AgendaList({ tasks, groupByStatus = false, emptyLabel = 
            isOpen={!!editingTask}
            onClose={() => setEditingTask(null)}
            task={editingTask}
+        />
+      )}
+
+      {feedingTask && (
+        <FeedCompleteModal
+          key={feedingTask.id}
+          task={feedingTask}
+          onClose={() => setFeedingTask(null)}
+          onComplete={async (details) => {
+            await setStatus(feedingTask, 'completed', details)
+            setFeedingTask(null)
+          }}
         />
       )}
 
