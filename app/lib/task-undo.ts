@@ -7,12 +7,11 @@
  * forma de volver atrás era planta por planta.
  *
  * Al completar se guarda en `metadata.last_effect` cómo estaba cada cosa
- * antes. "Deshacer" lee eso y lo vuelve a poner. Todo lo de este archivo es
- * puro: la acción de servidor lee y escribe la base.
+ * antes y qué escribió la tarea. Desmarcarla (o "Deshacer") lo vuelve a poner,
+ * pero sólo donde sigue lo que escribió la tarea: si después se cambió a mano,
+ * eso no se pisa. Por eso ya no hay una ventana de 30 minutos. Todo lo de este
+ * archivo es puro: la acción de servidor lee y escribe la base.
  */
-
-/** Cuánto tiempo después de completar se puede deshacer. */
-export const UNDO_WINDOW_MS = 1000 * 60 * 30;
 
 export interface WaterBefore {
   id: number;
@@ -31,13 +30,24 @@ export interface LastEffect {
   /** Cuándo se completó la tarea (ISO). */
   at: string;
   water?: WaterBefore[];
+  /** El día que la tarea escribió en `last_water`. */
+  waterSet?: string;
   /** Plantas que se archivaron al completar (estaban activas). */
   archived?: number[];
-  stage?: { column: string; plants: StageBefore[] };
-  /** Ciclos mudados de espacio, con el espacio que tenían. */
-  cycles?: { id: number; space_id: number | null }[];
-  /** Plantas pasadas de ciclo, con el ciclo que tenían. */
-  plants?: { id: number; cycle_id: number | null }[];
+  stage?: {
+    column: string;
+    plants: StageBefore[];
+    /** Lo que escribió la tarea: la etapa y `stage_updated_at`. */
+    set?: { stage: string; at: string };
+  };
+  /** Ciclos mudados de espacio, con el espacio que tenían y al que fueron. */
+  cycles?: { id: number; space_id: number | null; to?: number }[];
+  /** Plantas pasadas de ciclo, con el ciclo que tenían y al que fueron. */
+  plants?: { id: number; cycle_id: number | null; to?: number | null }[];
+  /** Un ciclo que creó la tarea en el destino de una mudanza. */
+  createdCycle?: number;
+  /** Plantas a las que la tarea les creó la ficha de cosecha. */
+  harvests?: number[];
   /** Registros de bitácora que escribió la tarea (una mezcla aplicada). */
   logs?: number[];
   /** Lo que se descontó del stock: [{ fertilizer_id, delta }], con delta negativo. */
@@ -76,9 +86,11 @@ export function readLastEffect(metadata: unknown): LastEffect | null {
     });
   }
 
+  if (typeof raw.waterSet === 'string') effect.waterSet = raw.waterSet;
+
   if (Array.isArray(raw.archived)) effect.archived = raw.archived.filter(isId);
 
-  const stage = raw.stage as { column?: unknown; plants?: unknown } | undefined;
+  const stage = raw.stage as { column?: unknown; plants?: unknown; set?: { stage?: unknown; at?: unknown } } | undefined;
   if (stage && typeof stage.column === 'string' && Array.isArray(stage.plants)) {
     effect.stage = {
       column: stage.column,
@@ -89,13 +101,18 @@ export function readLastEffect(metadata: unknown): LastEffect | null {
         return [{ id: row.id, stage: fields[0] ?? null, stage_updated_at: fields[1] ?? null, date: fields[2] ?? null }];
       }),
     };
+    if (typeof stage.set?.stage === 'string' && typeof stage.set?.at === 'string') {
+      effect.stage.set = { stage: stage.set.stage, at: stage.set.at };
+    }
   }
 
   if (Array.isArray(raw.cycles)) {
     effect.cycles = raw.cycles.flatMap((item) => {
       const id = (item as { id?: unknown })?.id;
       const spaceId = nullableId((item as { space_id?: unknown })?.space_id);
-      return isId(id) && spaceId !== undefined ? [{ id, space_id: spaceId }] : [];
+      const to = (item as { to?: unknown })?.to;
+      if (!isId(id) || spaceId === undefined) return [];
+      return [isId(to) ? { id, space_id: spaceId, to } : { id, space_id: spaceId }];
     });
   }
 
@@ -103,9 +120,14 @@ export function readLastEffect(metadata: unknown): LastEffect | null {
     effect.plants = raw.plants.flatMap((item) => {
       const id = (item as { id?: unknown })?.id;
       const cycleId = nullableId((item as { cycle_id?: unknown })?.cycle_id);
-      return isId(id) && cycleId !== undefined ? [{ id, cycle_id: cycleId }] : [];
+      const to = nullableId((item as { to?: unknown })?.to);
+      if (!isId(id) || cycleId === undefined) return [];
+      return [to !== undefined ? { id, cycle_id: cycleId, to } : { id, cycle_id: cycleId }];
     });
   }
+
+  if (isId(raw.createdCycle)) effect.createdCycle = raw.createdCycle;
+  if (Array.isArray(raw.harvests)) effect.harvests = raw.harvests.filter(isId);
 
   if (Array.isArray(raw.logs)) effect.logs = raw.logs.filter(isId);
 
@@ -130,16 +152,10 @@ export function hasUndoableChanges(effect: LastEffect | null): boolean {
       effect.cycles?.length ||
       effect.plants?.length ||
       effect.logs?.length ||
-      effect.stock?.length
+      effect.stock?.length ||
+      effect.harvests?.length ||
+      effect.createdCycle
   );
-}
-
-/** ¿Todavía se puede deshacer? Pasada la ventana, otras cosas pudieron cambiar. */
-export function canStillUndo(effect: LastEffect | null, now: Date = new Date()): boolean {
-  if (!effect) return false;
-  const at = new Date(effect.at).getTime();
-  if (isNaN(at)) return false;
-  return now.getTime() - at <= UNDO_WINDOW_MS;
 }
 
 /**
