@@ -245,20 +245,23 @@ export async function createTask(input: unknown) {
 /**
  * Edita una tarea, o "esta y las siguientes" de una serie.
  *
- * En una tarea de fertilizante llega la mezcla como datos y los detalles sin
- * la receta: la receta se arma acá. En una serie, cada tarea corre su fecha
- * los mismos días que la elegida y recalcula la dosis con su propia semana;
- * todo se escribe junto con `update_task_series_rows`. Antes se copiaba la
- * descripción de la elegida a todas, receta incluida, y todas quedaban con la
- * dosis de la misma semana.
+ * Una tarea completada ya hizo lo suyo en las plantas: de ella sólo se editan
+ * las notas, y para cambiar el resto primero se desmarca (que lo deshace).
+ * Antes se podía cambiar la etapa o la fecha de una completada y la tarea
+ * quedaba diciendo una cosa y la planta otra.
+ *
+ * En una pendiente, el título sale del tipo (sólo "Otro" lo elige), y se
+ * pueden cambiar el día, las notas, la mezcla y la forma de aplicar, la etapa
+ * destino y el espacio destino. En una tarea de fertilizante llega la mezcla
+ * como datos y la receta se arma acá; en una serie, cada tarea pendiente
+ * corre su fecha los mismos días que la elegida y recalcula la dosis con su
+ * semana, todo junto con `update_task_series_rows`.
  */
 export async function updateTask(
   rawTaskId: string | number,
   rawUpdates: unknown,
-  scope: 'single' | 'all_future' = 'single',
-  _recurrenceId?: string | null
+  scope: 'single' | 'all_future' = 'single'
 ) {
-  void _recurrenceId
   const taskId = parseId(rawTaskId)
   if (!taskId) return { error: 'Esa tarea no es válida.' }
 
@@ -267,27 +270,60 @@ export async function updateTask(
   const { supabase, user } = session
 
   const updates = (rawUpdates ?? {}) as Record<string, unknown>
-  const title = typeof updates.title === 'string' ? updates.title.trim().slice(0, 120) : ''
-  if (!title) return { error: 'El título es obligatorio.' }
-
   const notes = typeof updates.description === 'string' ? updates.description.trim().slice(0, 2000) : ''
-  const day = readDay(updates.date)
-  if (!day) return { error: 'La fecha no es válida.' }
-
-  const applicationType = updates.application_type == null
-    ? null
-    : APPLICATION_TYPES.find((value) => value === updates.application_type) ?? null
-  if (updates.application_type != null && !applicationType) return { error: 'Elegí cómo se aplica.' }
-
-  const targetStage = updates.target_stage == null ? null : isStageName(updates.target_stage) ? updates.target_stage : null
-  if (updates.target_stage != null && !targetStage) return { error: 'Elegí la etapa de destino.' }
 
   const { data: task, error: taskError } = await supabase
     .from('tasks')
-    .select('id, type, due_date, recurrence_id, metadata')
+    .select('id, type, title, status, due_date, recurrence_id, metadata')
     .eq('id', taskId)
     .maybeSingle()
   if (taskError || !task) return { error: friendlyDbError(taskError, 'No se encontró la tarea.', {}, 'Error leyendo la tarea:') }
+
+  if (task.status === 'completed') {
+    // La receta de una mezcla ya aplicada se conserva arriba de las notas.
+    const stored = (task.metadata as { nutrition?: Partial<StoredMix> } | null)?.nutrition
+    const recipe = task.type === 'fertilizante' && Array.isArray(stored?.resolved) && typeof stored?.week === 'number'
+      ? mixRecipe(stored.resolved, stored.week)
+      : ''
+    const { error } = await supabase
+      .from('tasks')
+      .update({ description: (recipe ? withRecipe(notes, recipe) : notes) || null })
+      .eq('id', taskId)
+    if (error) return { error: friendlyDbError(error, 'No se pudo actualizar la tarea.', {}, 'Error actualizando tarea:') }
+    revalidatePath('/')
+    revalidatePath('/calendar')
+    return { success: true }
+  }
+
+  // El título lo elige sólo "Otro"; el resto conserva el suyo.
+  const isOther = task.type === 'otro'
+  const title = isOther
+    ? (typeof updates.title === 'string' ? updates.title.trim().slice(0, 120) : '')
+    : task.title
+  if (!title) return { error: 'El título es obligatorio.' }
+
+  const day = readDay(updates.date)
+  if (!day) return { error: 'La fecha no es válida.' }
+
+  const applicationType = task.type !== 'fertilizante' || updates.application_type == null
+    ? null
+    : APPLICATION_TYPES.find((value) => value === updates.application_type) ?? null
+  if (task.type === 'fertilizante' && updates.application_type != null && !applicationType) return { error: 'Elegí cómo se aplica.' }
+
+  const targetStage = task.type !== 'cambio_etapa' || updates.target_stage == null
+    ? null
+    : isStageName(updates.target_stage) ? updates.target_stage : null
+  if (task.type === 'cambio_etapa' && !targetStage) return { error: 'Elegí la etapa de destino.' }
+
+  // El destino de una mudanza, contra los espacios del usuario.
+  let targetSpaceId: number | null = null
+  if (task.type === 'ambiente' && updates.target_space_id != null) {
+    targetSpaceId = parseId(updates.target_space_id)
+    const { data: space } = targetSpaceId
+      ? await supabase.from('spaces').select('id').eq('id', targetSpaceId).maybeSingle()
+      : { data: null }
+    if (!space) return { error: 'Elegí a qué espacio se muda.' }
+  }
 
   // La mezcla sólo se toca si vino en el formulario y la tarea es de fertilizante.
   const touchesMix = task.type === 'fertilizante' && Object.prototype.hasOwnProperty.call(updates, 'nutrition')
@@ -302,10 +338,12 @@ export async function updateTask(
     if (!oldDay) return { error: 'La fecha de la tarea no es válida.' }
     const shift = daysBetweenKeys(oldDay, day)
 
+    // Sólo las pendientes: las completadas de la serie ya hicieron lo suyo.
     const { data: series, error: seriesError } = await supabase
       .from('tasks')
       .select('id, due_date')
       .eq('recurrence_id', task.recurrence_id)
+      .eq('status', 'pending')
       .gte('due_date', task.due_date)
       .order('due_date', { ascending: true })
     if (seriesError) return { error: friendlyDbError(seriesError, 'No se pudo leer la serie.', {}, 'Error leyendo la serie:') }
@@ -325,7 +363,8 @@ export async function updateTask(
 
     const { error } = await supabase.rpc('update_task_series_rows', {
       p_task_id: taskId,
-      p_title: title,
+      // Vacío: cada tarea conserva su título.
+      p_title: isOther ? title : '',
       p_application_type: applicationType,
       p_target_stage: targetStage,
       p_rows: rows as unknown as Json,
@@ -338,6 +377,14 @@ export async function updateTask(
           '22023': 'La tarea no es parte de una serie.',
         }, 'Error actualizando la serie:'),
       }
+    }
+
+    if (targetSpaceId) {
+      const { error: spaceError } = await supabase
+        .from('tasks')
+        .update({ target_space_id: targetSpaceId })
+        .in('id', rows.map((row) => row.id))
+      if (spaceError) return { error: friendlyDbError(spaceError, 'No se pudo cambiar el destino de la serie.', {}, 'Error cambiando el destino de la serie:') }
     }
   } else {
     const stored = touchesMix && mix ? storedFor(mix.stage_days) : null
@@ -352,6 +399,7 @@ export async function updateTask(
         description: touchesMix ? describeWithMix(notes, stored) : notes || null,
         application_type: applicationType,
         target_stage: targetStage,
+        ...(targetSpaceId ? { target_space_id: targetSpaceId } : {}),
         // Mediodía: una fecha sin hora a las 00:00 se corre al día anterior.
         due_date: `${day}T12:00:00`,
         ...(touchesMix ? { metadata: metadata as Json } : {}),

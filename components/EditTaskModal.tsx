@@ -1,8 +1,8 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { Loader2, Repeat, Trash2, AlertTriangle } from 'lucide-react'
-import { updateTask, deleteTask, deleteTaskSeries, getTaskFeedContext } from '@/app/actions/tasks'
+import { Loader2, Repeat, Trash2, AlertTriangle, Warehouse } from 'lucide-react'
+import { updateTask, deleteTask, deleteTaskSeries, getSpaceOptions, getTaskFeedContext } from '@/app/actions/tasks'
 import { Task } from '@/app/lib/types'
 import { useToast } from '@/app/context/ToastContext'
 import { dateKey, daysBetweenKeys, todayKey } from '@/app/lib/dates'
@@ -15,7 +15,7 @@ import ConfirmDialog from '@/components/ui/ConfirmDialog'
 import { getTaskType } from '@/app/lib/constants'
 import { STAGE_NAMES } from '@/app/lib/stage-logic'
 import {
-  APPLICATION_OPTIONS, ChoiceGroup, DateField, Field, FormActions, Input, Textarea, stageOptions, useFieldErrors,
+  APPLICATION_OPTIONS, ChoiceGroup, ChoiceOrSelect, DateField, Field, FormActions, FormAlert, Input, Textarea, stageOptions, useFieldErrors,
 } from '@/components/ui/form'
 import type { ChoiceOption } from '@/components/ui/form'
 
@@ -30,13 +30,19 @@ interface EditTaskModalProps {
 /**
  * Se monta con la tarea a editar (y `key={task.id}`): el formulario arranca
  * con sus datos, sin un efecto que los copie al abrir.
+ *
+ * Una tarea completada ya hizo lo suyo en las plantas: sólo se editan sus
+ * notas. El título sólo se elige en "Otro"; en el resto lo da el tipo.
  */
 export default function EditTaskModal({ isOpen, onClose, task }: EditTaskModalProps) {
   const { showToast } = useToast()
   const router = useRouter()
 
-  const isFeed = task.type === 'fertilizante'
-  const hadMix = isFeed && hasStoredMix(task.metadata)
+  const isCompleted = task.status === 'completed'
+  const canEditTitle = task.type === 'otro' && !isCompleted
+  const isFeed = task.type === 'fertilizante' && !isCompleted
+  const hadMix = task.type === 'fertilizante' && hasStoredMix(task.metadata)
+  const isMove = task.type === 'ambiente' && !isCompleted
 
   const [title, setTitle] = useState(task.title)
   // Con mezcla guardada, la receta se arma sola: acá se editan sólo las notas.
@@ -45,6 +51,8 @@ export default function EditTaskModal({ isOpen, onClose, task }: EditTaskModalPr
   const [targetStage, setTargetStage] = useState(task.target_stage || 'Vegetativo')
   // El día de la tarea en Argentina, no en el huso del navegador.
   const [date, setDate] = useState(() => dateKey(task.due_date) ?? todayKey())
+  const [targetSpaceId, setTargetSpaceId] = useState<number | null>(task.target_space_id ?? null)
+  const [spaces, setSpaces] = useState<{ id: number; name: string }[] | null>(null)
 
   const [scope, setScope] = useState<'single' | 'all_future'>('single')
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -73,6 +81,14 @@ export default function EditTaskModal({ isOpen, onClose, task }: EditTaskModalPr
     return () => { cancelled = true }
   }, [isFeed, load, task.id])
 
+  // Los espacios, para el destino de una mudanza.
+  useEffect(() => {
+    if (!isMove) return
+    let cancelled = false
+    getSpaceOptions().then((result) => { if (!cancelled) setSpaces(result) })
+    return () => { cancelled = true }
+  }, [isMove])
+
   // La semana el día elegido: la guardada corrida los días que se movió la
   // tarea o, si no tenía mezcla, la de las plantas hoy.
   const originalDay = dateKey(task.due_date) ?? todayKey()
@@ -88,22 +104,24 @@ export default function EditTaskModal({ isOpen, onClose, task }: EditTaskModalPr
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    if (!validate({ title: !title.trim() && 'La tarea necesita un título.' }, formRef.current)) return
+    if (canEditTitle && !validate({ title: !title.trim() && 'La tarea necesita un título.' }, formRef.current)) return
 
     setIsSubmitting(true)
 
-    const updates = {
+    // Completada: sólo las notas. El servidor aplica la misma regla.
+    const updates = isCompleted ? { description } : {
        title,
        description,
        application_type: task.type === 'fertilizante' ? applicationType : undefined,
        target_stage: task.type === 'cambio_etapa' ? targetStage : undefined,
+       target_space_id: isMove ? targetSpaceId : undefined,
        date: `${date}T12:00:00`, // Mediodía para evitar desfases de zona horaria
        // La mezcla como datos: el servidor arma la receta (y en una serie, la
        // de cada fecha con su semana).
        ...(isFeed && mix !== null ? { nutrition: mix.length > 0 ? { items: mix, stage_days: stageDays } : null } : {}),
     }
 
-    const result = await updateTask(task.id, updates, scope, task.recurrence_id)
+    const result = await updateTask(task.id, updates, isCompleted ? 'single' : scope)
 
     setIsSubmitting(false)
 
@@ -248,19 +266,37 @@ export default function EditTaskModal({ isOpen, onClose, task }: EditTaskModalPr
         }
       >
         <form id="edit-task-form" ref={formRef} onSubmit={handleSubmit} className="space-y-6" noValidate>
-          <Field label="Título" error={errors.title}>
-            <Input
-              data-autofocus
-              type="text"
-              autoComplete="off"
-              leading={<span className={typeDef.color}><typeDef.icon size={18} /></span>}
-              value={title}
-              onChange={(e) => { setTitle(e.target.value); clear('title') }}
-              placeholder="Nombre de la tarea"
-            />
-          </Field>
+          {canEditTitle ? (
+            <Field label="Título" error={errors.title}>
+              <Input
+                data-autofocus
+                type="text"
+                autoComplete="off"
+                leading={<span className={typeDef.color}><typeDef.icon size={18} /></span>}
+                value={title}
+                onChange={(e) => { setTitle(e.target.value); clear('title') }}
+                placeholder="Nombre de la tarea"
+              />
+            </Field>
+          ) : (
+            <p className="flex items-center gap-2.5 text-base font-semibold text-fg">
+              <span
+                className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius-sm)] ${typeDef.bg} ${typeDef.color}`}
+                aria-hidden="true"
+              >
+                <typeDef.icon size={16} />
+              </span>
+              {task.title}
+            </p>
+          )}
 
-          <DateField label="Día" value={date} onChange={setDate} quick="future" />
+          {isCompleted && (
+            <FormAlert tone="info">
+              Está completada: para cambiar el día o lo que hace, primero desmarcala (se deshacen sus cambios).
+            </FormAlert>
+          )}
+
+          {!isCompleted && <DateField label="Día" value={date} onChange={setDate} quick="future" />}
 
           {isFeed && (
             <>
@@ -293,7 +329,24 @@ export default function EditTaskModal({ isOpen, onClose, task }: EditTaskModalPr
             </>
           )}
 
-          {task.type === 'cambio_etapa' && (
+          {isMove && (
+            spaces === null ? (
+              <p className="flex items-center gap-2 text-sm text-fg-muted">
+                <Loader2 size={15} className="animate-spin" aria-hidden="true" />
+                Cargando espacios…
+              </p>
+            ) : (
+              <ChoiceOrSelect
+                legend="Se muda a"
+                options={spaces.map((space) => ({ value: space.id, label: space.name, icon: <Warehouse size={15} /> }))}
+                value={targetSpaceId}
+                onChange={setTargetSpaceId}
+                size="sm"
+              />
+            )
+          )}
+
+          {task.type === 'cambio_etapa' && !isCompleted && (
             <ChoiceGroup
               legend="Pasa a"
               options={STAGE_OPTIONS}
@@ -305,13 +358,14 @@ export default function EditTaskModal({ isOpen, onClose, task }: EditTaskModalPr
 
           <Field label={isFeed ? 'Notas' : 'Detalles'} optional>
             <Textarea
+              data-autofocus={!canEditTitle ? true : undefined}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder={isFeed ? 'Cómo prepararla, en qué orden, lo que haga falta recordar' : 'Notas adicionales'}
             />
           </Field>
 
-          {task.recurrence_id && (
+          {task.recurrence_id && !isCompleted && (
             <ChoiceGroup
               legend={
                 <span className="inline-flex items-center gap-1.5">
