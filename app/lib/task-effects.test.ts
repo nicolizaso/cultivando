@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert';
 import {
   completionNeeds,
+  cycleMoveEntry,
   cycleMoveTitle,
   getCompletionPlan,
   getTaskEffectDate,
@@ -62,6 +63,14 @@ test('los tipos sin cambio igual dejan su registro', () => {
     assert.deepStrictEqual(getCompletionPlan({ type }), { ...base, logType: type }, `tipo ${type}`);
   }
   assert.deepStrictEqual(getCompletionPlan({ type: 'algo viejo' }), { ...base, logType: 'otro' });
+});
+
+test('cycleMoveEntry: el registro de una mudanza, igual a mano o por tarea', () => {
+  assert.deepStrictEqual(cycleMoveEntry('Indoor 1x1', 'Indoor Vege'), {
+    type: 'ambiente',
+    title: 'Mudanza de espacio: Indoor 1x1 → Indoor Vege',
+    notes: 'El ciclo pasó de "Indoor 1x1" a "Indoor Vege".',
+  });
 });
 
 test('el esquejado se completa por su lado', () => {

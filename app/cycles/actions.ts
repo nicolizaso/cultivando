@@ -6,6 +6,8 @@ import { friendlyDbError } from '@/app/lib/errors';
 import { parseId } from '@/app/lib/sanitize';
 import { parseCultivationDate } from '@/app/lib/dates';
 import { IMAGES_BUCKET, buildImagePath, validateImage } from '@/app/lib/uploads';
+import { setCycleSpace, writeCycleLog } from '@/app/lib/plant-writes';
+import { cycleMoveEntry } from '@/app/lib/task-effects';
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
@@ -245,10 +247,7 @@ export async function moveCycleToSpace(cycleId: number, spaceId: number) {
     return { success: false, error: 'No se encontró el espacio de destino' };
   }
 
-  const { error: updateError } = await supabase
-    .from('cycles')
-    .update({ space_id: targetSpaceId })
-    .eq('id', id);
+  const { error: updateError } = await setCycleSpace(supabase, id, targetSpaceId);
 
   if (updateError) {
     return { success: false, error: friendlyDbError(updateError, 'No se pudo mover el ciclo de espacio', {}, 'Error al mudar el ciclo de espacio:') };
@@ -259,19 +258,9 @@ export async function moveCycleToSpace(cycleId: number, spaceId: number) {
   const previousSpace = cycle.spaces as { name: string } | { name: string }[] | null;
   const fromName = (Array.isArray(previousSpace) ? previousSpace[0]?.name : previousSpace?.name) || 'Sin espacio';
 
-  const { error: logError } = await supabase.from('logs').insert({
-    cycle_id: id,
-    plant_id: null,
-    user_id: user.id,
-    type: 'ambiente',
-    title: `Mudanza de espacio: ${fromName} → ${space.name}`,
-    notes: `El ciclo pasó de "${fromName}" a "${space.name}".`,
-    created_at: new Date().toISOString(),
-  });
-
   // El registro es historial, no parte de la mudanza: si falla, el ciclo ya
   // se mudó y avisar de un error sería mentirle al usuario.
-  if (logError) console.error('Error al registrar la mudanza en la bitácora:', logError);
+  await writeCycleLog(supabase, user.id, id, cycleMoveEntry(fromName, space.name), new Date().toISOString());
 
   revalidatePath('/cycles/[id]', 'page');
   revalidatePath('/cycles');

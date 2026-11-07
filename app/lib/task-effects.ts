@@ -102,6 +102,11 @@ export function cycleMoveTitle(from: string, to: string): string {
   return `Mudanza de espacio: ${from} → ${to}`;
 }
 
+/** El registro completo de una mudanza de ciclo (va a nivel ciclo, sin planta). */
+export function cycleMoveEntry(from: string, to: string): { type: 'ambiente'; title: string; notes: string } {
+  return { type: 'ambiente', title: cycleMoveTitle(from, to), notes: `El ciclo pasó de "${from}" a "${to}".` };
+}
+
 const LOG_TITLES: Record<string, string> = {
   riego: 'Riego',
   lavado: 'Lavado de raíces',
