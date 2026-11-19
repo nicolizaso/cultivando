@@ -138,8 +138,8 @@ export function strainYields(
   );
 }
 
-/** Días de floración que se suponen si la genética no tiene historia. */
-export const DEFAULT_FLOWER_DAYS = 63;
+/** Días de floración que se suponen si no hay otra cosa: la meta de 8 semanas. */
+export const DEFAULT_FLOWER_DAYS = 56;
 
 export interface HarvestEstimate {
   /** "YYYY-MM-DD" */

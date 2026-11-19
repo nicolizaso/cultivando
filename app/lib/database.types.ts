@@ -129,9 +129,11 @@ export type Database = {
         Row: {
           created_at: string | null
           estimated_harvest: string | null
+          flower_target_weeks: number
           id: number
           is_active: boolean | null
           name: string
+          planned_flower_start: string | null
           space_id: number | null
           start_date: string | null
           user_id: string | null
@@ -139,9 +141,11 @@ export type Database = {
         Insert: {
           created_at?: string | null
           estimated_harvest?: string | null
+          flower_target_weeks?: number
           id?: never
           is_active?: boolean | null
           name: string
+          planned_flower_start?: string | null
           space_id?: number | null
           start_date?: string | null
           user_id?: string | null
@@ -149,9 +153,11 @@ export type Database = {
         Update: {
           created_at?: string | null
           estimated_harvest?: string | null
+          flower_target_weeks?: number
           id?: never
           is_active?: boolean | null
           name?: string
+          planned_flower_start?: string | null
           space_id?: number | null
           start_date?: string | null
           user_id?: string | null
