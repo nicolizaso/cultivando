@@ -44,6 +44,11 @@ export default function CalendarView({ month, initialSelectedDay, logs, tasks, p
 
   const pendingCount = tasks.filter(t => t.status === 'pending').length
 
+  // Las semanas de etapa ("F4") de los ciclos a la vista: el elegido o todos.
+  const weekCycles = cycles
+    .filter(cycle => (isAll || cycle.id === selectedCycleId) && cycle.timeline)
+    .map(cycle => ({ id: cycle.id, name: cycle.name, ref: cycle.timeline! }))
+
   // Cambiar de mes pide ese mes al servidor: la página trae sólo lo que se ve.
   const goToMonth = (next: string, day?: string) => {
     startNavigation(() => {
@@ -123,6 +128,7 @@ export default function CalendarView({ month, initialSelectedDay, logs, tasks, p
         logs={filteredLogs}
         tasks={filteredTasks}
         selectedDay={selectedDay}
+        weekCycles={weekCycles}
         onDaySelect={selectDay}
         onMonthChange={goToMonth}
         isLoading={isNavigating}

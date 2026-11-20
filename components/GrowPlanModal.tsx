@@ -2,10 +2,11 @@
 
 import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { CalendarRange, Trash2 } from 'lucide-react'
+import { CalendarRange, Plus, Trash2, X } from 'lucide-react'
 import { createGrowPlan, deleteGrowPlan } from '@/app/actions/grow-plan'
-import { buildGrowPlan, countByType } from '@/app/lib/grow-plan'
-import type { PlanItem } from '@/app/lib/grow-plan'
+import { CUSTOM_PLAN_TYPES, MAX_CUSTOM_NOTE, MAX_CUSTOM_TASKS, buildGrowPlan, countByType, isCustomPlanType } from '@/app/lib/grow-plan'
+import type { CustomPlanTask, PlanItem } from '@/app/lib/grow-plan'
+import { MAX_FLOWER_WEEKS, MIN_FLOWER_WEEKS, STAGE_SHORT } from '@/app/lib/cycle-week'
 import { mixLabel } from '@/app/lib/nutrition'
 import type { MixItem } from '@/app/lib/nutrition'
 import NutrientPicker, { useNutritionOptions } from '@/components/NutrientPicker'
@@ -14,7 +15,7 @@ import { addDaysToKey, formatInAppTz, todayKey } from '@/app/lib/dates'
 import { getTaskType } from '@/app/lib/constants'
 import { useToast } from '@/app/context/ToastContext'
 import Modal from '@/components/ui/Modal'
-import { Disclosure, Field, FormActions, FormAlert, FormSection, MultiChoice, Stepper } from '@/components/ui/form'
+import { ChoiceGroup, Disclosure, Field, FormActions, FormAlert, FormSection, Input, MultiChoice, Select, Stepper } from '@/components/ui/form'
 import ConfirmDialog from '@/components/ui/ConfirmDialog'
 
 interface GrowPlanModalProps {
@@ -24,9 +25,15 @@ interface GrowPlanModalProps {
   stageStart: string | null
   /** Sugerencias: los promedios de la genética o los valores de siempre. */
   defaultVegDays: number
-  defaultFlowerDays: number
+  /** La meta de flora del ciclo, en semanas. */
+  defaultFlowerWeeks: number
   /** Tareas pendientes de planes anteriores de este ciclo. */
   pendingPlanTasks: number
+}
+
+/** Cómo se llama una tarea propia en los avisos. */
+function customName(task: CustomPlanTask): string {
+  return task.type === 'otro' && task.note?.trim() ? task.note.trim() : getTaskType(task.type).label
 }
 
 /**
@@ -35,7 +42,7 @@ interface GrowPlanModalProps {
  * (marcadas como parte del plan, para poder borrarlas juntas).
  */
 export default function GrowPlanModal(props: GrowPlanModalProps) {
-  const { cycleId, stage, stageStart, defaultVegDays, defaultFlowerDays, pendingPlanTasks } = props
+  const { cycleId, stage, stageStart, defaultVegDays, defaultFlowerWeeks, pendingPlanTasks } = props
   const router = useRouter()
   const { showToast } = useToast()
   const [isOpen, setIsOpen] = useState(false)
@@ -43,7 +50,7 @@ export default function GrowPlanModal(props: GrowPlanModalProps) {
   const [saving, setSaving] = useState(false)
 
   const [vegDays, setVegDays] = useState(String(defaultVegDays))
-  const [flowerDays, setFlowerDays] = useState(String(defaultFlowerDays))
+  const [flowerWeeks, setFlowerWeeks] = useState(String(defaultFlowerWeeks))
   const [waterEvery, setWaterEvery] = useState('3')
   const [feedEvery, setFeedEvery] = useState('2')
   const [flushDays, setFlushDays] = useState('10')
@@ -51,6 +58,9 @@ export default function GrowPlanModal(props: GrowPlanModalProps) {
   const [flowerNutrition, setFlowerNutrition] = useState<MixItem[]>([])
   const [include, setInclude] = useState({ stageChange: true, harvest: true, flush: true })
   const [excluded, setExcluded] = useState<Set<string>>(new Set())
+  // Tareas propias por semana de etapa (podas, entrenamiento…).
+  const [custom, setCustom] = useState<CustomPlanTask[]>([])
+  const [nextCustomId, setNextCustomId] = useState(1)
 
   const nutrition = useNutritionOptions()
   const [openMix, setOpenMix] = useState<'veg' | 'flower' | null>(null)
@@ -62,14 +72,16 @@ export default function GrowPlanModal(props: GrowPlanModalProps) {
 
   const options = useMemo(() => ({
     vegDays: Number(vegDays) || defaultVegDays,
-    flowerDays: Number(flowerDays) || defaultFlowerDays,
+    flowerWeeks: Number(flowerWeeks) || defaultFlowerWeeks,
+    flowerDays: (Number(flowerWeeks) || defaultFlowerWeeks) * 7,
     waterEvery: Number(waterEvery) || 3,
     feedEvery: Number(feedEvery),
     flushDays: Number(flushDays) || 0,
     vegNutrition: vegNutrition.length > 0 ? vegNutrition : null,
     flowerNutrition: flowerNutrition.length > 0 ? flowerNutrition : null,
     include,
-  }), [vegDays, flowerDays, waterEvery, feedEvery, flushDays, vegNutrition, flowerNutrition, include, defaultVegDays, defaultFlowerDays])
+    custom,
+  }), [vegDays, flowerWeeks, waterEvery, feedEvery, flushDays, vegNutrition, flowerNutrition, include, custom, defaultVegDays, defaultFlowerWeeks])
 
   const plan = useMemo(
     () => (stage && stageStart ? buildGrowPlan({ ...options, today: todayKey(), currentStage: stage, stageStart }) : null),
@@ -92,6 +104,16 @@ export default function GrowPlanModal(props: GrowPlanModalProps) {
     return Array.from(groups)
   }, [plan])
 
+  const addCustom = () => {
+    const id = `t${nextCustomId}`
+    setNextCustomId((n) => n + 1)
+    setCustom((prev) => [...prev, { id, type: 'poda', stage: stage === 'Floración' ? 'Floración' : 'Vegetativo', week: 1, day: 1, note: '' }])
+  }
+  const updateCustom = (id: string, patch: Partial<CustomPlanTask>) =>
+    setCustom((prev) => prev.map((task) => (task.id === id ? { ...task, ...patch } : task)))
+  const removeCustom = (id: string) => setCustom((prev) => prev.filter((task) => task.id !== id))
+  const missingOtherName = custom.some((task) => task.type === 'otro' && !task.note?.trim())
+
   const toggle = (key: string) =>
     setExcluded((prev) => {
       const next = new Set(prev)
@@ -111,6 +133,7 @@ export default function GrowPlanModal(props: GrowPlanModalProps) {
     showToast(`Plan creado: ${res.created} tareas en la agenda${res.truncated ? ' (se cortó en el máximo)' : ''}.`)
     setIsOpen(false)
     setExcluded(new Set())
+    setCustom([])
     router.refresh()
   }
 
@@ -202,7 +225,7 @@ export default function GrowPlanModal(props: GrowPlanModalProps) {
             icon={CalendarRange}
             pending={saving}
             pendingLabel="Creando…"
-            disabled={selected.length === 0}
+            disabled={selected.length === 0 || missingOtherName}
             submitLabel={`Agendar ${selected.length} ${selected.length === 1 ? 'tarea' : 'tareas'}`}
           />
         }
@@ -224,7 +247,7 @@ export default function GrowPlanModal(props: GrowPlanModalProps) {
             <FormSection title="Duración">
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 {stage !== 'Floración' && stepper('Vegetativo', vegDays, setVegDays, { suffix: 'días', min: 1, hint: 'Desde que empezó la etapa' })}
-                {stepper('Floración', flowerDays, setFlowerDays, { suffix: 'días', min: 1 })}
+                {stepper('Floración', flowerWeeks, setFlowerWeeks, { suffix: 'semanas', min: MIN_FLOWER_WEEKS, max: MAX_FLOWER_WEEKS, hint: 'Queda como meta del ciclo' })}
               </div>
             </FormSection>
 
@@ -255,6 +278,88 @@ export default function GrowPlanModal(props: GrowPlanModalProps) {
               {include.flush && stepper('Lavado', flushDays, setFlushDays, { suffix: 'días antes', max: 30, hint: 'Con agua sola, antes de cortar.' })}
             </FormSection>
 
+            <FormSection
+              title="Tus tareas"
+              description="Podas, entrenamiento, defoliación… las que ya sabés, por semana de etapa. Se agendan con el resto."
+            >
+              {custom.length > 0 && (
+                <ul className="space-y-3">
+                  {custom.map((task, index) => (
+                    <li key={task.id} className="space-y-3 rounded-[var(--radius-lg)] border border-line p-3">
+                      <div className="flex items-start gap-2">
+                        <div className="grid flex-1 grid-cols-1 gap-3 sm:grid-cols-2">
+                          <Field label="Tarea">
+                            <Select
+                              value={task.type}
+                              onChange={(e) => { if (isCustomPlanType(e.target.value)) updateCustom(task.id, { type: e.target.value }) }}
+                              aria-label={`Tipo de la tarea ${index + 1}`}
+                            >
+                              {CUSTOM_PLAN_TYPES.map((type) => (
+                                <option key={type} value={type}>{getTaskType(type).label}</option>
+                              ))}
+                            </Select>
+                          </Field>
+                          <Field label={task.type === 'otro' ? 'Qué es' : 'Nota'} optional={task.type !== 'otro'}>
+                            <Input
+                              type="text"
+                              value={task.note ?? ''}
+                              maxLength={MAX_CUSTOM_NOTE}
+                              placeholder={task.type === 'otro' ? 'Ej: Defoliación' : 'Ej: Apical'}
+                              onChange={(e) => updateCustom(task.id, { note: e.target.value })}
+                              autoComplete="off"
+                            />
+                          </Field>
+                        </div>
+                        <button
+                          type="button"
+                          className="btn-icon btn-icon-sm mt-7"
+                          onClick={() => removeCustom(task.id)}
+                          aria-label={`Quitar la tarea ${index + 1}`}
+                        >
+                          <X size={16} aria-hidden="true" />
+                        </button>
+                      </div>
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                        <ChoiceGroup
+                          legend="Etapa"
+                          size="sm"
+                          options={[
+                            { value: 'Vegetativo' as const, label: 'Vege', disabled: stage === 'Floración' },
+                            { value: 'Floración' as const, label: 'Flora' },
+                          ]}
+                          value={task.stage}
+                          onChange={(value) => updateCustom(task.id, { stage: value })}
+                        />
+                        <Field label="Semana">
+                          <Stepper value={task.week} onChange={(week) => updateCustom(task.id, { week })} min={1} max={30} unitName="semana" />
+                        </Field>
+                        <Field label="Día de la semana">
+                          <Stepper value={task.day} onChange={(day) => updateCustom(task.id, { day })} min={1} max={7} unitName="día" />
+                        </Field>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {custom.length < MAX_CUSTOM_TASKS && (
+                <button type="button" className="btn btn-sm btn-secondary" onClick={addCustom}>
+                  <Plus size={15} aria-hidden="true" />
+                  Agregar tarea
+                </button>
+              )}
+              {plan.skipped.length > 0 && (
+                <FormAlert tone="warning">
+                  No se agendan:{' '}
+                  {plan.skipped.map(({ task, reason }, i) => (
+                    <span key={task.id}>
+                      {i > 0 && '; '}
+                      {customName(task)} ({STAGE_SHORT[task.stage]}{task.week}) {reason === 'past' ? 'ya pasó' : 'cae después de la cosecha'}
+                    </span>
+                  ))}.
+                </FormAlert>
+              )}
+            </FormSection>
+
             <div className="rounded-[var(--radius-lg)] bg-brand-soft p-4 text-sm">
               <p className="text-fg">
                 Floración desde el <strong>{formatInAppTz(plan.flowerStart, { day: 'numeric', month: 'short' })}</strong>, cosecha el{' '}
@@ -263,6 +368,7 @@ export default function GrowPlanModal(props: GrowPlanModalProps) {
               <p className="mt-1 text-fg-muted">
                 {counts.riego + counts.fertilizante} riegos ({counts.fertilizante} con fertilizante)
                 {counts.cambio_etapa > 0 && `, ${counts.cambio_etapa} ${counts.cambio_etapa === 1 ? 'cambio' : 'cambios'} de etapa`}
+                {counts.propias > 0 && `, ${counts.propias} ${counts.propias === 1 ? 'tarea tuya' : 'tareas tuyas'}`}
                 {counts.lavado > 0 && ', lavado'}{counts.cosechar > 0 && ' y cosecha'}
                 {plan.truncated && '. Se cortó en 200 tareas'}.
               </p>
@@ -287,11 +393,12 @@ export default function GrowPlanModal(props: GrowPlanModalProps) {
                             {formatInAppTz(item.day, { weekday: 'short', day: 'numeric' })}
                           </span>
                           <span className="text-fg">
-                            {getTaskType(item.type).label}
+                            {item.type === 'otro' && item.note ? item.note : getTaskType(item.type).label}
                             {item.targetStage && ` a ${item.targetStage}`}
+                            {item.note && item.type !== 'otro' && <span className="text-fg-muted"> · {item.note}</span>}
                           </span>
-                          {item.type === 'fertilizante' && (
-                            <span className="text-xs text-fg-muted">semana {item.week} de {item.stage.toLowerCase()}</span>
+                          {(item.type === 'fertilizante' || isCustomPlanType(item.type)) && (item.stage === 'Vegetativo' || item.stage === 'Floración') && (
+                            <span className="mono text-xs text-fg-muted">{STAGE_SHORT[item.stage]}{item.week}</span>
                           )}
                         </label>
                       </li>

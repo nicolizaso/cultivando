@@ -9,6 +9,9 @@ import { getPlantMetrics } from './plant-metrics.ts';
 import type { PlantDates } from './plant-metrics.ts';
 import { averageDays } from './nutrition.ts';
 import { dominantStage } from './climate.ts';
+import { addDaysToKey } from './dates.ts';
+import { cycleWeekRef } from './cycle-week.ts';
+import type { CycleWeekRef } from './cycle-week.ts';
 
 export interface PlantOption {
   id: string;
@@ -28,12 +31,16 @@ export interface CycleOption {
   days_in_stage: number | null;
   /** La etapa de la mayoría de sus plantas activas. */
   stage: string | null;
+  /** Para ubicar cualquier día en su semana de etapa ("F4"). */
+  timeline?: CycleWeekRef | null;
 }
 
 type CycleWithPlants = {
   id: number;
   name: string;
   space_id?: number | null;
+  flower_target_weeks?: number | null;
+  planned_flower_start?: string | null;
   plants?: (PlantDates & { id: number | string; name: string; is_archived?: boolean | null })[] | null;
 };
 
@@ -68,6 +75,7 @@ export function buildTaskTargetOptions(
       space_id: spaceId,
       days_in_stage: averageDays(days),
       stage: dominantStage(active),
+      timeline: cycleWeekRef(active, cycle),
     });
   }
 
@@ -120,4 +128,49 @@ export function feedContext(targets: TargetRef[], plants: PlantOption[], cycles:
     maxWeek: Math.floor(max / 7) + 1,
     stages: Array.from(new Set(stages)),
   };
+}
+
+/**
+ * Desde cuándo cuentan las semanas de vege y de flora para lo elegido en una
+ * tarea, para agendar "flora, semana 6" o decir en qué semana cae una fecha.
+ *
+ * Arranca de la línea de tiempo del ciclo (con el pase a flora previsto, si
+ * todavía no pasó) y corrige el inicio de la etapa actual con los mismos días
+ * que usa la dosis: así la semana que se ve en el formulario es la de la dosis.
+ * Si lo elegido abarca ciclos con fechas distintas no hay una sola cuenta.
+ */
+export function targetWeekRef(
+  targets: TargetRef[],
+  plants: PlantOption[],
+  cycles: CycleOption[],
+  today: string
+): { ref: CycleWeekRef | null; reason: string | null } {
+  const ids = new Set<number>();
+  for (const target of targets) {
+    if (target.type === 'cycle') ids.add(Number(target.id));
+    else if (target.type === 'plant') {
+      const cycleId = plants.find((plant) => String(plant.id) === String(target.id))?.cycle_id;
+      if (cycleId !== null && cycleId !== undefined) ids.add(cycleId);
+    } else {
+      for (const cycle of cycles.filter((item) => item.space_id === Number(target.id))) ids.add(cycle.id);
+    }
+  }
+  if (ids.size === 0) return { ref: null, reason: 'Elegí sobre qué es la tarea para contar por semana.' };
+
+  const refs = Array.from(ids).map((id) => cycles.find((cycle) => cycle.id === id)?.timeline ?? null);
+  const known = refs.filter((ref): ref is CycleWeekRef => ref !== null && Boolean(ref.vegStart || ref.flowerStart));
+  if (known.length === 0) return { ref: null, reason: 'Cargá la etapa de las plantas (con su fecha) para contar por semana.' };
+  const distinct = new Set(known.map((ref) => `${ref.vegStart}|${ref.flowerStart}`));
+  if (distinct.size > 1 || known.length < refs.length) {
+    return { ref: null, reason: 'Lo elegido está en ciclos con fechas distintas: elegí el día en el calendario.' };
+  }
+
+  let ref = known[0];
+  const context = feedContext(targets, plants, cycles);
+  if (context.stageDays !== null && context.stages.length === 1) {
+    const start = addDaysToKey(today, -context.stageDays);
+    if (context.stages[0] === 'Floración') ref = { ...ref, flowerStart: start, flowerPlanned: false };
+    else if (context.stages[0] === 'Vegetativo') ref = { ...ref, vegStart: start };
+  }
+  return { ref, reason: null };
 }

@@ -84,3 +84,45 @@ test('buildGrowPlan - tope de tareas', () => {
   assert.equal(plan.items.length, 200);
   assert.equal(plan.truncated, true);
 });
+
+test('buildGrowPlan - tareas propias por semana de etapa, con su nota', () => {
+  const plan = buildGrowPlan({
+    ...base,
+    custom: [
+      { id: 'a', type: 'poda', stage: 'Vegetativo', week: 3, day: 1, note: 'Apical' },
+      { id: 'b', type: 'otro', stage: 'Floración', week: 3, day: 1, note: '  Defoliación  ' },
+    ],
+  })!;
+  const poda = plan.items.find((i) => i.key === 'propia-a')!;
+  assert.equal(poda.day, '2026-10-24');
+  assert.equal(poda.type, 'poda');
+  assert.equal(poda.week, 3);
+  assert.equal(poda.note, 'Apical');
+  const defol = plan.items.find((i) => i.key === 'propia-b')!;
+  assert.equal(defol.day, '2026-11-21');
+  assert.equal(defol.stage, 'Floración');
+  assert.equal(defol.note, 'Defoliación');
+  assert.equal(countByType(plan.items).propias, 2);
+  assert.deepEqual(plan.skipped, []);
+});
+
+test('buildGrowPlan - tareas propias antes de hoy o después de la cosecha no entran', () => {
+  const plan = buildGrowPlan({
+    ...base,
+    custom: [
+      { id: 'pasada', type: 'poda', stage: 'Vegetativo', week: 1, day: 1 },
+      { id: 'tarde', type: 'entrenamiento', stage: 'Floración', week: 9, day: 2 },
+      { id: 'hoy', type: 'repelente', stage: 'Vegetativo', week: 2, day: 1 },
+    ],
+  })!;
+  assert.deepEqual(plan.skipped.map((s) => [s.task.id, s.reason, s.day]), [
+    ['pasada', 'past', '2026-10-10'],
+    ['tarde', 'after_harvest', '2027-01-03'],
+  ]);
+  assert.ok(plan.items.some((i) => i.key === 'propia-hoy' && i.day === '2026-10-17'));
+});
+
+test('buildGrowPlan - en floración una tarea de vege ya no entra', () => {
+  const plan = buildGrowPlan({ ...base, currentStage: 'Floración', stageStart: '2026-10-01', custom: [{ id: 'v', type: 'poda', stage: 'Vegetativo', week: 30, day: 1 }] })!;
+  assert.equal(plan.skipped[0]?.reason, 'past');
+});

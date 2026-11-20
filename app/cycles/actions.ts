@@ -8,6 +8,7 @@ import { parseCultivationDate } from '@/app/lib/dates';
 import { IMAGES_BUCKET, buildImagePath, validateImage } from '@/app/lib/uploads';
 import { setCycleSpace, writeCycleLog } from '@/app/lib/plant-writes';
 import { cycleMoveEntry } from '@/app/lib/task-effects';
+import { MAX_FLOWER_WEEKS, MIN_FLOWER_WEEKS } from '@/app/lib/cycle-week';
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
@@ -289,6 +290,46 @@ export async function setCycleActive(cycleId: number, active: boolean) {
   revalidatePath('/spaces');
   revalidatePath('/calendar');
   return { success: true };
+}
+
+/**
+ * La meta de flora del ciclo (semanas enteras, 1 a 30) y el pase a flora
+ * previsto ("YYYY-MM-DD" o null para quitarlo). Con eso se calcula la semana
+ * y la cosecha aproximada; ninguna tarea se mueve.
+ */
+export async function updateCycleSchedule(cycleId: number, input: { flowerTargetWeeks: unknown; plannedFlowerStart: unknown }) {
+  const session = await requireUser();
+  if ('error' in session) return { error: session.error };
+  const { supabase } = session;
+
+  const id = parseId(cycleId);
+  if (!id) return { error: 'Ese ciclo no es válido.' };
+
+  const weeks = Number(input?.flowerTargetWeeks);
+  if (!Number.isInteger(weeks) || weeks < MIN_FLOWER_WEEKS || weeks > MAX_FLOWER_WEEKS) {
+    return { error: `La meta de flora tiene que estar entre ${MIN_FLOWER_WEEKS} y ${MAX_FLOWER_WEEKS} semanas.` };
+  }
+
+  const rawPlanned = input?.plannedFlowerStart;
+  let planned: string | null = null;
+  if (rawPlanned !== null && rawPlanned !== undefined && rawPlanned !== '') {
+    if (typeof rawPlanned !== 'string' || !DATE_ONLY.test(rawPlanned) || !parseCultivationDate(rawPlanned)) {
+      return { error: 'La fecha del pase a flora no es válida.' };
+    }
+    planned = rawPlanned;
+  }
+
+  const { data, error } = await supabase
+    .from('cycles')
+    .update({ flower_target_weeks: weeks, planned_flower_start: planned })
+    .eq('id', id)
+    .select('id');
+  if (error) return { error: friendlyDbError(error, 'No se pudo guardar la meta del ciclo.', {}, 'Error guardando la meta del ciclo:') };
+  if (!data || data.length === 0) return { error: 'No se encontró el ciclo.' };
+
+  revalidateCycleViews();
+  revalidatePath('/calendar');
+  return { error: null };
 }
 
 /**

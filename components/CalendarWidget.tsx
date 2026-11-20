@@ -10,6 +10,8 @@ import { getTaskType } from "@/app/lib/constants";
 import { canonicalLogType } from "@/app/lib/logs";
 import { addDaysToKey, dateKey, daysBetweenKeys, todayKey } from "@/app/lib/dates";
 import { Task } from "@/app/lib/types";
+import { stageWeekOn, weekLabel } from "@/app/lib/cycle-week";
+import type { CycleWeekRef } from "@/app/lib/cycle-week";
 
 /** Un registro de la bitácora tal como llega de la página. */
 export interface CalendarLog {
@@ -45,6 +47,8 @@ interface CalendarWidgetProps {
   logs: CalendarLog[];
   tasks: Task[];
   selectedDay: string;
+  /** Ciclos a la vista, para rotular cada día con su semana de etapa. */
+  weekCycles?: { id: number; name: string; ref: CycleWeekRef }[];
   onDaySelect: (day: string) => void;
   onMonthChange: (month: string) => void;
   isLoading?: boolean;
@@ -95,10 +99,16 @@ export default function CalendarWidget({
   logs,
   tasks,
   selectedDay,
+  weekCycles = [],
   onDaySelect,
   onMonthChange,
   isLoading = false,
 }: CalendarWidgetProps) {
+  // Con un solo ciclo a la vista, la grilla marca dónde empieza cada semana de etapa.
+  const gridRef = weekCycles.length === 1 ? weekCycles[0].ref : null;
+  const selectedWeeks = weekCycles
+    .map((cycle) => ({ id: cycle.id, name: cycle.name, label: weekLabel(selectedDay, cycle.ref) }))
+    .filter((cycle) => cycle.label);
   const days = useMemo(() => gridDays(month), [month]);
   const today = todayKey();
 
@@ -213,6 +223,8 @@ export default function CalendarWidget({
             const isCurrentMonth = day.startsWith(month);
             const isSelected = day === selectedDay;
             const isToday = day === today;
+            const weekAt = gridRef ? stageWeekOn(day, gridRef) : null;
+            const weekStartLabel = weekAt && weekAt.dayInStage % 7 === 0 ? `${weekAt.stage === 'Floración' ? 'F' : 'V'}${weekAt.week}` : null;
 
             return (
               /* Cada día es un botón: antes era un div con onClick y el
@@ -236,6 +248,7 @@ export default function CalendarWidget({
                   isSelected ? 'border-[color:var(--brand)] ring-1 ring-[color:var(--brand)]' : ''
                 }`}
               >
+                <span className="flex items-center justify-between gap-0.5">
                 <span
                   className={`mono flex h-5 w-5 items-center justify-center rounded-full text-[11px] font-semibold ${
                     isToday
@@ -246,6 +259,12 @@ export default function CalendarWidget({
                   }`}
                 >
                   {Number(day.slice(8))}
+                </span>
+                {weekStartLabel && (
+                  <span className="mono rounded-full bg-brand-soft px-1 text-[9px] font-semibold leading-4 text-[color:var(--brand-text)] sm:text-[10px]">
+                    {weekStartLabel}
+                  </span>
+                )}
                 </span>
 
                 <span className="flex flex-wrap content-start gap-1">
@@ -275,9 +294,20 @@ export default function CalendarWidget({
           <h3 className="section-title mb-1 capitalize">
             {format(asDate(selectedDay), "EEEE d", { locale: es })}
           </h3>
-          <p className="mb-4 text-xs text-fg-muted">
+          <p className={`text-xs text-fg-muted ${selectedWeeks.length > 0 ? 'mb-2' : 'mb-4'}`}>
             {format(asDate(selectedDay), "d 'de' MMMM 'de' yyyy", { locale: es })}
           </p>
+          {selectedWeeks.length > 0 && (
+            <ul className="mb-4 space-y-0.5" aria-label="Semana de etapa de cada ciclo">
+              {selectedWeeks.map((cycle) => (
+                <li key={cycle.id} className="text-sm font-semibold text-[color:var(--brand-text)]">
+                  {weekCycles.length > 1 && <span className="font-normal text-fg-muted">{cycle.name}: </span>}
+                  {cycle.label!.long}
+                  {cycle.label!.planned && <span className="font-normal text-fg-subtle"> · previsto</span>}
+                </li>
+              ))}
+            </ul>
+          )}
 
           <div className="space-y-4">
             {/* Las tareas llegan completas: editarlas desde acá ya no pisa la

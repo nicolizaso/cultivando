@@ -13,7 +13,8 @@ import StatCard from "@/components/ui/StatCard";
 import EmptyState from "@/components/EmptyState";
 import StageSuggester from "@/components/StageSuggester";
 import { Plant, Task } from "@/app/lib/types";
-import { daysSince, mapTaskCycles } from "@/app/lib/utils";
+import { mapTaskCycles } from "@/app/lib/utils";
+import { cycleTimeline, cycleWeekRef, timelineText } from "@/app/lib/cycle-week";
 import { dayRange, formatInAppTz, todayKey } from "@/app/lib/dates";
 import { ONBOARDING_SKIPPED_COOKIE } from "@/app/lib/onboarding";
 import { STRAIN_PLANT_COLUMNS, strainDurationIndex, strainStats } from "@/app/lib/strain-stats";
@@ -28,6 +29,8 @@ interface CycleWithPlantsAndSpace {
     plants: Plant[];
     spaces: SpaceInfo;
     cycle_images?: { public_url: string }[];
+    flower_target_weeks?: number | null;
+    planned_flower_start?: string | null;
 }
 
 /** Tope de atrasadas en el panel: el resto se ve en la agenda. */
@@ -234,7 +237,7 @@ export default async function DashboardData({ user }: { user: { id: string } }) 
                 <CycleStatusCard
                   key={cycle.id}
                   cycle={cycle}
-                  days={daysSince(cycle.start_date)}
+                  timeline={timelineText(cycleTimeline(cycleWeekRef(cycle.plants || [], cycle), today), today)}
                   isCompact={activeCycles.length > 2}
                 />
               ))}

@@ -5,6 +5,8 @@ import Image from "next/image";
 import { ArrowUpRight, Leaf, MapPin } from "lucide-react";
 import { Plant } from "@/app/lib/types";
 import { groupPlants } from "@/app/lib/plant-grouping";
+import type { TimelineText } from "@/app/lib/cycle-week";
+import CycleWeekSummary from "./CycleWeekSummary";
 
 interface SpaceInfo {
   id: number;
@@ -20,12 +22,14 @@ export interface CycleWithPlantsAndSpace {
   plants: Plant[];
   spaces: SpaceInfo | null;
   cycle_images?: { public_url: string }[];
+  flower_target_weeks?: number | null;
+  planned_flower_start?: string | null;
 }
 
 interface CycleStatusCardProps {
   cycle: CycleWithPlantsAndSpace;
-  /** Día de cultivo, resuelto en el servidor. */
-  days: number;
+  /** En qué semana de etapa está, resuelto en el servidor. */
+  timeline: TimelineText;
   isCompact?: boolean;
 }
 
@@ -36,7 +40,7 @@ interface CycleStatusCardProps {
  * En táctil eso era contenido inalcanzable, así que ahora sólo cambia la
  * densidad: todo el contenido está siempre presente.
  */
-export default function CycleStatusCard({ cycle, days, isCompact = false }: CycleStatusCardProps) {
+export default function CycleStatusCard({ cycle, timeline, isCompact = false }: CycleStatusCardProps) {
   const groupedPlants = groupPlants(cycle.plants || []);
   const latestImage = cycle.cycle_images?.[0]?.public_url;
   const plantCount = cycle.plants?.length || 0;
@@ -73,14 +77,16 @@ export default function CycleStatusCard({ cycle, days, isCompact = false }: Cycl
           />
         </div>
 
-        <dl className="mt-2 flex flex-wrap items-baseline gap-x-5 gap-y-1">
+        <div className="mt-2">
+          <CycleWeekSummary text={timeline} />
+        </div>
+
+        <dl className="mt-2 flex flex-wrap items-baseline gap-x-4 gap-y-1">
           <div className="flex items-baseline gap-1.5">
-            <dt className="text-xs text-fg-muted">Día</dt>
-            <dd className="metric text-xl text-fg">{days}</dd>
-          </div>
-          <div className="flex items-baseline gap-1.5">
-            <dt className="text-xs text-fg-muted">{plantCount === 1 ? 'Planta' : 'Plantas'}</dt>
-            <dd className="metric text-xl text-fg">{plantCount}</dd>
+            <dt className="sr-only">Plantas</dt>
+            <dd className="text-xs text-fg-muted">
+              <span className="mono font-semibold text-fg">{plantCount}</span> {plantCount === 1 ? 'planta' : 'plantas'}
+            </dd>
           </div>
           {cycle.spaces && (
             <div className="flex min-w-0 items-center gap-1.5">

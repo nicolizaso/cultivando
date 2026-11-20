@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { cycleTimeline, cycleWeekRef, dayForStageWeek, stageWeekOn, weekLabel } from './cycle-week.ts';
+import { cycleTimeline, cycleWeekRef, dayForStageWeek, stageWeekOn, timelineText, weekLabel } from './cycle-week.ts';
 
 const flowering = [
   { stage: 'Floración', date_vegetativo: '2026-09-01', date_floracion: '2026-10-26' },
@@ -107,4 +107,24 @@ test('dayForStageWeek - semana y día de etapa a fecha, null sin inicio', () => 
   assert.equal(dayForStageWeek('Vegetativo', 2, 1, ref), '2026-09-08');
   const noFlower = cycleWeekRef([{ stage: 'Vegetativo', date_vegetativo: '2026-11-01' }], {});
   assert.equal(dayForStageWeek('Floración', 2, 1, noFlower), null);
+});
+
+test('timelineText - flora con meta, meta superada, vege con pase previsto y sin etapa', () => {
+  const ref = cycleWeekRef(flowering, {});
+  const t = timelineText(cycleTimeline(ref, '2026-11-19'), '2026-11-19');
+  assert.equal(t.headline, 'Flora · semana 4 de ~8');
+  assert.equal(t.detail, 'día 24 · cosecha aprox. 21 dic');
+  assert.equal(t.progress, 24 / 56);
+
+  const over = timelineText(cycleTimeline(ref, '2026-12-24'), '2026-12-24');
+  assert.equal(over.headline, 'Flora · semana 9');
+  assert.equal(over.detail, 'día 59 · 1 semana más que lo previsto');
+  assert.equal(over.progress, 1);
+
+  const vegRef = cycleWeekRef([{ stage: 'Vegetativo', date_vegetativo: '2026-11-01' }], { planned_flower_start: '2026-12-01' });
+  const veg = timelineText(cycleTimeline(vegRef, '2026-11-19'), '2026-11-19');
+  assert.equal(veg.headline, 'Vege · semana 3');
+  assert.equal(veg.detail, 'día 18 · flora aprox. 1 dic');
+
+  assert.equal(timelineText(cycleTimeline(cycleWeekRef([], {}), '2026-11-19'), '2026-11-19').headline, 'Sin etapa cargada');
 });

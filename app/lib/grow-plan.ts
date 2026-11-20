@@ -3,7 +3,9 @@
  * ------------------------------------------------------------------
  * Arma, para un ciclo, el calendario de lo que viene: riegos cada tantos
  * días, cuáles llevan fertilizante (con el producto de la etapa y su semana),
- * el pase a floración, el lavado de raíces y la cosecha. Los días de cada
+ * el pase a floración, el lavado de raíces y la cosecha, más las tareas
+ * propias del usuario (podas, entrenamiento…) ubicadas por semana de etapa.
+ * Los días de cada
  * etapa salen de lo que eligió el usuario (con el promedio de su genética
  * como sugerencia). Puro: la vista previa y el servidor usan lo mismo.
  */
@@ -25,7 +27,33 @@ export const DAYS_TO_VEG: Partial<Record<StageName, number>> = {
 
 export const DEFAULT_VEG_DAYS = 35;
 
-export type PlanTaskType = 'riego' | 'fertilizante' | 'cambio_etapa' | 'lavado' | 'cosechar';
+export type BasePlanType = 'riego' | 'fertilizante' | 'cambio_etapa' | 'lavado' | 'cosechar';
+
+/** Las tareas propias que se pueden sumar al plan, ubicadas por semana de etapa. */
+export const CUSTOM_PLAN_TYPES = ['poda', 'entrenamiento', 'repelente', 'trasplante', 'otro'] as const;
+export type CustomPlanType = (typeof CUSTOM_PLAN_TYPES)[number];
+
+export type PlanTaskType = BasePlanType | CustomPlanType;
+
+export const MAX_CUSTOM_TASKS = 40;
+export const MAX_CUSTOM_NOTE = 120;
+
+/** "Defoliación · flora semana 3, día 1": una tarea propia del plan. */
+export interface CustomPlanTask {
+  /** Estable mientras se edita (la vista previa lo usa como clave). */
+  id: string;
+  type: CustomPlanType;
+  stage: 'Vegetativo' | 'Floración';
+  /** Semana de la etapa (1 a 30). */
+  week: number;
+  /** Día dentro de esa semana (1 a 7). */
+  day: number;
+  note?: string;
+}
+
+export function isCustomPlanType(value: unknown): value is CustomPlanType {
+  return typeof value === 'string' && (CUSTOM_PLAN_TYPES as readonly string[]).includes(value);
+}
 
 export interface GrowPlanOptions {
   today: string;
@@ -45,6 +73,8 @@ export interface GrowPlanOptions {
   vegNutrition: MixItem[] | null;
   flowerNutrition: MixItem[] | null;
   include: { stageChange: boolean; harvest: boolean; flush: boolean };
+  /** Tareas propias por semana de etapa. */
+  custom?: CustomPlanTask[];
 }
 
 export interface PlanItem {
@@ -59,6 +89,15 @@ export interface PlanItem {
   week: number;
   targetStage?: StageName;
   nutrition?: MixItem[];
+  /** Nota de una tarea propia. */
+  note?: string;
+}
+
+/** Una tarea propia que no entra en el plan, y por qué. */
+export interface SkippedCustomTask {
+  task: CustomPlanTask;
+  day: string;
+  reason: 'past' | 'after_harvest';
 }
 
 export interface GrowPlan {
@@ -68,6 +107,8 @@ export interface GrowPlan {
   harvestDay: string;
   /** Hubo que cortar porque superaba MAX_PLAN_ITEMS. */
   truncated: boolean;
+  /** Tareas propias que caen antes de hoy o después de la cosecha: no se crean. */
+  skipped: SkippedCustomTask[];
 }
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, Math.round(value)));
@@ -143,8 +184,29 @@ export function buildGrowPlan(options: GrowPlanOptions): GrowPlan | null {
     items.push({ key: `cosechar-${harvestDay}`, day: harvestDay, type: 'cosechar', stage: 'Floración', ...timing(harvestDay, 'Floración') });
   }
 
-  const order: Record<PlanTaskType, number> = { cambio_etapa: 0, lavado: 1, fertilizante: 2, riego: 3, cosechar: 4 };
-  items.sort((a, b) => a.day.localeCompare(b.day) || order[a.type] - order[b.type]);
+  const skipped: SkippedCustomTask[] = [];
+  for (const task of options.custom ?? []) {
+    const start = task.stage === 'Floración' ? flowerStart : vegStart;
+    const week = clamp(task.week, 1, 30);
+    const stageDays = (week - 1) * 7 + clamp(task.day, 1, 7) - 1;
+    const day = addDaysToKey(start, stageDays);
+    // En floración el vegetativo ya pasó: no hay semanas de vege por delante.
+    const vegGone = task.stage === 'Vegetativo' && currentStage === 'Floración';
+    if (vegGone || day < today) {
+      skipped.push({ task, day, reason: 'past' });
+      continue;
+    }
+    if (day > harvestDay) {
+      skipped.push({ task, day, reason: 'after_harvest' });
+      continue;
+    }
+    const note = task.note?.trim().slice(0, MAX_CUSTOM_NOTE) || undefined;
+    items.push({ key: `propia-${task.id}`, day, type: task.type, stage: task.stage, stageDays, week, ...(note ? { note } : {}) });
+  }
+
+  const order: Partial<Record<PlanTaskType, number>> = { cambio_etapa: 0, lavado: 1, fertilizante: 3, riego: 4, cosechar: 5 };
+  const rank = (type: PlanTaskType) => order[type] ?? 2;
+  items.sort((a, b) => a.day.localeCompare(b.day) || rank(a.type) - rank(b.type));
 
   return {
     items: items.slice(0, MAX_PLAN_ITEMS),
@@ -152,12 +214,16 @@ export function buildGrowPlan(options: GrowPlanOptions): GrowPlan | null {
     flowerStart,
     harvestDay,
     truncated: items.length > MAX_PLAN_ITEMS,
+    skipped,
   };
 }
 
-/** Cuántas tareas de cada tipo tiene el plan, para el resumen. */
-export function countByType(items: PlanItem[]): Record<PlanTaskType, number> {
-  const counts: Record<PlanTaskType, number> = { riego: 0, fertilizante: 0, cambio_etapa: 0, lavado: 0, cosechar: 0 };
-  for (const item of items) counts[item.type]++;
+/** Cuántas tareas de cada tipo tiene el plan, para el resumen ("propias" junta las del usuario). */
+export function countByType(items: PlanItem[]): Record<BasePlanType | 'propias', number> {
+  const counts: Record<BasePlanType | 'propias', number> = { riego: 0, fertilizante: 0, cambio_etapa: 0, lavado: 0, cosechar: 0, propias: 0 };
+  for (const item of items) {
+    if (isCustomPlanType(item.type)) counts.propias++;
+    else counts[item.type]++;
+  }
   return counts;
 }

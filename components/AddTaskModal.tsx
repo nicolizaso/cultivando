@@ -17,7 +17,9 @@ import {
 import NutrientPicker, { useNutritionOptions } from '@/components/NutrientPicker'
 import { stageDaysForWeek, weekInStage } from '@/app/lib/nutrition'
 import type { MixItem } from '@/app/lib/nutrition'
-import { feedContext } from '@/app/lib/task-targets'
+import { feedContext, targetWeekRef } from '@/app/lib/task-targets'
+import TaskDateField from '@/components/TaskDateField'
+import type { WeekSelection } from '@/components/TaskDateField'
 import type { CycleOption, PlantOption } from '@/app/lib/task-targets'
 
 type Plant = PlantOption
@@ -84,6 +86,8 @@ export default function AddTaskModal({ isOpen, onClose, plants, spaces, cycles =
   const nutrition = useNutritionOptions()
   const [mix, setMix] = useState<MixItem[]>([])
   const [weekOverride, setWeekOverride] = useState<number | null>(null)
+  // "Por semana de etapa": la semana elegida, que también manda en la dosis.
+  const [weekSelection, setWeekSelection] = useState<WeekSelection | null>(null)
 
   // Recurrencia
   const [isRecurring, setIsRecurring] = useState(false)
@@ -109,16 +113,19 @@ export default function AddTaskModal({ isOpen, onClose, plants, spaces, cycles =
    * la semana en cada repetición.
    */
   const context = feedContext(selectedTargets, plants, cycles)
-  const autoStageDays = context.stageDays === null
-    ? 0
-    : Math.max(0, context.stageDays + daysBetweenKeys(todayKey(), date))
+  const weekCount = targetWeekRef(selectedTargets, plants, cycles, todayKey())
+  const autoStageDays = weekSelection
+    ? stageDaysForWeek(weekSelection.week) + weekSelection.day - 1
+    : context.stageDays === null
+      ? 0
+      : Math.max(0, context.stageDays + daysBetweenKeys(todayKey(), date))
   const week = weekOverride ?? weekInStage(autoStageDays)
   const stageDays = weekOverride !== null ? stageDaysForWeek(weekOverride) : autoStageDays
   const weekNote = weekOverride !== null ? (
     <>
       Semana elegida a mano.{' '}
       <button type="button" className="font-semibold text-[color:var(--brand-text)]" onClick={() => setWeekOverride(null)}>
-        Volver a la de las plantas ({weekInStage(autoStageDays)})
+        Volver a la {weekSelection ? 'de la semana elegida' : 'de las plantas'} ({weekInStage(autoStageDays)})
       </button>
     </>
   ) : selectedTargets.length === 0 ? (
@@ -429,7 +436,13 @@ export default function AddTaskModal({ isOpen, onClose, plants, spaces, cycles =
 
         {/* 3. CUÁNDO */}
         <FormSection title="Cuándo">
-          <DateField label="Día" value={date} onChange={setDate} quick="future" />
+          <TaskDateField
+            date={date}
+            onDateChange={setDate}
+            weekRef={weekCount.ref}
+            weekReason={weekCount.reason}
+            onSelectionChange={setWeekSelection}
+          />
 
           <div className="rounded-[var(--radius-lg)] border border-line px-4 py-1">
             <Switch

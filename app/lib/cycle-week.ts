@@ -14,7 +14,7 @@
  * el pase previsto del ciclo.
  */
 
-import { addDaysToKey, dateKey, daysBetweenKeys } from './dates.ts';
+import { addDaysToKey, dateKey, daysBetweenKeys, formatInAppTz } from './dates.ts';
 import { dominantStage, stagePeriods } from './climate.ts';
 import { weekInStage } from './nutrition.ts';
 import { STAGE_DATE_COLUMNS } from './stage-logic.ts';
@@ -152,4 +152,44 @@ export function dayForStageWeek(stage: WeekStage, week: number, dayOfWeek: numbe
   const w = Math.max(1, Math.floor(week));
   const d = Math.min(7, Math.max(1, Math.floor(dayOfWeek)));
   return addDaysToKey(start, (w - 1) * 7 + (d - 1));
+}
+
+export interface TimelineText {
+  /** "Flora · semana 4 de ~8", "Vege · semana 3", "Plántula · día 4". */
+  headline: string;
+  /** "día 24 · cosecha aprox. 21 dic", "1 semana más que lo previsto". */
+  detail: string | null;
+  /** Avance de la flora hacia la meta (0 a 1), solo en floración. */
+  progress: number | null;
+}
+
+const shortDay = (day: string) => formatInAppTz(day, { day: 'numeric', month: 'short' }).replace('.', '');
+
+/** Lo que se lee en la tarjeta del panel y en la cabecera del ciclo. */
+export function timelineText(t: CycleTimeline, today: string): TimelineText {
+  if (!t.stage) return { headline: 'Sin etapa cargada', detail: null, progress: null };
+
+  if (t.stage === 'Floración' && t.week !== null) {
+    const over = t.overTarget;
+    const detailParts = [`día ${t.dayInStage}`];
+    if (over > 0) detailParts.push(`${over} ${over === 1 ? 'semana' : 'semanas'} más que lo previsto`);
+    else if (t.harvestApprox) detailParts.push(t.harvestApprox === today ? 'cosecha aprox. hoy' : `cosecha aprox. ${shortDay(t.harvestApprox)}`);
+    return {
+      headline: over > 0 ? `Flora · semana ${t.week}` : `Flora · semana ${t.week} de ~${t.targetWeeks}`,
+      detail: detailParts.join(' · '),
+      progress: Math.min(1, (t.dayInStage ?? 0) / (t.targetWeeks * 7)),
+    };
+  }
+
+  if (t.stage === 'Vegetativo' && t.week !== null) {
+    const parts = [`día ${t.dayInStage}`];
+    if (t.flowerStart && t.flowerStart > today) parts.push(`flora ${t.flowerPlanned ? 'aprox. ' : ''}${shortDay(t.flowerStart)}`);
+    return { headline: `Vege · semana ${t.week}`, detail: parts.join(' · '), progress: null };
+  }
+
+  return {
+    headline: t.dayInStage !== null ? `${t.stage} · día ${t.dayInStage}` : t.stage,
+    detail: null,
+    progress: null,
+  };
 }

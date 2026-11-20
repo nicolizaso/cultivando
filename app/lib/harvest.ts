@@ -2,13 +2,11 @@
  * COSECHA Y RENDIMIENTO
  * ------------------------------------------------------------------
  * Peso húmedo y seco de cada planta, y lo que rindió un ciclo: gramos secos
- * por planta, por metro cuadrado y por watt de luz. También cuándo se espera
- * cosechar un ciclo en floración. Puro.
+ * por planta, por metro cuadrado y por watt de luz. Puro. (La cosecha
+ * aproximada de un ciclo está en `cycle-week.ts`.)
  */
 
-import { addDaysToKey, dateKey, daysBetweenKeys } from './dates.ts';
 import { strainKey } from './strain-stats.ts';
-import type { StrainDurations } from './strain-stats.ts';
 
 export interface HarvestRow {
   plant_id: number;
@@ -138,39 +136,6 @@ export function strainYields(
   );
 }
 
-/** Días de floración que se suponen si no hay otra cosa: la meta de 8 semanas. */
-export const DEFAULT_FLOWER_DAYS = 56;
-
-export interface HarvestEstimate {
-  /** "YYYY-MM-DD" */
-  day: string;
-  daysLeft: number;
-  /** De dónde salen los días de floración. */
-  basis: 'strain' | 'default';
-  flowerDays: number;
-}
-
-/**
- * Cuándo se espera cosechar un ciclo: el día en que empezó a florecer más
- * los días de floración de su genética (promedio de lo que ya cultivaste, con
- * 2 plantas o más) o, si no hay datos, DEFAULT_FLOWER_DAYS.
- */
-export function estimateHarvest(options: {
-  flowerStart: string | null | undefined;
-  strain: string | null | undefined;
-  durations: StrainDurations;
-  today: string;
-  minSamples?: number;
-}): HarvestEstimate | null {
-  const start = dateKey(options.flowerStart ?? null);
-  if (!start) return null;
-  const key = strainKey(options.strain);
-  const average = key ? options.durations[key]?.['Floración'] : undefined;
-  const useStrain = Boolean(average && average.n >= (options.minSamples ?? 2));
-  const flowerDays = useStrain && average ? average.avg : DEFAULT_FLOWER_DAYS;
-  const day = addDaysToKey(start, flowerDays);
-  return { day, daysLeft: daysBetweenKeys(options.today, day), basis: useStrain ? 'strain' : 'default', flowerDays };
-}
 
 /** La genética que más se repite entre las plantas activas. */
 export function dominantStrain(plants: { strain?: string | null; is_archived?: boolean | null }[]): string | null {
