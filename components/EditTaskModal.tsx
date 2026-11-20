@@ -2,7 +2,10 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { Loader2, Repeat, Trash2, AlertTriangle, Warehouse } from 'lucide-react'
-import { updateTask, deleteTask, deleteTaskSeries, getSpaceOptions, getTaskFeedContext } from '@/app/actions/tasks'
+import { updateTask, deleteTask, deleteTaskSeries, getSpaceOptions, getTaskFeedContext, getTaskWeekRef } from '@/app/actions/tasks'
+import TaskDateField from '@/components/TaskDateField'
+import type { WeekSelection } from '@/components/TaskDateField'
+import type { CycleWeekRef } from '@/app/lib/cycle-week'
 import { Task } from '@/app/lib/types'
 import { useToast } from '@/app/context/ToastContext'
 import { dateKey, daysBetweenKeys, todayKey } from '@/app/lib/dates'
@@ -15,7 +18,7 @@ import ConfirmDialog from '@/components/ui/ConfirmDialog'
 import { getTaskType } from '@/app/lib/constants'
 import { STAGE_NAMES } from '@/app/lib/stage-logic'
 import {
-  APPLICATION_OPTIONS, ChoiceGroup, ChoiceOrSelect, DateField, Field, FormActions, FormAlert, Input, Textarea, stageOptions, useFieldErrors,
+  APPLICATION_OPTIONS, ChoiceGroup, ChoiceOrSelect, Field, FormActions, FormAlert, Input, Textarea, stageOptions, useFieldErrors,
 } from '@/components/ui/form'
 import type { ChoiceOption } from '@/components/ui/form'
 
@@ -72,6 +75,16 @@ export default function EditTaskModal({ isOpen, onClose, task }: EditTaskModalPr
   const mix = mixDraft ?? (!hadMix ? [] : stored ? stored.items : nutrition.options ? [] : null)
   const [context, setContext] = useState<{ stageDaysToday: number | null; stages: string[] } | null>(null)
   const [weekOverride, setWeekOverride] = useState<number | null>(null)
+  // "Por semana de etapa": desde cuándo cuentan las semanas de la tarea y la elegida.
+  const [weekCount, setWeekCount] = useState<{ ref: CycleWeekRef | null; reason: string | null } | null>(null)
+  const [weekSelection, setWeekSelection] = useState<WeekSelection | null>(null)
+
+  useEffect(() => {
+    if (isCompleted || !isOpen) return
+    let cancelled = false
+    getTaskWeekRef(task.id).then((result) => { if (!cancelled) setWeekCount(result) })
+    return () => { cancelled = true }
+  }, [isCompleted, isOpen, task.id])
 
   useEffect(() => {
     if (!isFeed) return
@@ -93,9 +106,11 @@ export default function EditTaskModal({ isOpen, onClose, task }: EditTaskModalPr
   // tarea o, si no tenía mezcla, la de las plantas hoy.
   const originalDay = dateKey(task.due_date) ?? todayKey()
   const savedStageDays = stored?.stage_days ?? null
-  const autoStageDays = Math.max(0, savedStageDays !== null
-    ? savedStageDays + daysBetweenKeys(originalDay, date)
-    : (context?.stageDaysToday ?? 0) + daysBetweenKeys(todayKey(), date))
+  const autoStageDays = weekSelection
+    ? stageDaysForWeek(weekSelection.week) + weekSelection.day - 1
+    : Math.max(0, savedStageDays !== null
+      ? savedStageDays + daysBetweenKeys(originalDay, date)
+      : (context?.stageDaysToday ?? 0) + daysBetweenKeys(todayKey(), date))
   const week = weekOverride ?? weekInStage(autoStageDays)
   const stageDays = weekOverride !== null ? stageDaysForWeek(weekOverride) : autoStageDays
   const mixReady = !isFeed || mix !== null
@@ -296,7 +311,15 @@ export default function EditTaskModal({ isOpen, onClose, task }: EditTaskModalPr
             </FormAlert>
           )}
 
-          {!isCompleted && <DateField label="Día" value={date} onChange={setDate} quick="future" />}
+          {!isCompleted && (
+            <TaskDateField
+              date={date}
+              onDateChange={setDate}
+              weekRef={weekCount?.ref ?? null}
+              weekReason={weekCount ? weekCount.reason : 'Calculando las semanas de la tarea…'}
+              onSelectionChange={setWeekSelection}
+            />
+          )}
 
           {isFeed && (
             <>

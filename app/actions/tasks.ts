@@ -50,6 +50,9 @@ import {
 } from "../lib/plant-writes"
 import type { LogEntry, PlantRef } from "../lib/plant-writes"
 import { parseHarvestInput } from "../lib/harvest"
+import { buildTaskTargetOptions, targetWeekRef } from "../lib/task-targets"
+import type { TargetRef } from "../lib/task-targets"
+import type { CycleWeekRef } from "../lib/cycle-week"
 
 /** Las siete columnas de fecha de etapa, para pedirlas en un select. */
 const STAGE_DATE_SELECT = Object.values(STAGE_DATE_COLUMNS).join(', ')
@@ -1039,6 +1042,42 @@ export async function getTaskFeedContext(rawTaskId: string | number): Promise<{ 
     stageDaysToday: Math.min(...metrics.map((metric) => metric.daysInCurrentStage)),
     stages: Array.from(new Set(metrics.map((metric) => metric.currentStage).filter(Boolean))),
   }
+}
+
+/**
+ * Para editar el día de una tarea por semana de etapa: desde cuándo cuentan
+ * vege y flora para sus objetivos, con la misma regla que al agendar
+ * (`targetWeekRef`), o la razón por la que no hay una sola cuenta.
+ */
+export async function getTaskWeekRef(rawTaskId: string | number): Promise<{ ref: CycleWeekRef | null; reason: string | null }> {
+  const none = { ref: null, reason: 'No se pudo leer el ciclo de la tarea.' }
+  const taskId = parseId(rawTaskId)
+  if (!taskId) return none
+
+  const session = await requireUser()
+  if ('error' in session) return none
+  const { supabase } = session
+
+  const { data: task } = await supabase.from('tasks').select(TASK_WITH_TARGETS).eq('id', taskId).maybeSingle()
+  if (!task) return none
+
+  const targets = getTaskTargets(task)
+  const plants = await loadTaskPlants(supabase, task)
+  const cycleIds = Array.from(new Set([
+    ...targets.cycle_ids,
+    ...plants.map((plant) => plant.cycle_id).filter((id): id is number => id !== null && id !== undefined),
+  ].map(Number)))
+  if (cycleIds.length === 0) return { ref: null, reason: 'La tarea no está en ningún ciclo: elegí el día en el calendario.' }
+
+  const { data: cycles, error } = await supabase.from('cycles').select('*, plants (*)').in('id', cycleIds)
+  if (error || !cycles) return none
+
+  const options = buildTaskTargetOptions(cycles as unknown as Parameters<typeof buildTaskTargetOptions>[0])
+  const refs: TargetRef[] = [
+    ...targets.cycle_ids.map((id) => ({ id, type: 'cycle' as const })),
+    ...targets.plant_ids.map((id) => ({ id: String(id), type: 'plant' as const })),
+  ]
+  return targetWeekRef(refs, options.plants, options.cycles, todayKey())
 }
 
 /** Lo que dejó en la bitácora (y en el stock) un fertilizante al completarse. */
