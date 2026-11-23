@@ -1135,29 +1135,175 @@
   }
 
   /* --------------------------------------------------------- Barra fija */
-  /* Barra flotante de acciones sobre una selección múltiple. Un solo
-     componente visual para plantas, tareas y fotos. */
-  /* La barra creció: sobre una selección de plantas ya hay cinco acciones, y
-     en un teléfono no entran en una línea. Envuelve en vez de desbordar, así
-     que ninguna acción queda fuera de la pantalla. Con una o dos sigue siendo
-     la misma píldora de siempre. */
+  /* Barra flotante de acciones sobre una selección múltiple.
+     Teléfono: panel a lo ancho, recuento arriba y acciones en una grilla de
+     columnas iguales (ícono sobre texto), así cinco acciones entran en una
+     fila sin envolverse. Desde 640px: una sola fila centrada.
+     Se centra con márgenes y no con translateX: la animación de entrada usa
+     transform y, con fill "both", pisaba el centrado y la corría a la derecha. */
   .action-bar {
     position: fixed;
-    left: 50%;
+    left: 0.75rem;
+    right: 0.75rem;
     z-index: 60;
     display: flex;
-    flex-wrap: wrap;
+    flex-direction: column;
+    gap: 0.375rem;
+    margin-inline: auto;
+    max-width: 30rem;
+    border-radius: var(--radius-xl);
+    border: 1px solid var(--border-strong);
+    background-color: color-mix(in srgb, var(--surface) 92%, transparent);
+    -webkit-backdrop-filter: blur(14px) saturate(1.4);
+    backdrop-filter: blur(14px) saturate(1.4);
+    padding: 0.5rem;
+    box-shadow: var(--shadow-lg);
+    bottom: calc(var(--nav-bottom) + 0.75rem + env(safe-area-inset-bottom));
+  }
+
+  .action-bar-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding-left: 0.375rem;
+  }
+
+  .action-bar-count {
+    display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 0.5rem;
-    transform: translateX(-50%);
-    max-width: min(calc(100vw - 1.5rem), 46rem);
+    min-width: 1.75rem;
+    height: 1.5rem;
+    margin-right: 0.5rem;
+    padding-inline: 0.4rem;
     border-radius: 999px;
-    border: 1px solid var(--border-strong);
-    background-color: var(--surface);
-    padding: 0.375rem 0.75rem;
-    box-shadow: var(--shadow-lg);
-    bottom: calc(var(--nav-bottom) + 1rem + env(safe-area-inset-bottom));
+    background-color: var(--brand);
+    color: var(--brand-fg);
+    font-size: 0.8125rem;
+    font-weight: 700;
+  }
+
+  .action-bar-actions {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(0, 1fr);
+    gap: 0.375rem;
+  }
+
+  .action-bar-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.25rem;
+    min-height: 3.5rem;
+    padding: 0.5rem 0.25rem;
+    border-radius: var(--radius-md);
+    background-color: var(--surface-2);
+    color: var(--fg);
+    font-size: 0.75rem;
+    font-weight: 600;
+    line-height: 1.15;
+    text-align: center;
+    cursor: pointer;
+    transition:
+      background-color var(--dur-fast) var(--ease-out),
+      transform var(--dur-fast) var(--ease-out);
+  }
+
+  .action-bar-btn svg {
+    flex-shrink: 0;
+    color: var(--brand);
+  }
+
+  .action-bar-btn:hover:not(:disabled) {
+    background-color: var(--surface-3);
+  }
+
+  .action-bar-btn:active:not(:disabled) {
+    transform: scale(0.96);
+  }
+
+  .action-bar-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .action-bar-btn:focus-visible {
+    outline: 2px solid var(--brand);
+    outline-offset: 2px;
+  }
+
+  .action-bar-btn-danger {
+    background-color: var(--danger-soft);
+    color: var(--danger);
+  }
+
+  .action-bar-btn-danger svg {
+    color: var(--danger);
+  }
+
+  .action-bar-btn-danger:hover:not(:disabled) {
+    background-color: color-mix(in srgb, var(--danger) 20%, transparent);
+  }
+
+  @media (min-width: 640px) {
+    .action-bar {
+      left: 1rem;
+      right: 1rem;
+      flex-direction: row;
+      align-items: center;
+      gap: 0.75rem;
+      width: fit-content;
+      max-width: min(calc(100vw - 2rem), 52rem);
+      border-radius: 999px;
+      padding: 0.375rem 0.375rem 0.375rem 0.875rem;
+    }
+
+    .action-bar-head {
+      display: contents;
+    }
+
+    .action-bar-head > p {
+      order: 0;
+    }
+
+    .action-bar-actions {
+      order: 1;
+      display: flex;
+      gap: 0.25rem;
+      padding-left: 0.75rem;
+      border-left: 1px solid var(--border);
+    }
+
+    .action-bar-close {
+      order: 2;
+    }
+
+    .action-bar-btn {
+      flex-direction: row;
+      gap: 0.4rem;
+      min-height: 2.5rem;
+      padding: 0.5rem 0.875rem;
+      border-radius: 999px;
+      background-color: transparent;
+      font-size: 0.8125rem;
+      white-space: nowrap;
+    }
+
+    .action-bar-btn svg {
+      width: 16px;
+      height: 16px;
+    }
+
+    .action-bar-btn-danger {
+      background-color: transparent;
+    }
+
+    .action-bar-btn-danger:hover:not(:disabled) {
+      background-color: var(--danger-soft);
+    }
   }
 
   @media (min-width: 1024px) {

@@ -48,6 +48,7 @@ export default async function CycleDetailPage({ params }: { params: Promise<{ id
     { count: pendingPlanTasks },
     { data: cycleTasks },
     { data: plantTasks },
+    { data: activeCycles },
   ] = await Promise.all([
     supabase.from('cycles').select(`*, spaces ( name, type, area_m2, width, length, light_watts )`).eq('id', id).single(),
     supabase.from('plants').select('*').eq('cycle_id', id).order('id', { ascending: true }),
@@ -93,6 +94,8 @@ export default async function CycleDetailPage({ params }: { params: Promise<{ id
       .select('id, due_date, type, task_plants!inner(plants!inner(cycle_id))')
       .eq('status', 'pending')
       .eq('task_plants.plants.cycle_id', id),
+    // Destinos para mudar plantas a otro ciclo desde la selección.
+    supabase.from('cycles').select('id, name').eq('is_active', true).neq('id', id).order('name', { ascending: true }),
   ]);
 
   if (error || !cycle) return notFound();
@@ -230,6 +233,9 @@ export default async function CycleDetailPage({ params }: { params: Promise<{ id
         lastMeasurement={lastMeasurement}
         history={history || []}
         cycleImages={cycleImages || []}
+        moveTargets={activeCycles ?? []}
+        spaces={(spaces ?? []).map(({ id, name }) => ({ id, name }))}
+        spaceId={cycle.space_id ?? null}
         photoLogs={[...(plantPhotoLogs ?? []), ...(cyclePhotoLogs ?? [])].map(({ id, plant_id, created_at, media_url, title }) => ({ id, plant_id, created_at, media_url, title }))}
       />
 

@@ -17,7 +17,7 @@ import { Plant as BasePlant, Cycle, Space } from "@/app/lib/types";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import EmptyState from "@/components/EmptyState";
 import SegmentedControl from "@/components/ui/SegmentedControl";
-import SelectionBar from "@/components/ui/SelectionBar";
+import SelectionBar, { SelectionAction } from "@/components/ui/SelectionBar";
 import { useToast } from "@/app/context/ToastContext";
 import { averageDays, weekInStage } from "@/app/lib/nutrition";
 import { getPlantMetrics } from "@/app/lib/plant-metrics";
@@ -327,54 +327,17 @@ export default function PlantsGridManager({ plants, cycles, spaces, initialQuery
       >
         {!isArchivedScope && (
           <>
-            <button
-              type="button"
-              onClick={() => setOpenModal('stage')}
-              className="btn btn-sm btn-secondary rounded-full"
-            >
-              <ArrowRightCircle size={15} aria-hidden="true" />
-              Cambiar etapa
-            </button>
-            <button
-              type="button"
-              onClick={() => setOpenModal('water')}
-              className="btn btn-sm btn-secondary rounded-full"
-            >
-              <Droplets size={15} aria-hidden="true" />
-              Regar
-            </button>
+            <SelectionAction icon={ArrowRightCircle} label="Etapa" onClick={() => setOpenModal('stage')} />
+            <SelectionAction icon={Droplets} label="Regar" onClick={() => setOpenModal('water')} />
           </>
         )}
-
-        <button
-          type="button"
-          onClick={() => setOpenModal('cycle')}
-          className="btn btn-sm btn-secondary rounded-full"
-        >
-          <ArrowRightLeft size={15} aria-hidden="true" />
-          Mover de ciclo
-        </button>
-
-        <button
-          type="button"
+        <SelectionAction icon={ArrowRightLeft} label="Ciclo" onClick={() => setOpenModal('cycle')} />
+        <SelectionAction
+          icon={isArchivedScope ? ArchiveRestore : Archive}
+          label={isArchivedScope ? 'Restaurar' : 'Archivar'}
           onClick={() => setOpenModal(isArchivedScope ? 'restore' : 'archive')}
-          className="btn btn-sm btn-secondary rounded-full"
-        >
-          {isArchivedScope
-            ? <ArchiveRestore size={15} aria-hidden="true" />
-            : <Archive size={15} aria-hidden="true" />}
-          {isArchivedScope ? 'Restaurar' : 'Archivar'}
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setShowDeleteConfirm(true)}
-          disabled={isDeleting}
-          className="btn btn-sm btn-danger rounded-full"
-        >
-          <Trash2 size={15} aria-hidden="true" />
-          {isDeleting ? "Eliminando..." : "Eliminar"}
-        </button>
+        />
+        <SelectionAction icon={Trash2} label="Eliminar" tone="danger" pending={isDeleting} onClick={() => setShowDeleteConfirm(true)} />
       </SelectionBar>
 
       <BulkStageModal
@@ -398,6 +361,7 @@ export default function PlantsGridManager({ plants, cycles, spaces, initialQuery
         selectedIds={targetIds}
         onSuccess={handleBulkSuccess}
         cycles={cycles}
+        spaces={spaces}
       />
 
       <BulkArchiveModal

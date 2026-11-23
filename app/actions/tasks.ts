@@ -1430,18 +1430,23 @@ export async function getEsquejadoCandidates(rawTaskId: string | number) {
     }))
     .sort((a, b) => a.name.localeCompare(b.name, 'es', { numeric: true }))
 
-  const activeCycles: CycleRow[] = cyclesResult.data ?? []
-  const defaultCycleId =
-    targets.cycle_ids.find((id) => activeCycles.some((c) => c.id === id)) ??
-    candidates.find((p) => p.cycle_id)?.cycle_id ??
-    activeCycles[0]?.id ??
-    null
+  // Los esquejes nunca van al ciclo de sus madres: ese ciclo no se ofrece y,
+  // por defecto, se propone abrir uno nuevo. Su espacio sí se usa como
+  // sugerencia para el ciclo nuevo.
+  const motherCycleIds = new Set<number>([
+    ...targets.cycle_ids.map(Number),
+    ...candidates.map((p) => Number(p.cycle_id)).filter((id) => Number.isInteger(id) && id > 0),
+  ])
+  const allCycles: CycleRow[] = cyclesResult.data ?? []
+  const activeCycles = allCycles.filter((c) => !motherCycleIds.has(c.id))
+  const defaultSpaceId =
+    allCycles.find((c) => motherCycleIds.has(c.id) && c.space_id)?.space_id ?? null
 
   return {
     candidates,
     cycles: activeCycles,
     spaces: spacesResult.data ?? [],
-    defaultCycleId,
+    defaultSpaceId,
     dueDate: task.due_date ?? null,
     alreadyRegistered: (task.metadata as TaskMetadata | null)?.esquejado ?? null,
   }
@@ -1511,6 +1516,13 @@ export async function completeEsquejado(
 
   let targetCycleName: string | null = newCycle?.name ?? null
   if (targetCycleId) {
+    const motherCycles = new Set(
+      entries.map((entry) => Number(mothersById.get(entry.motherId)?.cycle_id)).filter((id) => id > 0)
+    )
+    if (motherCycles.has(targetCycleId)) {
+      return { error: 'Los esquejes no pueden ir al mismo ciclo que sus madres. Elegí otro o creá uno nuevo.' }
+    }
+
     const { data: cycle } = await supabase.from('cycles').select('id, name').eq('id', targetCycleId).maybeSingle()
     if (!cycle) return { error: 'No se encontró el ciclo de destino.' }
     targetCycleName = cycle.name

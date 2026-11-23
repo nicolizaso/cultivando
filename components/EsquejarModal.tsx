@@ -82,12 +82,12 @@ export default function EsquejarModal({ isOpen, onClose, task }: EsquejarModalPr
         setCycles(res.cycles ?? [])
         setSpaces(res.spaces ?? [])
         setAlreadyRegistered(res.alreadyRegistered ?? null)
-        setCycleChoice(res.defaultCycleId ? String(res.defaultCycleId) : '')
+        // Arranca en "Ciclo nuevo": los esquejes no van con sus madres, y lo
+        // más común es abrirles un ciclo propio en el momento.
+        setCycleChoice(NEW_CYCLE)
 
         setNewCycleName(`Esquejes ${formatInAppTz(new Date(), { day: '2-digit', month: '2-digit' })}`)
-
-        const originCycle = res.cycles?.find((c: Cycle) => c.id === res.defaultCycleId)
-        setNewCycleSpaceId(originCycle?.space_id ?? res.spaces?.[0]?.id ?? '')
+        setNewCycleSpaceId(res.defaultSpaceId ?? res.spaces?.[0]?.id ?? '')
       }
 
       setIsLoading(false)
@@ -300,6 +300,7 @@ export default function EsquejarModal({ isOpen, onClose, task }: EsquejarModalPr
               ]}
               value={cycleChoice || null}
               onChange={setCycleChoice}
+              hint="No se ofrece el ciclo de las plantas madre: los esquejes arrancan aparte."
             />
 
             {cycleChoice === NEW_CYCLE && (

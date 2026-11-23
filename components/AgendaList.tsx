@@ -13,7 +13,7 @@ import { hasStoredMix } from "@/app/lib/nutrition"
 import { completionNeeds } from "@/app/lib/task-effects"
 import { useToast } from "@/app/context/ToastContext"
 import ConfirmDialog from "@/components/ui/ConfirmDialog"
-import SelectionBar from "@/components/ui/SelectionBar"
+import SelectionBar, { SelectionAction } from "@/components/ui/SelectionBar"
 
 interface AgendaListProps {
   tasks: Task[]
@@ -254,17 +254,7 @@ export default function AgendaList({ tasks, groupByStatus = false, emptyLabel = 
         onClear={exitSelectionMode}
         label="Acciones sobre las tareas seleccionadas"
       >
-        <button
-          type="button"
-          onClick={() => setShowDeleteConfirm(true)}
-          disabled={isDeleting}
-          className="btn btn-sm btn-danger rounded-full"
-        >
-          {isDeleting
-            ? <Loader2 size={15} className="animate-spin" aria-hidden="true" />
-            : <Trash2 size={15} aria-hidden="true" />}
-          Eliminar
-        </button>
+        <SelectionAction icon={Trash2} label="Eliminar" tone="danger" pending={isDeleting} onClick={() => setShowDeleteConfirm(true)} />
       </SelectionBar>
     </div>
   )

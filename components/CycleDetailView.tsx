@@ -9,7 +9,7 @@ import imageCompression from 'browser-image-compression';
 import {
   ArrowRight, ArrowUpRight, Camera, CloudRain, Droplets, LayoutGrid, Leaf,
   List as ListIcon, Loader2, Archive, Thermometer, Trash2, Gauge,
-  CalendarDays,
+  CalendarDays, ArrowRightLeft,
 } from "lucide-react";
 
 import { Plant, CycleImage, Measurement } from "@/app/lib/types";
@@ -24,13 +24,14 @@ import { getPlantMetrics, getStageColor } from "@/app/lib/utils";
 import BulkStageModal from "./BulkStageModal";
 import BulkArchiveModal from "./BulkArchiveModal";
 import BulkWaterModal from "./BulkWaterModal";
+import BulkMoveCycleModal from "./BulkMoveCycleModal";
 import MeasurementModal from "./MeasurementModal";
 import { Field, FormActions, Input, Textarea } from "@/components/ui/form";
 import { useToast } from "@/app/context/ToastContext";
 import Modal from "@/components/ui/Modal";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import SegmentedControl from "@/components/ui/SegmentedControl";
-import SelectionBar from "@/components/ui/SelectionBar";
+import SelectionBar, { SelectionAction } from "@/components/ui/SelectionBar";
 import { uploadCycleImage, deleteCycleImages, updateCycleImage } from "@/app/cycles/actions";
 
 interface CycleDetailViewProps {
@@ -41,11 +42,16 @@ interface CycleDetailViewProps {
   cycleImages?: CycleImage[];
   /** Registros de bitácora con fotos (de las plantas del ciclo o del ciclo). */
   photoLogs?: PhotoLog[];
+  /** Ciclos a los que se pueden mudar plantas (sin incluir éste). */
+  moveTargets?: { id: number; name: string }[];
+  /** Espacios, para poder abrir un ciclo nuevo al mover plantas. */
+  spaces?: { id: number; name: string }[];
+  spaceId?: number | null;
 }
 
 type ViewMode = 'table' | 'grid';
 
-export default function CycleDetailView({ cycle, plants, lastMeasurement, history, cycleImages = [], photoLogs = [] }: CycleDetailViewProps) {
+export default function CycleDetailView({ cycle, plants, lastMeasurement, history, cycleImages = [], photoLogs = [], moveTargets = [], spaces = [], spaceId = null }: CycleDetailViewProps) {
   const router = useRouter();
   const { showToast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -63,6 +69,7 @@ export default function CycleDetailView({ cycle, plants, lastMeasurement, histor
   const [isArchiveModalOpen, setIsArchiveModalOpen] = useState(false);
   const [isStageModalOpen, setIsStageModalOpen] = useState(false);
   const [isWaterModalOpen, setIsWaterModalOpen] = useState(false);
+  const [isMoveModalOpen, setIsMoveModalOpen] = useState(false);
   const [isMeasureModalOpen, setIsMeasureModalOpen] = useState(false);
   const isMounted = useIsClient();
   const [showDeleteImagesConfirm, setShowDeleteImagesConfirm] = useState(false);
@@ -607,30 +614,10 @@ export default function CycleDetailView({ cycle, plants, lastMeasurement, histor
         onClear={() => setSelectedPlants([])}
         label="Acciones sobre las plantas seleccionadas"
       >
-        <button
-          type="button"
-          onClick={() => setIsStageModalOpen(true)}
-          className="btn btn-sm btn-secondary rounded-full"
-        >
-          <ArrowRight size={15} aria-hidden="true" />
-          Cambiar etapa
-        </button>
-        <button
-          type="button"
-          onClick={() => setIsWaterModalOpen(true)}
-          className="btn btn-sm btn-secondary rounded-full"
-        >
-          <Droplets size={15} aria-hidden="true" />
-          Regar
-        </button>
-        <button
-          type="button"
-          onClick={() => setIsArchiveModalOpen(true)}
-          className="btn btn-sm btn-secondary rounded-full"
-        >
-          <Archive size={15} aria-hidden="true" />
-          Archivar
-        </button>
+        <SelectionAction icon={ArrowRight} label="Etapa" onClick={() => setIsStageModalOpen(true)} />
+        <SelectionAction icon={ArrowRightLeft} label="Ciclo" onClick={() => setIsMoveModalOpen(true)} />
+        <SelectionAction icon={Droplets} label="Regar" onClick={() => setIsWaterModalOpen(true)} />
+        <SelectionAction icon={Archive} label="Archivar" onClick={() => setIsArchiveModalOpen(true)} />
       </SelectionBar>
 
       <SelectionBar
@@ -638,14 +625,7 @@ export default function CycleDetailView({ cycle, plants, lastMeasurement, histor
         onClear={() => { setIsSelectionMode(false); setSelectedImages([]); }}
         label="Acciones sobre las fotos seleccionadas"
       >
-        <button
-          type="button"
-          onClick={() => setShowDeleteImagesConfirm(true)}
-          className="btn btn-sm btn-danger rounded-full"
-        >
-          <Trash2 size={15} aria-hidden="true" />
-          Eliminar
-        </button>
+        <SelectionAction icon={Trash2} label="Eliminar" tone="danger" onClick={() => setShowDeleteImagesConfirm(true)} />
       </SelectionBar>
 
       <ConfirmDialog
@@ -658,6 +638,15 @@ export default function CycleDetailView({ cycle, plants, lastMeasurement, histor
       />
 
       <BulkArchiveModal isOpen={isArchiveModalOpen} onClose={() => setIsArchiveModalOpen(false)} selectedIds={selectedPlants} onSuccess={handleBulkSuccess} />
+      <BulkMoveCycleModal
+        isOpen={isMoveModalOpen}
+        onClose={() => setIsMoveModalOpen(false)}
+        selectedIds={selectedPlants}
+        onSuccess={handleBulkSuccess}
+        cycles={moveTargets}
+        spaces={spaces}
+        defaultSpaceId={spaceId}
+      />
       <BulkStageModal isOpen={isStageModalOpen} onClose={() => setIsStageModalOpen(false)} selectedIds={selectedPlants} onSuccess={handleBulkSuccess} />
       <BulkWaterModal
         isOpen={isWaterModalOpen}
